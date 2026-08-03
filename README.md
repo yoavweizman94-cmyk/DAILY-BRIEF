@@ -41,10 +41,23 @@ GitHub Actions (06:45 ישראל, יומי)
 pip install -r requirements.txt
 python ingest/markets_pull.py      # עובד בלי סודות
 python ingest/maya_pull.py         # עובד בלי סודות
-FEEDLY_TOKEN=... python ingest/feedly_pull.py
+python ingest/rmi_pull.py          # עובד בלי סודות
+python ingest/feedly_pull.py       # קורא FEEDLY_TOKEN מ-.env
 python scripts/gmail_authorize.py  # פעם אחת; אח"כ gmail_pull עובד מקומית
 bash run_daily.sh                  # הצנרת המלאה (דורש claude CLI)
 ```
+
+**קובץ `.env` להרצה מקומית** (מוחרג מ-git). משתנה שכבר מוגדר בסביבה גובר עליו,
+כך שב-CI ה-Secrets תמיד מנצחים:
+
+```
+FEEDLY_TOKEN=
+FEEDLY_REFRESH_TOKEN=
+```
+
+טוקן גישה של Feedly תקף כ-31 יום. אם `FEEDLY_REFRESH_TOKEN` מוגדר, קבלת 401
+מפעילה רענון אוטומטי, הבקשה נשלחת שוב, והטוקן החדש נשמר חזרה ל-`.env`
+(ב-CI, שבו אין קובץ, הרענון תקף לריצה הנוכחית — וזה מספיק).
 
 הערות סביבה:
 

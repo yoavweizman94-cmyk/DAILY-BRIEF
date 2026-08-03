@@ -21,7 +21,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingest"))
 from _tls import harden
+from _env import load_env
 harden()
+load_env()
 
 import requests
 import yaml

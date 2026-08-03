@@ -23,8 +23,11 @@ harden()
 
 import yaml
 
+from _env import load_env
 from _state import connect, filter_new
 from _text import clean_html
+
+load_env()
 
 ROOT = Path(__file__).resolve().parents[1]
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]

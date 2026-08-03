@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """משיכת אייטמים מ-Feedly (24 שעות אחרונות) ונרמול ל-JSONL.
 
-דורש FEEDLY_TOKEN בסביבה (Feedly API access token).
+דורש FEEDLY_TOKEN — מהסביבה או מ-.env מקומי. אם מוגדר גם FEEDLY_REFRESH_TOKEN,
+טוקן שפג (401) מתחדש אוטומטית והבקשה נשלחת שוב; טוקני Feedly תקפים ~31 יום,
+כך שבלי זה הריצה היומית נשברת אחת לחודש.
+
 פלט: data/raw/<YYYY-MM-DD>/feedly.jsonl — שורה לאייטם:
   {id, ts, title, body, url, source}
 """
@@ -20,18 +23,57 @@ harden()
 import requests
 import yaml
 
+from _env import load_env, update_env
 from _state import connect, filter_new
 from _text import clean_html
 
 ROOT = Path(__file__).resolve().parents[1]
+# מסלול הרענון של טוקני developer ב-Feedly משתמש בזוג הקבוע הזה
+REFRESH_CLIENT = {"client_id": "feedlydev", "client_secret": "feedlydev"}
 
 
-def api(session: requests.Session, base: str, path: str, **params):
-    r = session.get(f"{base}{path}", params=params or None, timeout=45)
-    if r.status_code == 401:
-        raise SystemExit("שגיאה: FEEDLY_TOKEN לא תקף (401) — יש לחדש את הטוקן")
-    r.raise_for_status()
-    return r.json()
+class Feedly:
+    def __init__(self, base: str, token: str, refresh_token: str | None):
+        self.base = base
+        self.refresh_token = refresh_token
+        self.session = requests.Session()
+        self._set_token(token)
+        self._refreshed = False
+
+    def _set_token(self, token: str):
+        self.session.headers["Authorization"] = f"Bearer {token}"
+
+    def _refresh(self) -> bool:
+        if not self.refresh_token or self._refreshed:
+            return False
+        self._refreshed = True          # ניסיון אחד בלבד לכל ריצה
+        r = requests.post(f"{self.base}/auth/token", timeout=45,
+                          data={**REFRESH_CLIENT, "grant_type": "refresh_token",
+                                "refresh_token": self.refresh_token})
+        if not r.ok:
+            print(f"אזהרה: רענון טוקן Feedly נכשל ({r.status_code})", file=sys.stderr)
+            return False
+        token = r.json().get("access_token")
+        if not token:
+            return False
+        self._set_token(token)
+        # ב-CI אין .env — הטוקן החדש חי לריצה הזו בלבד, וזה מספיק
+        if update_env("FEEDLY_TOKEN", token):
+            print("טוקן Feedly חודש ונשמר ב-.env")
+        else:
+            print("טוקן Feedly חודש (לריצה הנוכחית בלבד)")
+        return True
+
+    def get(self, path: str, **params):
+        r = self.session.get(f"{self.base}{path}", params=params or None, timeout=45)
+        if r.status_code == 401 and self._refresh():
+            r = self.session.get(f"{self.base}{path}", params=params or None, timeout=45)
+        if r.status_code == 401:
+            raise SystemExit(
+                "שגיאה: FEEDLY_TOKEN לא תקף (401) ולא ניתן לרענן — "
+                "יש להנפיק טוקן חדש ולעדכן את הסביבה או את .env")
+        r.raise_for_status()
+        return r.json()
 
 
 def normalize(entry: dict) -> dict:
@@ -54,9 +96,11 @@ def normalize(entry: dict) -> dict:
 
 
 def main() -> int:
+    load_env()
     token = os.environ.get("FEEDLY_TOKEN")
     if not token:
-        print("שגיאה: FEEDLY_TOKEN לא מוגדר בסביבה — אין גישה ל-Feedly", file=sys.stderr)
+        print("שגיאה: FEEDLY_TOKEN לא מוגדר בסביבה ולא ב-.env — אין גישה ל-Feedly",
+              file=sys.stderr)
         return 1
 
     cfg = yaml.safe_load((ROOT / "config" / "sources.yaml").read_text(encoding="utf-8"))
@@ -65,11 +109,10 @@ def main() -> int:
     newer_than = int((datetime.now(timezone.utc) - timedelta(hours=lookback))
                      .timestamp() * 1000)
 
-    s = requests.Session()
-    s.headers["Authorization"] = f"Bearer {token}"
     base = fcfg.get("api_base", "https://cloud.feedly.com/v3")
+    api = Feedly(base, token, os.environ.get("FEEDLY_REFRESH_TOKEN"))
 
-    uid = api(s, base, "/profile")["id"]
+    uid = api.get("/profile")["id"]
     entries: list[dict] = []
     for stream in fcfg.get("stream_ids", ["global.all"]):
         stream_id = (f"user/{uid}/category/{stream}"
@@ -80,7 +123,7 @@ def main() -> int:
                       "count": min(int(fcfg.get("max_items_per_stream", 250)), 250)}
             if continuation:
                 params["continuation"] = continuation
-            data = api(s, base, "/streams/contents", **params)
+            data = api.get("/streams/contents", **params)
             entries.extend(data.get("items", []))
             continuation = data.get("continuation")
             if not continuation or len(entries) >= int(fcfg.get("max_items_per_stream", 250)):
