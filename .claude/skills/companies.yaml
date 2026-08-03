@@ -1,0 +1,248 @@
+# companies.yaml — FOREST Daily Brief
+# גרסה 0.2 · 2026-08-03 · מקור: רשימה ידנית מיואב (94 שמות → 82 פעילות, 12 מוחרגות)
+#
+# עקרונות:
+# 1. דרייברים מוגדרים ברמת סקטור (sector_profiles) — לחברה מוסיפים רק drivers_extra ספציפיים.
+# 2. tase_id נשאר null בכוונה — ימולא ע"י סקריפט resolver מול TASE/מאיה. לא מנחשים מספרי נייר.
+#    ה-resolver הוא גם בקרת האיכות: שם שלא נמצא ב-TASE = שגיאה שמדווחת, לא מתעלמים.
+# 3. aliases — שמות חלופיים בעברית/אנגלית לצורך התאמת חדשות (news matching).
+# 4. generic_name: true — שם שהוא גם מילה עברית רגילה. התאמה רק עם גבולות מילה ובהקשר עסקי.
+
+meta:
+  version: "0.2"
+  updated: "2026-08-03"
+  companies_count: 82
+  excluded_count: 12
+  scope_note: הסוכן מכסה את הרשימה הזו בלבד (לא את כל יקום הכיסוי של FOREST)
+
+# ---------------------------------------------------------------------------
+# קטלוג דרייברים מרכזיים → מקור נתונים
+# ---------------------------------------------------------------------------
+drivers_catalog:
+  boi_rate:               {desc: ריבית בנק ישראל והצפי, source: BOI}
+  mortgage_volumes:       {desc: נטילות משכנתאות חודשיות, source: BOI}
+  cbs_home_price_index:   {desc: מדד מחירי דירות, source: skill israeli-statistics}
+  cbs_building_starts:    {desc: התחלות וגמר בנייה, source: skill israeli-statistics}
+  building_inputs_index:  {desc: מדד תשומות הבנייה, source: skill israeli-statistics}
+  cpi_il:                 {desc: מדד המחירים לצרכן + הצמדות, source: skill israeli-statistics}
+  rmi_tenders:            {desc: מכרזי קרקע רמ"י, source: skill israeli-land-tenders}
+  fx_usd_ils:             {desc: 'שער יציג דולר/שקל', source: BOI API}
+  fx_eur_ils:             {desc: 'שער יציג אירו/שקל', source: BOI API}
+  crude_oil:              {desc: 'ברנט/WTI → נגזר לפולימרים ולוגיסטיקה', source: yfinance BZ=F CL=F}
+  polymers:               {desc: 'מחירי PE/PP/PVC/פוליקרבונט (פרוקסי: נפט + מקורות ענפיים)', source: markets_pull}
+  aluminum_lme:           {desc: אלומיניום LME, source: yfinance ALI=F}
+  steel:                  {desc: פלדה/ברזל בנייה, source: markets_pull}
+  soft_commodities:       {desc: 'חיטה/תירס/סויה/סוכר/קקאו/חלב', source: yfinance}
+  shipping_freight:       {desc: מחירי הובלה ימית ומכולות, source: markets_pull}
+  us10y:                  {desc: תשואת אג"ח ארה"ב 10ש, source: yfinance ^TNX}
+  il_gov_yields:          {desc: תשואות ממשלתי שקלי/צמוד, source: markets_pull}
+  nasdaq_sentiment:       {desc: מדדי טק ארה"ב, source: yfinance}
+  construction_labor:     {desc: 'זמינות כוח אדם בענף הבנייה (עובדים זרים/פלסטינים)', source: news}
+  planning_policy:        {desc: 'רגולציית תכנון — ותמ"ל, שבס, היטלים', source: news + maya}
+  defense_budgets:        {desc: תקציבי ביטחון והזמנות משהב"ט, source: news + maya}
+
+# ---------------------------------------------------------------------------
+# פרופילי סקטור
+# ---------------------------------------------------------------------------
+sector_profiles:
+
+  resi_dev_il:
+    label: יזום למגורים — ישראל
+    drivers: [boi_rate, mortgage_volumes, cbs_home_price_index, cbs_building_starts,
+              building_inputs_index, rmi_tenders, planning_policy, construction_labor,
+              il_gov_yields, cpi_il]
+
+  urban_renewal:
+    label: התחדשות עירונית
+    inherits: resi_dev_il
+    drivers_extra: [renewal_regulation, municipal_planning]
+
+  income_il:
+    label: נדל"ן מניב — ישראל
+    drivers: [il_gov_yields, cpi_il, boi_rate, office_retail_demand, cap_rates]
+
+  income_intl:
+    label: נדל"ן מניב/יזום — חו"ל
+    drivers: [fx_eur_ils, fx_usd_ils, us10y, ecb_fed_policy, local_re_markets]
+
+  rental_reit:
+    label: קרנות ריט לדיור להשכרה
+    drivers: [cpi_il, il_gov_yields, boi_rate, rental_market_il, reit_regulation]
+
+  senior_housing:
+    label: דיור מוגן
+    drivers: [cbs_home_price_index, cpi_il, il_gov_yields, senior_housing_regulation]
+
+  construction_infra:
+    label: קבלנות ותשתיות
+    drivers: [gov_infra_budget, infra_tenders, steel, building_inputs_index,
+              construction_labor, crude_oil]
+
+  industrials_plastics:
+    label: תעשיית פלסטיק ופולימרים
+    drivers: [crude_oil, polymers, fx_usd_ils, fx_eur_ils, shipping_freight,
+              global_industrial_demand]
+
+  nonwovens:
+    label: בדים לא ארוגים
+    inherits: industrials_plastics
+    drivers_extra: [polypropylene, hygiene_demand, china_competition]
+
+  building_products:
+    label: מוצרי בנייה וגמר
+    drivers: [cbs_building_starts, building_inputs_index, renovation_demand,
+              shipping_freight, fx_usd_ils]
+
+  food_agri:
+    label: מזון וחקלאות
+    drivers: [soft_commodities, fx_eur_ils, fx_usd_ils, shipping_freight, cpi_il,
+              food_regulation_il]
+
+  defense_industry:
+    label: תעשייה ביטחונית
+    drivers: [defense_budgets, steel, fx_usd_ils]
+
+  auto_components:
+    label: רכיבי רכב
+    drivers: [global_auto_production, ev_transition, fx_usd_ils, fx_eur_ils]
+
+  tech_us:
+    label: טכנולוגיה — נסחרות בארה"ב
+    drivers: [nasdaq_sentiment, us10y, fx_usd_ils, sector_specific_news]
+
+  holdings_credit:
+    label: אחזקות / אשראי / אחר
+    drivers: [il_gov_yields, credit_spreads, nav_discount]
+
+# ---------------------------------------------------------------------------
+# חברות (82 פעילות)
+# ---------------------------------------------------------------------------
+companies:
+
+  # --- יזום למגורים ישראל ---
+  - {name_he: צרפתי, name_en: Tzarfati, listing: TASE, tase_id: null, sector: resi_dev_il, aliases: [צרפתי שמעון]}
+  - {name_he: רוטשטיין, name_en: Rotshtein, listing: TASE, tase_id: null, sector: resi_dev_il}
+  - {name_he: אפריקה מגורים, name_en: Africa Residences, listing: TASE, tase_id: null, sector: resi_dev_il}
+  - {name_he: פרשקובסקי, name_en: Prashkovsky, listing: TASE, tase_id: null, sector: resi_dev_il}
+  - {name_he: נתנאל גרופ, name_en: Netanel Group, listing: TASE, tase_id: null, sector: resi_dev_il}
+  - {name_he: דמרי, name_en: Y.H. Dimri, listing: TASE, tase_id: null, sector: resi_dev_il, aliases: [י.ח. דמרי]}
+  - {name_he: אלמוגים, name_en: Almogim, listing: TASE, tase_id: null, sector: resi_dev_il}
+  - {name_he: בוני תיכון, name_en: Bonei Hatichon, listing: TASE, tase_id: null, sector: resi_dev_il, aliases: [בוני התיכון]}
+  - {name_he: אנשי העיר, name_en: Anshei Hair, listing: TASE, tase_id: null, sector: resi_dev_il}
+  - {name_he: קנדה גלובל, name_en: Canada Global, listing: TASE, tase_id: null, sector: resi_dev_il, drivers_extra: [luxury_tlv]}
+  - {name_he: מגידו, name_en: Megiddo, listing: TASE, tase_id: null, sector: resi_dev_il}
+  - {name_he: שובל, name_en: Shoval, listing: TASE, tase_id: null, sector: resi_dev_il, generic_name: true}
+  - {name_he: אביב בניה, name_en: Aviv Bniya, listing: TASE, tase_id: null, sector: resi_dev_il, generic_name: true}
+  - {name_he: יעז יזמות, name_en: Yaaz, listing: TASE, tase_id: null, sector: resi_dev_il}
+  - {name_he: חג'ג' אירופה, name_en: Hagag Europe, listing: TASE, tase_id: null, sector: resi_dev_il, drivers_extra: [europe_resi]}
+
+  # --- התחדשות עירונית ---
+  - {name_he: אאורה, name_en: Aura, listing: TASE, tase_id: null, sector: urban_renewal, aliases: [אאורה השקעות]}
+  - {name_he: אב-גד, name_en: Av-Gad, listing: TASE, tase_id: null, sector: urban_renewal}
+  - {name_he: רותם שני, name_en: Rotem Shani, listing: TASE, tase_id: null, sector: urban_renewal}
+  - {name_he: בית וגג, name_en: Bayit VeGag, listing: TASE, tase_id: null, sector: urban_renewal, generic_name: true}
+  - {name_he: הכשרה התחדשות, name_en: null, listing: TASE, tase_id: null, sector: urban_renewal}
+
+  # --- נדל"ן מניב ישראל ---
+  - {name_he: עזריאלי קבוצה, name_en: Azrieli Group, listing: TASE, tase_id: null, sector: income_il, drivers_extra: [data_centers, senior_housing]}
+  - {name_he: אלרוב נדלן, name_en: Alrov, listing: TASE, tase_id: null, sector: income_il, drivers_extra: [luxury_hotels, europe_assets]}
+  - {name_he: נכסים ובנין, name_en: Property & Building, listing: TASE, tase_id: null, sector: income_il}
+  - {name_he: ישרס אחזקות, name_en: Isras, listing: TASE, tase_id: null, sector: income_il}
+  - {name_he: רבד, name_en: Ravad, listing: TASE, tase_id: null, sector: income_il}
+  - {name_he: אספן גרופ, name_en: Aspen Group, listing: TASE, tase_id: null, sector: income_il, drivers_extra: [europe_assets]}
+  - {name_he: שמן נדלן, name_en: Shemen Real Estate, listing: TASE, tase_id: null, sector: income_il}
+  - {name_he: וילאר, name_en: Villar, listing: TASE, tase_id: null, sector: income_il}
+  - {name_he: נתנאל מניבים, name_en: null, listing: TASE, tase_id: null, sector: income_il}
+  - {name_he: ארי נדלן, name_en: null, listing: TASE, tase_id: null, sector: income_il}
+  - {name_he: יסודות, name_en: Yesodot, listing: TASE, tase_id: null, sector: income_il, generic_name: true}
+
+  # --- נדל"ן חו"ל ---
+  - {name_he: ג'י סיטי, name_en: G City, listing: TASE, tase_id: null, sector: income_intl, aliases: [גזית גלוב, Gazit Globe]}
+  - {name_he: נורסטאר, name_en: Norstar, listing: TASE, tase_id: null, sector: income_intl, drivers_extra: [gcity_holding_discount]}
+  - {name_he: סאמיט, name_en: Summit, listing: TASE, tase_id: null, sector: income_intl, drivers_extra: [germany_re, us_re]}
+  - {name_he: ארגו פרופרטיז, name_en: Argo Properties, listing: TASE, tase_id: null, sector: income_intl, drivers_extra: [germany_resi]}
+  - {name_he: בוליגו, name_en: Buligo Capital, listing: TASE, tase_id: null, sector: income_intl, drivers_extra: [us_re_funds]}
+  - {name_he: אלקטרה נדלן, name_en: Electra Real Estate, listing: TASE, tase_id: null, sector: income_intl, drivers_extra: [us_multifamily, fee_business]}
+
+  # --- ריט להשכרה ---
+  - {name_he: מגוריט, name_en: Megureit, listing: TASE, tase_id: null, sector: rental_reit}
+  - {name_he: ריט אזורים ליוי, name_en: Azorim Living REIT, listing: TASE, tase_id: null, sector: rental_reit, aliases: [אזורים ליווינג]}
+
+  # --- דיור מוגן ---
+  - {name_he: בית הזהב, name_en: Beit Hazahav, listing: TASE, tase_id: null, sector: senior_housing}
+  - {name_he: בית בכפר, name_en: Beit Bakfar, listing: TASE, tase_id: null, sector: senior_housing}
+  - {name_he: מגדלי תיכון, name_en: Mediterranean Towers, listing: TASE, tase_id: null, sector: senior_housing, aliases: [מגדלי הים התיכון]}
+
+  # --- קבלנות ותשתיות ---
+  - {name_he: שיכון ובינוי, name_en: Shikun & Binui, listing: TASE, tase_id: null, sector: construction_infra, drivers_extra: [intl_concessions, energy_projects]}
+  - {name_he: דניה סיבוס, name_en: Danya Cebus, listing: TASE, tase_id: null, sector: construction_infra}
+  - {name_he: אשטרום קבוצה, name_en: Ashtrom Group, listing: TASE, tase_id: null, sector: construction_infra, drivers_extra: [income_re, industry]}
+  - {name_he: שפיר הנדסה, name_en: Shapir Engineering, listing: TASE, tase_id: null, sector: construction_infra, drivers_extra: [cement_quarries, ppp_concessions]}
+  - {name_he: לסיכו, name_en: Lesico, listing: TASE, tase_id: null, sector: construction_infra, drivers_extra: [water_infra]}
+  - {name_he: אורון קבוצה, name_en: Oron Group, listing: TASE, tase_id: null, sector: construction_infra}
+  - {name_he: יעקובי קבוצה, name_en: Yaacobi Group, listing: TASE, tase_id: null, sector: construction_infra}
+  - {name_he: רימון, name_en: Rimon, listing: TASE, tase_id: null, sector: construction_infra, generic_name: true}
+
+  # --- תעשיית פלסטיק ---
+  - {name_he: פלרם, name_en: Palram Industries, listing: TASE, tase_id: null, sector: industrials_plastics, drivers_extra: [polycarbonate, pvc, us_eu_construction]}
+  - {name_he: פלסאון תעשיות, name_en: Plasson Industries, listing: TASE, tase_id: null, sector: industrials_plastics, drivers_extra: [water_fittings, poultry_systems, avian_flu]}
+  - {name_he: רימוני, name_en: Rimoni Industries, listing: TASE, tase_id: null, sector: industrials_plastics, drivers_extra: [injection_molds, medical_devices]}
+  - {name_he: פלסטופיל, name_en: Plastopil, listing: TASE, tase_id: null, sector: industrials_plastics, drivers_extra: [food_packaging_films]}
+
+  # --- בדים לא ארוגים ---
+  - {name_he: אבגול, name_en: Avgol, listing: TASE, tase_id: null, sector: nonwovens, drivers_extra: [polypropylene]}
+  - {name_he: ספאנטק, name_en: Spuntech, listing: TASE, tase_id: null, sector: nonwovens, drivers_extra: [spunlace, us_plant]}
+  - {name_he: עלבד, name_en: Albaad, listing: TASE, tase_id: null, sector: nonwovens, drivers_extra: [wet_wipes, europe_demand]}
+
+  # --- מוצרי בנייה וגמר ---
+  - {name_he: קליל, name_en: Klil Industries, listing: TASE, tase_id: null, sector: building_products, drivers_extra: [aluminum_lme]}
+  - {name_he: חמת, name_en: Hamat, listing: TASE, tase_id: null, sector: building_products, drivers_extra: [sanitary_ware]}
+  - {name_he: אינרום, name_en: Inrom Construction, listing: TASE, tase_id: null, sector: building_products}
+  - {name_he: קבוצת אקרשטיין, name_en: Ackerstein Group, listing: TASE, tase_id: null, sector: building_products, drivers_extra: [income_re, infra_products]}
+  - {name_he: בירמן, name_en: Birman, listing: TASE, tase_id: null, sector: building_products, drivers_extra: [wood_trade, import_costs]}
+  - {name_he: ויז'ן סיגמא, name_en: Vision Sigma, listing: TASE, tase_id: null, sector: building_products}
+  - {name_he: לודזיה, name_en: Lodzia, listing: TASE, tase_id: null, sector: building_products}
+
+  # --- מזון וחקלאות ---
+  - {name_he: מהדרין, name_en: Mehadrin, listing: TASE, tase_id: null, sector: food_agri, drivers_extra: [citrus_prices, water_quotas, fx_eur_ils]}
+  - {name_he: זנלכל, name_en: Zanlakol, listing: TASE, tase_id: null, sector: food_agri, drivers_extra: [canned_food, tin_packaging]}
+  - {name_he: מחלבות גד, name_en: Gad Dairies, listing: TASE, tase_id: null, sector: food_agri, drivers_extra: [raw_milk_price, dairy_regulation]}
+  - {name_he: נטו אחזקות, name_en: Neto Holdings, listing: TASE, tase_id: null, sector: food_agri, drivers_extra: [food_import, meat_poultry, shipping_freight]}
+
+  # --- ביטחוני / רכב ---
+  - {name_he: עשות, name_en: Ashot Ashkelon, listing: TASE, tase_id: null, sector: defense_industry, drivers_extra: [imod_orders, gear_components], generic_name: true}
+  - {name_he: רבל, name_en: Raval, listing: TASE, tase_id: null, sector: auto_components, drivers_extra: [fuel_system_valves, ev_transition_risk]}
+
+  # --- טכנולוגיה ארה"ב ---
+  - {name_he: Check Point, name_en: Check Point Software, listing: NASDAQ, ticker: CHKP, sector: tech_us, drivers_extra: [cybersecurity], aliases: [צ'ק פוינט]}
+  - {name_he: אמדוקס US, name_en: Amdocs, listing: NASDAQ, ticker: DOX, sector: tech_us, drivers_extra: [telecom_capex], aliases: [אמדוקס]}
+  - {name_he: WIX, name_en: Wix.com, listing: NASDAQ, ticker: WIX, sector: tech_us, drivers_extra: [smb_ecommerce, ai_website_builders], aliases: [וויקס]}
+  - {name_he: Fivver, name_en: Fiverr, listing: NYSE, ticker: FVRR, sector: tech_us, drivers_extra: [gig_economy, ai_disruption], aliases: [פייבר, Fiverr]}
+  - {name_he: קורנית דיגיטל US, name_en: Kornit Digital, listing: NASDAQ, ticker: KRNT, sector: tech_us, drivers_extra: [digital_textile_printing, apparel_demand], aliases: [קורנית]}
+  - {name_he: סולאר אדג' US, name_en: SolarEdge, listing: NASDAQ, ticker: SEDG, sector: tech_us, drivers_extra: [solar_demand_eu_us, us_tariffs_ira, inventory_cycle], aliases: [סולאראדג']}
+  - {name_he: סרגון US, name_en: Ceragon Networks, listing: NASDAQ, ticker: CRNT, sector: tech_us, drivers_extra: [wireless_backhaul, india_capex], aliases: [סרגון]}
+  - {name_he: מאינד US, name_en: MIND C.T.I, listing: NASDAQ, ticker: MNDO, sector: tech_us, drivers_extra: [billing_software, dividend_yield], aliases: [מאינד]}
+  - {name_he: אבן קיסר US, name_en: Caesarstone, listing: NASDAQ, ticker: CSTE, sector: tech_us, drivers_extra: [us_housing_renovation, quartz, silica_litigation], aliases: [אבן קיסר], note: מסווגת טק רק בגלל רישום בארה"ב — מהותית מוצרי בנייה}
+
+  # --- אחזקות ---
+  - {name_he: אמפא, name_en: Ampa, listing: TASE, tase_id: null, sector: holdings_credit}
+  - {name_he: קרדן ישראל, name_en: Kardan Israel, listing: TASE, tase_id: null, sector: holdings_credit}
+  - {name_he: גאון קבוצה, name_en: Gaon Group, listing: TASE, tase_id: null, sector: holdings_credit, drivers_extra: [water_infra, plastics_trade]}
+
+# ---------------------------------------------------------------------------
+# מוחרגות — הופיעו ברשימה המקורית, אושר ע"י יואב (03/08/2026) שאינן רלוונטיות.
+# לא נכללות במיפוי. להחזרה: להעביר חזרה ל-companies עם סיווג.
+# ---------------------------------------------------------------------------
+excluded:
+  - וויי בוקס
+  - צילו-בלו
+  - אייאיאס
+  - "יו.אמ.איץ'"
+  - רנט איט
+  - אבו מגורים
+  - דלק נכסים
+  - אפי קפיטל
+  - 'שדה נדל"ן'
+  - חד
+  - סופרין
+  - רם און
