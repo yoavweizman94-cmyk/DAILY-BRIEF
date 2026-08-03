@@ -1,0 +1,77 @@
+# sources.yaml — FOREST Daily Brief
+# פרמטרי מקורות לסקריפטי ה-ingest. הסוכן לא קורא מכאן — רק הסקריפטים.
+
+meta:
+  version: "0.1"
+  updated: "2026-08-03"
+
+params:
+  timezone: Asia/Jerusalem
+  lookback_hours: 24          # חלון ברירת מחדל לכל המקורות החדשותיים
+
+# ---------------------------------------------------------------------------
+# Feedly — דורש FEEDLY_TOKEN בסביבה
+# stream_ids: ברירת המחדל היא כל הפידים של החשבון (global.all).
+# אפשר לצמצם לקטגוריה ספציפית: "user/<userId>/category/<שם>"
+# ---------------------------------------------------------------------------
+feedly:
+  api_base: https://cloud.feedly.com/v3
+  stream_ids:
+    - global.all              # מתורגם בסקריפט ל-user/<userId>/category/global.all
+  max_items_per_stream: 250
+
+# ---------------------------------------------------------------------------
+# Gmail — דורש GMAIL_CREDENTIALS בסביבה (JSON עם client_id/client_secret/refresh_token)
+# ---------------------------------------------------------------------------
+gmail:
+  label: "ברייף"
+  max_messages: 50
+
+# ---------------------------------------------------------------------------
+# מאיה — API ציבורי, ללא אימות. הסינון לפי tase_id מ-companies.yaml נעשה בסקריפט.
+# ---------------------------------------------------------------------------
+maya:
+  api_base: https://mayaapi.tase.co.il/api
+  page_limit: 10              # עד 10 עמודי דיווחים אחורה בחלון הזמן
+
+# ---------------------------------------------------------------------------
+# שווקים — BOI (שערים יציגים) + yfinance. הרשימה נגזרת מ-drivers_catalog.
+# proxy: true = המדד הוא קירוב, לא המחיר הענפי עצמו — הסוכן מציין זאת בברייף.
+# ---------------------------------------------------------------------------
+markets:
+  boi:
+    api: https://boi.org.il/PublicApi/GetExchangeRates?asJson=true
+    currencies: [USD, EUR]
+  yfinance:
+    - {key: brent,        ticker: "BZ=F",      label: "ברנט",                       group: energy}
+    - {key: wti,          ticker: "CL=F",      label: "WTI",                        group: energy}
+    - {key: aluminum,     ticker: "ALI=F",     label: "אלומיניום LME",              group: metals}
+    - {key: steel_hrc,    ticker: "HRC=F",     label: "פלדה HRC (ארה\"ב)",          group: metals, proxy: true}
+    - {key: wheat,        ticker: "ZW=F",      label: "חיטה",                       group: soft}
+    - {key: corn,         ticker: "ZC=F",      label: "תירס",                       group: soft}
+    - {key: soybean,      ticker: "ZS=F",      label: "סויה",                       group: soft}
+    - {key: sugar,        ticker: "SB=F",      label: "סוכר",                       group: soft}
+    - {key: cocoa,        ticker: "CC=F",      label: "קקאו",                       group: soft}
+    - {key: milk_c3,      ticker: "DC=F",      label: "חלב Class III",              group: soft}
+    - {key: dry_bulk,     ticker: "BDRY",      label: "הובלה ימית (BDRY, פרוקסי)",  group: shipping, proxy: true}
+    - {key: us10y,        ticker: "^TNX",      label: "US 10Y",                     group: yields, transform: tnx_div10}
+    - {key: sp500,        ticker: "^GSPC",     label: "S&P 500",                    group: indices}
+    - {key: nasdaq,       ticker: "^IXIC",     label: "נאסד\"ק",                    group: indices}
+    - {key: ta125,        ticker: "^TA125.TA", label: "ת\"א-125",                   group: indices}
+    - {key: ta35,         ticker: "TA35.TA" ,  label: "ת\"א-35",                    group: indices}
+  # תשואת ממשלתי שקלי 10ש: אין מקור חינמי יציב (BOI SDMX מסורבל, TASE בתשלום).
+  # markets_pull כותב null + הערת מקור; הברייף מציג US10Y בלבד עד שיוגדר מקור.
+  il_gov_10y:
+    enabled: false
+    note: "אין מקור חינמי אמין — לבחון BOI SDMX או נתוני TASE בהמשך"
+
+# ---------------------------------------------------------------------------
+# אתר וטלגרם
+# ---------------------------------------------------------------------------
+site:
+  base_url: https://yoavweizman94-cmyk.github.io/DAILY-BRIEF
+  title: "ברייף FOREST"
+
+telegram:
+  parse_mode: HTML
+  # TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID מגיעים מהסביבה, לא מכאן

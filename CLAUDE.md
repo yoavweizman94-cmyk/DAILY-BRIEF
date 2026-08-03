@@ -107,6 +107,8 @@ forest-brief/
 כללי פורמט לכל אייטם ממופה: **כיוון השפעה** (חיובי / שלילי / ניטרלי / מעורב) + נימוק
 של משפט אחד + מקור (שם האתר וקישור). הפרד תמיד עובדה מפרשנות — פרשנות מסומנת
 "**משמעות:**" בתחילת המשפט.
+אייטם רמה 3 נפתח בשורה עם **כותרת מודגשת** קצרה (עד ~10 מילים) — ממנה נבנית
+תמצית הטלגרם (scripts/send_telegram.py מלקט את ההדגשות הפותחות).
 
 ## מעקות בטיחות — אין חריגים
 
@@ -127,18 +129,25 @@ forest-brief/
 ענייני, ישיר, בלי סופרלטיבים ובלי דרמה. משפטים קצרים. מספרים מדויקים עם יחידות.
 בלי "מעניין לציין ש", בלי "חשוב להדגיש". כתוב כמו אנליסט שכותב לעצמו, לא כמו עיתונאי.
 
-## משימות הקמה (לביצוע ע"י Claude Code בפקודה "בצע את משימות ההקמה")
+## משימות הקמה (בוצעו 03/08/2026 ע"י Claude Code)
 
-- [ ] `ingest/resolve_tase_ids.py` — מילוי tase_id מול TASE; שם לא נמצא → שגיאה מפורשת.
-- [ ] `ingest/markets_pull.py` — BOI API (שערים יציגים) + yfinance; חישוב שינוי
-      יומי/שבועי/חודשי מול `state.sqlite`; פלט `markets.json`.
-- [ ] `ingest/feedly_pull.py` — משיכת 24ש אחרונות, נרמול ל-JSONL (id, ts, title, body, url, source).
-- [ ] `ingest/gmail_pull.py` — Gmail API, לייבל "ברייף", חילוץ טקסט נקי מ-HTML.
-- [ ] `ingest/maya_pull.py` — התאמת הסקרייפר הקיים; סינון לפי tase_id של חברות הכיסוי.
-- [ ] `run_daily.sh` + GitHub Actions workflow (cron 03:45 UTC = 06:45 ישראל בקיץ),
-      כולל commit של state ו-output חזרה לריפו.
-- [ ] `site/` — גנרטור סטטי מינימלי: index אחרון + ארכיון, RTL, נפרס ל-GitHub Pages.
-- [ ] שליחת טלגרם: תמצית (תמונת בוקר + כותרות רמה 3) + קישור לעמוד המלא.
-- [ ] `.mcp.json` — הגדרת שרתי ה-MCP שהסקילים דורשים (israel-statistics, remy-land-authority).
-- [ ] Secrets נדרשים ב-GitHub: `ANTHROPIC_API_KEY`, `FEEDLY_TOKEN`, `GMAIL_CREDENTIALS`,
-      `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+- [x] `ingest/resolve_tase_ids.py` — מילוי tase_id מול TASE; שם לא נמצא → שגיאה מפורשת.
+      בוצע והורץ: כל 73 חברות ה-TASE נפתרו (tase_id + maya_company_id), 0 שגיאות.
+- [x] `ingest/markets_pull.py` — BOI API (שערים יציגים) + yfinance; חישוב שינוי
+      יומי/שבועי/חודשי מול `state.sqlite`; פלט `markets.json`. הורץ: 2 מט"ח + 16 מכשירים.
+- [x] `ingest/feedly_pull.py` — משיכת 24ש אחרונות, נרמול ל-JSONL (id, ts, title, body, url, source).
+      ממתין ל-FEEDLY_TOKEN לבדיקה חיה.
+- [x] `ingest/gmail_pull.py` — Gmail API, לייבל "ברייף", חילוץ טקסט נקי מ-HTML.
+      אימות חד-פעמי: `scripts/gmail_authorize.py`.
+- [x] `ingest/maya_pull.py` — נכתב מאפס מול ה-API החדש של מאיה (לא נמצא סקרייפר קיים
+      בריפו); סינון לפי maya_company_id. הורץ: 22 דיווחי כיסוי ביממה.
+- [x] `run_daily.sh` + GitHub Actions workflow (cron 03:45 UTC = 06:45 ישראל בקיץ),
+      כולל commit של state ו-output חזרה לריפו (`.github/workflows/daily-brief.yml`).
+- [x] `site/` — גנרטור סטטי מינימלי: index אחרון + ארכיון, RTL, נפרס ל-GitHub Pages.
+- [x] שליחת טלגרם: תמצית (תמונת בוקר + כותרות רמה 3) + קישור לעמוד המלא
+      (`scripts/send_telegram.py`).
+- [x] `.mcp.json` — israel-statistics (npx) + remy-land-authority (uv מ-clone מקומי
+      ב-vendor/, כי אריזת ה-wheel של הפרויקט העילי שבורה).
+- [ ] Secrets ב-GitHub: `ANTHROPIC_API_KEY`, `FEEDLY_TOKEN`, `GMAIL_CREDENTIALS`,
+      `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` — **נשאר ליואב** (ערכים אישיים;
+      הוראות השגה ב-README) + הפעלת GitHub Pages (Settings → Pages → GitHub Actions).

@@ -143,8 +143,19 @@ venv.bak/
 # Rope project settings
 .ropeproject
 
-# mkdocs documentation
-/site
+# FOREST brief — קלט יומי גולמי לא נכנס לריפו (state.sqlite ו-output/ כן נכנסים)
+data/raw/*/
+!data/raw/.gitkeep
+
+# FOREST brief — תוצר בניית האתר (site/ עצמה, עם הגנרטור, כן בריפו)
+site/dist/
+
+# Gmail OAuth artifacts מקומיים
+credentials.json
+token.json
+
+# שרתי MCP משוכפלים (clone on demand — ראה README)
+vendor/
 
 # mypy
 .mypy_cache/

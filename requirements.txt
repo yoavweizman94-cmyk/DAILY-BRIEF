@@ -1,0 +1,11 @@
+# FOREST Daily Brief — תלויות סקריפטי ingest / site / telegram
+curl_cffi>=0.7          # עקיפת WAF של מאיה (חיקוי TLS דפדפן)
+requests>=2.32
+truststore>=0.9         # אמון בתעודות מערכת (פרוקסי ארגוני)
+pyyaml>=6.0
+ruamel.yaml>=0.18       # עריכת companies.yaml עם שימור הערות
+yfinance>=0.2.60
+google-api-python-client>=2.150
+google-auth>=2.35
+google-auth-oauthlib>=1.2
+markdown>=3.6           # רינדור הברייף לאתר
