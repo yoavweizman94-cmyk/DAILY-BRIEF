@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0     # היסטוריה מלאה — נדרש ל-pull --rebase בשלב ה-commit חזרה
 
       - uses: actions/setup-python@v5
         with:

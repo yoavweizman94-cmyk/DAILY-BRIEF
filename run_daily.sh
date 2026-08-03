@@ -38,10 +38,12 @@ PROMPT="היום $DATE. בצע את הפייפליין היומי לפי CLAUDE.
 לבדיקת פרסומי למ\"ס ומכרזי רמ\"י, וכתוב את output/brief_$DATE.md לפי מבנה הפלט הקשיח. \
 מקורות שנכשלו בשלב ה-ingest: ${FAILED[*]:-אין}."
 
+# Bash(python:*) נדרש לסקיל israeli-statistics — נתוני הלמ"ס מגיעים
+# מ-scripts/fetch_cbs_data.py שלו, לא מ-WebFetch.
 claude -p "$PROMPT" \
   --mcp-config .mcp.json \
   --permission-mode acceptEdits \
-  --allowedTools "Read,Write,Edit,Glob,Grep,Skill,WebFetch,WebSearch,mcp__israel-statistics__*,mcp__remy-land-authority__*" \
+  --allowedTools "Read,Write,Edit,Glob,Grep,Skill,WebFetch,WebSearch,Bash(python:*),mcp__israel-statistics__*,mcp__remy-land-authority__*" \
   ${CLAUDE_MODEL:+--model "$CLAUDE_MODEL"}
 
 if [ ! -s "output/brief_$DATE.md" ]; then
