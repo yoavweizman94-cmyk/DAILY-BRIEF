@@ -4,12 +4,6 @@
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@reuvennaor85/israel-statistics-mcp"]
-    },
-    "remy-land-authority": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["--directory", "vendor/remy-mcp", "run", "main.py"],
-      "env": { "UV_NATIVE_TLS": "true" }
     }
   }
 }

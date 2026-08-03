@@ -24,13 +24,18 @@ run_source feedly  python ingest/feedly_pull.py
 run_source gmail   python ingest/gmail_pull.py
 run_source maya    python ingest/maya_pull.py
 run_source markets python ingest/markets_pull.py
+run_source rmi     python ingest/rmi_pull.py
 if [ ${#FAILED[@]} -gt 0 ]; then
   echo "מקורות שנכשלו: ${FAILED[*]}"
 fi
 
-# שרת ה-MCP של רמ"י רץ מ-clone מקומי (אריזת ה-wheel של הפרויקט העילי שבורה)
+# ה-clone של remy-mcp משמש רק לטבלת קודי היישוב שבו (data/kod_yeshuv.py),
+# ש-rmi_pull.py מייבא כדי לתרגם KodYeshuv לשם יישוב. שרת ה-MCP עצמו אינו בשימוש:
+# ה-API של רמ"י חוסם את requests שהוא משתמש בו. rmi_pull עובד גם בלי ה-clone,
+# אבל אז יישובים יופיעו כקודים מספריים.
 if [ ! -d vendor/remy-mcp ]; then
-  git clone --depth 1 https://github.com/barvhaim/remy-mcp vendor/remy-mcp
+  git clone --depth 1 https://github.com/barvhaim/remy-mcp vendor/remy-mcp || \
+    echo "אזהרה: clone של remy-mcp נכשל — שמות יישובים יוצגו כקודים"
 fi
 
 PROMPT="היום $DATE. בצע את הפייפליין היומי לפי CLAUDE.md: קרא את config/companies.yaml \

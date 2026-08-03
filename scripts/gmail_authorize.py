@@ -16,7 +16,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingest"))
-from _tls import harden
+# _tls is added to sys.path dynamically at runtime.
+from _tls import harden  # type: ignore[import-not-found]
 harden()
 
 ROOT = Path(__file__).resolve().parents[1]

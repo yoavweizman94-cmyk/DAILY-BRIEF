@@ -22,9 +22,11 @@ forest-brief/
 │   ├── gmail_pull.py          # Gmail API (לייבל "ברייף") → gmail.jsonl
 │   ├── maya_pull.py           # הודעות מאיה מסוננות לחברות הכיסוי → maya.jsonl
 │   ├── markets_pull.py        # BOI + yfinance → markets.json (כולל שינויים מחושבים)
+│   ├── rmi_pull.py            # מכרזי רמ"י + תוצאות ועדה, מוצלב לכיסוי → rmi.json
 │   └── resolve_tase_ids.py    # ממלא tase_id ב-companies.yaml מול TASE
 ├── data/
-│   ├── raw/YYYY-MM-DD/        # הקלט היומי שלך: feedly.jsonl, gmail.jsonl, maya.jsonl, markets.json
+│   ├── raw/YYYY-MM-DD/        # הקלט היומי שלך: feedly.jsonl, gmail.jsonl, maya.jsonl,
+│   │                          #   markets.json, rmi.json
 │   └── state.sqlite           # היסטוריית מחירים + IDs שכבר דווחו
 ├── output/
 │   └── brief_YYYY-MM-DD.md    # התוצר שלך
@@ -42,14 +44,17 @@ forest-brief/
 
 ## פייפליין יומי
 
-1. **טעינה.** קרא את `config/companies.yaml` ואת כל הקבצים ב-`data/raw/<היום>/`.
+1. **טעינה.** קרא את `config/companies.yaml` ואת כל הקבצים ב-`data/raw/<היום>/`
+   (feedly.jsonl, gmail.jsonl, maya.jsonl, markets.json, rmi.json).
    קובץ חסר או ריק = תקלת מקור. רשום זאת בסעיף "תקלות מקורות" בסוף הברייף והמשך בלעדיו.
 2. **דה-דופ רך.** אותה ידיעה מכמה מקורות = אייטם אחד, כל המקורות מצוינים.
 3. **מאקרו ישראל.** הפעל את הסקיל `israeli-statistics` וב­דוק אם פורסמו היום או אתמול:
    מדד המחירים לצרכן, מדד מחירי דירות, מדד תשומות הבנייה, התחלות/גמר בנייה.
    פרסום חדש = אייטם חובה ברמה 3 עם ניתוח השלכות על הסקטורים הרלוונטיים.
-4. **רמ"י.** הפעל את הסקיל `israeli-land-tenders` לאיתור מכרזים חדשים / תוצאות מכרזים.
-   הצלב זכיות מול חברות הכיסוי — זכייה של חברת כיסוי היא תמיד רמה 3.
+4. **רמ"י.** קרא את `rmi.json` — הוא כבר מכיל פרסומים חדשים, תוצאות ועדה וזוכים
+   מוצלבים מול הכיסוי (`coverage_winners`). זכייה של חברת כיסוי היא תמיד רמה 3.
+   שדה `coverage_match_needs_review` = התאמה לשם גנרי, לאמת הקשר לפני ייחוס.
+   הסקיל `israeli-land-tenders` משמש להסבר מונחים ומסלולים, לא למשיכת נתונים.
 5. **מיפוי.** לכל אייטם קבע: חברות מושפעות ישירות (שם מוזכר) ובעקיפין (דרך דרייבר
    סקטוריאלי לפי `sector_profiles` ו-`drivers_extra`). כללי התאמת שמות:
    - התאמה לפי `name_he`, `name_en` ו-`aliases`, עם גבולות מילה.
@@ -146,8 +151,8 @@ forest-brief/
 - [x] `site/` — גנרטור סטטי מינימלי: index אחרון + ארכיון, RTL, נפרס ל-GitHub Pages.
 - [x] שליחת טלגרם: תמצית (תמונת בוקר + כותרות רמה 3) + קישור לעמוד המלא
       (`scripts/send_telegram.py`).
-- [x] `.mcp.json` — israel-statistics (npx) + remy-land-authority (uv מ-clone מקומי
-      ב-vendor/, כי אריזת ה-wheel של הפרויקט העילי שבורה).
+- [x] `.mcp.json` — israel-statistics (npx). remy-land-authority הוסר: ה-API של רמ"י
+      חוסם את ה-HTTP client שלו, והנתונים מגיעים מ-`ingest/rmi_pull.py` במקום.
 - [ ] Secrets ב-GitHub: `ANTHROPIC_API_KEY`, `FEEDLY_TOKEN`, `GMAIL_CREDENTIALS`,
       `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` — **נשאר ליואב** (ערכים אישיים;
       הוראות השגה ב-README) + הפעלת GitHub Pages (Settings → Pages → GitHub Actions).

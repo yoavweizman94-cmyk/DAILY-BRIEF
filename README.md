@@ -8,7 +8,7 @@
 ```
 GitHub Actions (06:45 ישראל, יומי)
   └─ run_daily.sh
-       1. ingest/  — feedly, gmail, maya, markets  →  data/raw/<היום>/
+       1. ingest/  — feedly, gmail, maya, markets, rmi  →  data/raw/<היום>/
        2. claude -p — קורא את הקלט, כותב output/brief_<היום>.md
        3. site/build.py — רינדור ל-site/dist (RTL)
        4. scripts/send_telegram.py — תמצית + קישור
@@ -53,10 +53,14 @@ bash run_daily.sh                  # הצנרת המלאה (דורש claude CLI)
 - **מאיה**: הגישה דרך `curl_cffi` עם חיקוי דפדפן ועוגיות (עוקף WAF). פרטי
   ה-API המהונדסים-לאחור מתועדים ב-[ingest/_maya_api.py](ingest/_maya_api.py).
   לא לשלוח שדות בשם `page`/`pageNum`/`skip` — חתימת WAF.
-- **MCP מקומי**: `israel-statistics` דורש Node.js מותקן (ב-CI קיים אוטומטית);
-  `remy-land-authority` דורש `uv` ו-clone של הריפו:
-  `git clone --depth 1 https://github.com/barvhaim/remy-mcp vendor/remy-mcp`
-  (מתבצע אוטומטית ב-run_daily.sh).
+- **רמ"י**: אותו סיפור — ה-API של `apps.land.gov.il` חוסם requests רגיל
+  (וזו הסיבה ששרת ה-MCP remy-mcp נכשל מולו). המשיכה נעשית ב-[ingest/rmi_pull.py](ingest/rmi_pull.py):
+  חיקוי דפדפן, `Accept: application/json` מפורש (אחרת חוזר XML של 6.6MB),
+  וסינון תאריכים מקומי — פילטרי התאריכים בצד השרת אינם מיושמים.
+- **MCP**: רק `israel-statistics`, ודורש Node.js (ב-CI מותקן אוטומטית).
+  שרת `remy-land-authority` הוסר מ-`.mcp.json` — ה-API של רמ"י חוסם את
+  ספריית ה-HTTP שהוא משתמש בה, ובמקומו יש `ingest/rmi_pull.py`. ה-clone של
+  `vendor/remy-mcp` עדיין מתבצע ב-run_daily.sh, אך רק בשביל טבלת קודי היישוב שבו.
 
 ## מבנה הריפו
 

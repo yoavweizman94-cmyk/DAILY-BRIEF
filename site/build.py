@@ -46,8 +46,24 @@ PAGE = """<!DOCTYPE html>
 """
 
 
+# מספר עם סימן מפורש בהקשר RTL: אלגוריתם ה-bidi מציב את הסימן מימין למספר,
+# כך ש-"-7.11%" נקרא על המסך "7.11%-". בטבלת שווקים זו טעות קריאה של ממש,
+# ולכן כל מספר חתום בתא טבלה נעטף ב-span עם כיוון LTR מפורש.
+_CELL = re.compile(r"<(td|th)([^>]*)>(.*?)</\1>", re.S)
+_SIGNED_NUM = re.compile(r"([+\-−])(\d[\d,.]*\s*%?)")
+
+
+def _isolate_signed_numbers(html_text: str) -> str:
+    def fix(m):
+        tag, attrs, inner = m.groups()
+        inner = _SIGNED_NUM.sub(
+            lambda x: f'<span dir="ltr">{x.group(1)}{x.group(2)}</span>', inner)
+        return f"<{tag}{attrs}>{inner}</{tag}>"
+    return _CELL.sub(fix, html_text)
+
+
 def render(md_text: str) -> str:
-    return markdown.markdown(md_text, extensions=MD_EXT)
+    return _isolate_signed_numbers(markdown.markdown(md_text, extensions=MD_EXT))
 
 
 def brief_title(md_text: str, fallback: str) -> str:

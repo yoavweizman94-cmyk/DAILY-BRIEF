@@ -51,8 +51,12 @@ def level3_headlines(md: str) -> list[str]:
 
 
 def md_to_tg(text: str) -> str:
-    """המרה מינימלית של Markdown ל-HTML של טלגרם."""
-    text = html.escape(text)
+    """המרה מינימלית של Markdown ל-HTML של טלגרם.
+
+    quote=False בכוונה: טלגרם דורש רק &amp; &lt; &gt;. בריחה של גרשיים הופכת
+    כל מונח עברי עם גרשיים (ת"א, נדל"ן, אג"ח) ל-&quot; על המסך.
+    """
+    text = html.escape(text, quote=False)
     text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
     text = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r'<a href="\2">\1</a>', text)
     return text
@@ -84,7 +88,7 @@ def main() -> int:
     morning = section(md, "תמונת בוקר")
     headlines = level3_headlines(md)
 
-    parts = [f"<b>{html.escape(title)}</b>", "", md_to_tg(morning)]
+    parts = [f"<b>{html.escape(title, quote=False)}</b>", "", md_to_tg(morning)]
     if headlines:
         parts += ["", "<b>עיקרי היום:</b>"]
         parts += [f"• {md_to_tg(h)}" for h in headlines]
