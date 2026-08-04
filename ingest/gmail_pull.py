@@ -42,10 +42,26 @@ def get_service():
         raise SystemExit(
             "שגיאה: חבילות Google חסרות — pip install google-api-python-client google-auth")
 
-    raw = os.environ.get("GMAIL_CREDENTIALS")
+    raw = (os.environ.get("GMAIL_CREDENTIALS") or "").strip().lstrip("﻿")
     token_file = ROOT / "token.json"
     if raw:
-        info = json.loads(raw)
+        # נוחות: אם הודבק נתיב לקובץ במקום תוכנו, נקרא אותו
+        if not raw.startswith("{") and Path(raw).is_file():
+            raw = Path(raw).read_text(encoding="utf-8-sig").strip()
+        try:
+            info = json.loads(raw)
+        except json.JSONDecodeError as ex:
+            # אבחון בלי לחשוף את הסוד עצמו
+            raise SystemExit(
+                f"שגיאה: GMAIL_CREDENTIALS אינו JSON תקין ({ex.msg}). "
+                f"אורך הערך {len(raw)} תווים, מתחיל ב-'{'{' if raw.startswith('{') else raw[:1]}'. "
+                "הערך צריך להיות שורה אחת בצורה "
+                '{"client_id":"...","client_secret":"...","refresh_token":"..."} — '
+                "הפק אותה עם scripts/gmail_authorize.py והדבק את התוכן, לא את נתיב הקובץ.")
+        missing = [k for k in ("client_id", "client_secret", "refresh_token")
+                   if not info.get(k)]
+        if missing:
+            raise SystemExit(f"שגיאה: ב-GMAIL_CREDENTIALS חסרים השדות: {', '.join(missing)}")
         creds = Credentials(None, refresh_token=info["refresh_token"],
                             token_uri=TOKEN_URI, client_id=info["client_id"],
                             client_secret=info["client_secret"], scopes=SCOPES)
