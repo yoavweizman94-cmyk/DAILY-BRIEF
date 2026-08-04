@@ -43,18 +43,39 @@ PROMPT="היום $DATE. בצע את הפייפליין היומי לפי CLAUDE.
 לבדיקת פרסומי למ\"ס ומכרזי רמ\"י, וכתוב את output/brief_$DATE.md לפי מבנה הפלט הקשיח. \
 מקורות שנכשלו בשלב ה-ingest: ${FAILED[*]:-אין}."
 
+if ! command -v claude >/dev/null 2>&1; then
+  echo "שגיאה: ה-CLI של claude לא נמצא ב-PATH — אי אפשר להפיק ברייף" >&2
+  exit 1
+fi
+
+# סמן זמן: הברייף חייב להיכתב אחריו, אחרת מדובר בקובץ מריצה קודמת
+MARKER="$(mktemp)"
+
 # Bash(python:*) נדרש לסקיל israeli-statistics — נתוני הלמ"ס מגיעים
 # מ-scripts/fetch_cbs_data.py שלו, לא מ-WebFetch.
 claude -p "$PROMPT" \
   --mcp-config .mcp.json \
   --permission-mode acceptEdits \
-  --allowedTools "Read,Write,Edit,Glob,Grep,Skill,WebFetch,WebSearch,Bash(python:*),mcp__israel-statistics__*,mcp__remy-land-authority__*" \
+  --allowedTools "Read,Write,Edit,Glob,Grep,Skill,WebFetch,WebSearch,Bash(python:*),mcp__israel-statistics__*" \
   ${CLAUDE_MODEL:+--model "$CLAUDE_MODEL"}
+CLAUDE_RC=$?
 
+# שלושת המחסומים האלה קיימים כי ריצה "ירוקה" בלי ברייף חדש היא הכשל המסוכן
+# ביותר כאן: האתר נפרס מחדש עם התוכן של אתמול ואיש אינו מבחין.
+if [ $CLAUDE_RC -ne 0 ]; then
+  echo "שגיאה: claude נכשל (קוד יציאה $CLAUDE_RC) — אין ברייף חדש" >&2
+  rm -f "$MARKER"; exit 1
+fi
 if [ ! -s "output/brief_$DATE.md" ]; then
   echo "שגיאה: output/brief_$DATE.md לא נוצר — אין מה לפרסם" >&2
-  exit 1
+  rm -f "$MARKER"; exit 1
 fi
+if [ ! "output/brief_$DATE.md" -nt "$MARKER" ]; then
+  echo "שגיאה: output/brief_$DATE.md לא נכתב בריצה הזו — הקובץ קדם להרצת הסוכן." >&2
+  echo "       פריסת התוכן הישן נמנעה במכוון." >&2
+  rm -f "$MARKER"; exit 1
+fi
+rm -f "$MARKER"
 
 python site/build.py
 python scripts/send_telegram.py --date "$DATE" || echo "אזהרה: שליחת הטלגרם נכשלה"

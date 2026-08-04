@@ -21,7 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "site" / "dist"
 STYLE = Path(__file__).parent / "style.css"
 
-MD_EXT = ["tables", "sane_lists", "smarty"]
+# בלי smarty: הוא ממיר גרשיים אנגליים טיפוגרפיים ומשבש עברית —
+# ש"ח הפך ל-ש&rdquo;ח וג'י סיטי ל-ג&rsquo;י סיטי.
+MD_EXT = ["tables", "sane_lists"]
 
 PAGE = """<!DOCTYPE html>
 <html lang="he" dir="rtl">
