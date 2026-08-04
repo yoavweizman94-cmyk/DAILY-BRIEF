@@ -121,9 +121,12 @@ def pull_yfinance(cfg, con, failures) -> dict:
         asof = closes.index[-1].date()
         val = round(float(closes.iloc[-1]), 4)
         kind = "pp" if inst.get("group") in YIELD_GROUPS else "pct"
+        # ריצת הבוקר מקדימה את פרסום הסגירה של חלק מהמכשירים (במיוחד מדדי ארה"ב),
+        # ואז asof מפגר. בלי סימון, "שינוי יומי" נקרא כאילו הוא תזוזת היום.
+        stale = (date.today() - asof).days
         out[key] = {"label": inst["label"], "ticker": ticker, "group": inst.get("group"),
                     "proxy": bool(inst.get("proxy")), "value": val,
-                    "asof": asof.isoformat(), "source": "yfinance",
+                    "asof": asof.isoformat(), "stale_days": stale, "source": "yfinance",
                     "change_unit": "pp" if kind == "pp" else "%",
                     "changes": changes(con, key, asof, val, kind)}
     return out
@@ -140,9 +143,12 @@ def main() -> int:
     con.commit()
 
     il10 = cfg.get("il_gov_10y", {})
+    stale = sorted(k for k, v in instruments.items() if v.get("stale_days", 0) > 0)
     result = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "date": TODAY,
+        # מכשירים שה-asof שלהם אינו היום — הברייף חייב לציין את תאריך הנתון לצידם
+        "stale_instruments": stale,
         "fx": fx,
         "instruments": instruments,
         "il_gov_10y": None if not il10.get("enabled") else il10,
