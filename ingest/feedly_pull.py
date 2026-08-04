@@ -72,6 +72,15 @@ class Feedly:
             raise SystemExit(
                 "שגיאה: FEEDLY_TOKEN לא תקף (401) ולא ניתן לרענן — "
                 "יש להנפיק טוקן חדש ולעדכן את הסביבה או את .env")
+        if r.status_code == 429:
+            # מכסת ה-API של Feedly היא 50 קריאות ליום. ריצה יומית צורכת ~7,
+            # אז 429 כמעט תמיד אומר שמישהו הריץ חקירה ידנית מול ה-API.
+            reset = r.headers.get("x-ratelimit-reset", "?")
+            used = r.headers.get("x-ratelimit-count", "?")
+            limit = r.headers.get("x-ratelimit-limit", "?")
+            raise SystemExit(
+                f"שגיאה: מכסת ה-API של Feedly מוצתה ({used}/{limit}); "
+                f"איפוס בעוד {reset} שניות. הברייף יופק בלי מקור Feedly.")
         r.raise_for_status()
         return r.json()
 
@@ -129,19 +138,23 @@ def main() -> int:
             f"שגיאה: הקטגוריה '{stream}' לא קיימת ב-Feedly. "
             f"קיימות: {', '.join(sorted(by_label)) or '(אין)'}")
 
+    cap = int(fcfg.get("max_items_per_stream", 250))
     entries: list[dict] = []
     for stream in fcfg.get("stream_ids", ["global.all"]):
         stream_id = resolve(stream)
         continuation = None
+        got = 0                    # מונה פר-זרם: אחרת קטגוריה עמוסה מרעיבה את הבאות
         while True:
             params = {"streamId": stream_id, "newerThan": newer_than,
-                      "count": min(int(fcfg.get("max_items_per_stream", 250)), 250)}
+                      "count": min(cap, 250)}
             if continuation:
                 params["continuation"] = continuation
             data = api.get("/streams/contents", **params)
-            entries.extend(data.get("items", []))
+            batch = data.get("items", [])
+            got += len(batch)
+            entries.extend(batch)
             continuation = data.get("continuation")
-            if not continuation or len(entries) >= int(fcfg.get("max_items_per_stream", 250)):
+            if not continuation or got >= cap:
                 break
 
     rows = [normalize(e) for e in entries if e.get("id")]
