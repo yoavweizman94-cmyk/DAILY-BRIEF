@@ -88,7 +88,8 @@ def normalize(entry: dict) -> dict:
         "id": entry.get("id"),
         "ts": datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
                       .isoformat(timespec="seconds"),
-        "title": (entry.get("title") or "").strip(),
+        # יש פידים (למשל RSS של gov.il) שמחזירים כותרת עטופה ב-HTML
+        "title": clean_html(entry.get("title") or "", max_chars=300),
         "body": clean_html(content),
         "url": url,
         "source": ((entry.get("origin") or {}).get("title") or "feedly").strip(),
