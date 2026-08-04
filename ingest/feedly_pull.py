@@ -114,10 +114,24 @@ def main() -> int:
     api = Feedly(base, token, os.environ.get("FEEDLY_REFRESH_TOKEN"))
 
     uid = api.get("/profile")["id"]
+    # Feedly מזהה קטגוריות שיצר המשתמש ב-UUID, לא בתווית. בקשה עם התווית
+    # מחזירה 200 ורשימה ריקה — כשל שקט — ולכן מתרגמים תווית→מזהה, ונכשלים במפורש.
+    by_label = {c["label"]: c["id"] for c in api.get("/categories")}
+
+    def resolve(stream: str) -> str:
+        if "/" in stream:                       # מזהה מלא שסופק כלשונו
+            return stream
+        if stream in by_label:
+            return by_label[stream]
+        if stream in ("global.all", "global.saved", "global.read"):
+            return f"user/{uid}/category/{stream}"
+        raise SystemExit(
+            f"שגיאה: הקטגוריה '{stream}' לא קיימת ב-Feedly. "
+            f"קיימות: {', '.join(sorted(by_label)) or '(אין)'}")
+
     entries: list[dict] = []
     for stream in fcfg.get("stream_ids", ["global.all"]):
-        stream_id = (f"user/{uid}/category/{stream}"
-                     if "/" not in stream else stream)
+        stream_id = resolve(stream)
         continuation = None
         while True:
             params = {"streamId": stream_id, "newerThan": newer_than,
