@@ -69,6 +69,7 @@ def md_to_tg(text: str) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=date.today().isoformat())
+    ap.add_argument("--brief", help="נתיב מפורש לברייף; גובר על --date (למהדורות)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -78,7 +79,10 @@ def main() -> int:
         print("שגיאה: TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID לא מוגדרים", file=sys.stderr)
         return 1
 
-    brief_path = ROOT / "output" / f"brief_{args.date}.md"
+    brief_path = (Path(args.brief) if args.brief
+                  else ROOT / "output" / f"brief_{args.date}.md")
+    if not brief_path.is_absolute():
+        brief_path = ROOT / brief_path
     if not brief_path.exists():
         print(f"שגיאה: {brief_path} לא קיים", file=sys.stderr)
         return 1
@@ -86,7 +90,8 @@ def main() -> int:
 
     cfg = yaml.safe_load((ROOT / "config" / "sources.yaml").read_text(encoding="utf-8"))
     base_url = cfg.get("site", {}).get("base_url", "").rstrip("/")
-    link = f"{base_url}/briefs/{args.date}.html" if base_url else ""
+    slug = brief_path.stem.replace("brief_", "")     # תאריך, ואם יש — גם המהדורה
+    link = f"{base_url}/briefs/{slug}.html" if base_url else ""
 
     title = md.splitlines()[0].lstrip("# ").strip() if md.strip() else f"ברייף {args.date}"
     morning = section(md, "תמונת בוקר")

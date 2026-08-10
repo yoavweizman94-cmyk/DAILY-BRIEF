@@ -265,8 +265,19 @@ def main() -> int:
     cfg = yaml.safe_load((ROOT / "config" / "sources.yaml").read_text(encoding="utf-8"))
     site_title = cfg.get("site", {}).get("title", "ברייף FOREST")
 
-    briefs = sorted((p for p in ROOT.glob("output/brief_*.md")
-                     if re.match(r"brief_\d{4}-\d{2}-\d{2}\.md$", p.name)), reverse=True)
+    # שלוש מהדורות ביום: brief_<date>.md (בוקר, שם היסטורי) ו-brief_<date>-<edition>.md.
+    # המיון הוא לפי (תאריך, סדר המהדורה) כדי שהחדשה ביותר תהיה ראשונה.
+    ED_ORDER = {"": 0, "morning": 0, "close": 1, "night": 2}
+    ED_HE = {"": "בוקר", "morning": "בוקר", "close": "נעילה", "night": "לילה"}
+    found = []
+    for f in ROOT.glob("output/brief_*.md"):
+        m = re.match(r"brief_(\d{4}-\d{2}-\d{2})(?:-(morning|close|night))?\.md$", f.name)
+        if m:
+            found.append((m.group(1), ED_ORDER.get(m.group(2) or "", 0), m.group(2) or "", f))
+    found.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    briefs = [f for _, _, _, f in found]
+    slugs = {f: (d + ("-" + e if e else "")) for d, _, e, f in found}
+    ed_of = {f: ED_HE.get(e, "בוקר") for d, _, e, f in found}
 
     if OUT.exists():
         shutil.rmtree(OUT)
@@ -275,16 +286,17 @@ def main() -> int:
 
     entries = []
     for p in briefs:
-        d = p.stem.replace("brief_", "")
+        slug = slugs[p]
         md_text = p.read_text(encoding="utf-8")
-        title = brief_title(md_text, f"ברייף {d}")
-        (OUT / "briefs" / f"{d}.html").write_text(
+        title = brief_title(md_text, f"ברייף {slug}")
+        (OUT / "briefs" / f"{slug}.html").write_text(
             PAGE.format(title=title, site_title=site_title, root="../", body=render(md_text)),
             encoding="utf-8")
-        entries.append((d, title))
+        entries.append((slug, f"{title}" if ed_of[p] in title else f"{title} · {ed_of[p]}"))
 
     if entries:
-        latest_date, latest_title = entries[0]
+        latest_slug, latest_title = entries[0]
+        latest_date = latest_slug[:10]
         raw_dir = ROOT / "data" / "raw" / latest_date
         markets = load_json(raw_dir / "markets.json")
         te = load_json(raw_dir / "te.json")

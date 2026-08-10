@@ -9,6 +9,35 @@ RAW="data/raw/$DATE"
 mkdir -p "$RAW"
 FAILED=()
 
+# --- מהדורה -----------------------------------------------------------------
+# שלוש מהדורות ביום. ה-cron של GitHub הוא ב-UTC בלבד, וישראל מזיזה שעון פעמיים
+# בשנה — לכן כל מהדורה מתוזמנת לשתי שעות UTC (קיץ וחורף) והבחירה נעשית כאן לפי
+# השעה המקומית בפועל. ריצה שנפלה על השעה ה"שנייה" יוצאת בשקט.
+edition_from_hour() {
+  case "$1" in
+    05|06|07) echo morning ;;
+    13|14|17|18|19) echo close ;;
+    23|00|01) echo night ;;
+    *) echo skip ;;
+  esac
+}
+
+EDITION="${BRIEF_EDITION:-$(edition_from_hour "$(date +%H)")}"
+if [ "$EDITION" = "skip" ]; then
+  echo "השעה $(date +%H:%M) אינה שעת מהדורה — יוצאים בלי להפיק ברייף."
+  exit 0
+fi
+
+case "$EDITION" in
+  morning) ED_HE="בוקר";  ED_FOCUS="סקירת פתיחה: מה קרה בלילה בעולם, מה צפוי היום, ומה שדווח במאיה מאז המהדורה הקודמת. סעיף 'מה לעקוב היום' הוא לב המהדורה." ;;
+  close)   ED_HE="נעילה"; ED_FOCUS="סיכום יום המסחר בתל אביב: תזוזות המדדים והמניות, כל דיווחי מאיה של היום ומשמעותם, ותגובת השוק. המיקוד ישראלי — שוק ארה\"ב עדיין נסחר ואינו הסיפור." ;;
+  night)   ED_HE="לילה";  ED_FOCUS="סיכום היום כולו לאחר נעילת וול סטריט: סגירת המדדים בארה\"ב, מאקרו גלובלי, וגזירת המשמעות לחברות הכיסוי לקראת יום המסחר הבא." ;;
+esac
+
+SUFFIX="-$EDITION"
+[ "$EDITION" = "morning" ] && SUFFIX=""     # שומר על שמות הברייפים הקיימים
+BRIEF="output/brief_${DATE}${SUFFIX}.md"
+
 run_source() {
   local name="$1"; shift
   if "$@"; then
@@ -19,7 +48,7 @@ run_source() {
   fi
 }
 
-echo "=== FOREST daily brief · $DATE ==="
+echo "=== FOREST brief · $DATE · מהדורת $ED_HE ($EDITION) ==="
 run_source feedly  python ingest/feedly_pull.py
 run_source gmail   python ingest/gmail_pull.py
 run_source maya    python ingest/maya_pull.py
@@ -39,9 +68,13 @@ if [ ! -d vendor/remy-mcp ]; then
     echo "אזהרה: clone של remy-mcp נכשל — שמות יישובים יוצגו כקודים"
 fi
 
-PROMPT="היום $DATE. בצע את הפייפליין היומי לפי CLAUDE.md: קרא את config/companies.yaml \
-ואת הקבצים ב-data/raw/$DATE/, הפעל את הסקילים israeli-statistics ו-israeli-land-tenders \
-לבדיקת פרסומי למ\"ס ומכרזי רמ\"י, וכתוב את output/brief_$DATE.md לפי מבנה הפלט הקשיח. \
+PROMPT="היום $DATE, מהדורת $ED_HE, השעה $(date +%H:%M) שעון ישראל. \
+בצע את הפייפליין היומי לפי CLAUDE.md: קרא את config/companies.yaml ואת הקבצים \
+ב-data/raw/$DATE/, הפעל את הסקיל israeli-statistics לבדיקת פרסומי למ\"ס, \
+וכתוב את $BRIEF לפי מבנה הפלט הקשיח. \
+מיקוד המהדורה: $ED_FOCUS \
+אם כבר קיימים ב-output/ ברייפים מהיום, קרא אותם קודם ואל תחזור על אותם אייטמים — \
+דווח מה השתנה מאז וסמן במפורש מה חדש. שורת הכותרת תכלול 'מהדורת $ED_HE'. \
 מקורות שנכשלו בשלב ה-ingest: ${FAILED[*]:-אין}."
 
 if ! command -v claude >/dev/null 2>&1; then
@@ -67,17 +100,17 @@ if [ $CLAUDE_RC -ne 0 ]; then
   echo "שגיאה: claude נכשל (קוד יציאה $CLAUDE_RC) — אין ברייף חדש" >&2
   rm -f "$MARKER"; exit 1
 fi
-if [ ! -s "output/brief_$DATE.md" ]; then
-  echo "שגיאה: output/brief_$DATE.md לא נוצר — אין מה לפרסם" >&2
+if [ ! -s "$BRIEF" ]; then
+  echo "שגיאה: $BRIEF לא נוצר — אין מה לפרסם" >&2
   rm -f "$MARKER"; exit 1
 fi
-if [ ! "output/brief_$DATE.md" -nt "$MARKER" ]; then
-  echo "שגיאה: output/brief_$DATE.md לא נכתב בריצה הזו — הקובץ קדם להרצת הסוכן." >&2
+if [ ! "$BRIEF" -nt "$MARKER" ]; then
+  echo "שגיאה: $BRIEF לא נכתב בריצה הזו — הקובץ קדם להרצת הסוכן." >&2
   echo "       פריסת התוכן הישן נמנעה במכוון." >&2
   rm -f "$MARKER"; exit 1
 fi
 rm -f "$MARKER"
 
 python site/build.py
-python scripts/send_telegram.py --date "$DATE" || echo "אזהרה: שליחת הטלגרם נכשלה"
-echo "=== הושלם: output/brief_$DATE.md ==="
+python scripts/send_telegram.py --brief "$BRIEF" || echo "אזהרה: שליחת הטלגרם נכשלה"
+echo "=== הושלם: $BRIEF (מהדורת $ED_HE) ==="

@@ -1,9 +1,21 @@
 name: Daily Brief
 
+# שלוש מהדורות ביום. cron של GitHub הוא UTC בלבד וישראל מזיזה שעון פעמיים בשנה,
+# ולכן כל מהדורה מתוזמנת לשתי שעות UTC — קיץ (UTC+3) וחורף (UTC+2) — ו-run_daily.sh
+# בוחר מהדורה לפי השעה המקומית בפועל ויוצא בשקט בשעה ה"שנייה".
+# הבורסה עברה בינואר 2026 למסחר שני–שישי; מהדורת הנעילה רצה רק בימי מסחר.
 on:
   schedule:
-    - cron: "45 3 * * *"     # 03:45 UTC = 06:45 ישראל (קיץ)
-  workflow_dispatch: {}
+    - cron: "45 3,4 * * *"        # 06:45 ישראל — מהדורת בוקר, כל יום
+    - cron: "0 15,16 * * 1,2,3,4" # 18:00 ישראל — נעילה, שני–חמישי (מסחר עד 17:14)
+    - cron: "30 11,12 * * 5"      # 14:30 ישראל — נעילה בשישי (מסחר עד 13:34)
+    - cron: "0 21,22 * * *"       # 00:00 ישראל — מהדורת לילה, כל יום
+  workflow_dispatch:
+    inputs:
+      edition:
+        description: "מהדורה (morning / close / night). ריק = לפי השעה"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -21,10 +33,12 @@ jobs:
   brief:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      produced: ${{ steps.pipeline.outputs.produced }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0     # היסטוריה מלאה — נדרש ל-pull --rebase בשלב ה-commit חזרה
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -43,7 +57,9 @@ jobs:
           npm install -g @anthropic-ai/claude-code
 
       - name: Run daily pipeline
+        id: pipeline
         env:
+          BRIEF_EDITION: ${{ github.event.inputs.edition }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           FEEDLY_TOKEN: ${{ secrets.FEEDLY_TOKEN }}
           FEEDLY_REFRESH_TOKEN: ${{ secrets.FEEDLY_REFRESH_TOKEN }}
@@ -51,23 +67,29 @@ jobs:
           TRADINGECONOMICS_KEY: ${{ secrets.TRADINGECONOMICS_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: bash run_daily.sh
+        run: |
+          bash run_daily.sh
+          # site/dist נוצר רק כשהופק ברייף; ריצת "skip" יוצאת לפני כן.
+          if [ -d site/dist ]; then echo "produced=yes" >> "$GITHUB_OUTPUT"; fi
 
       - name: Commit state and output back to repo
+        if: steps.pipeline.outputs.produced == 'yes'
         run: |
           git config user.name "forest-brief-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/state.sqlite output
-          git diff --cached --quiet || git commit -m "brief: $(date +%F)"
+          git diff --cached --quiet || git commit -m "brief: $(date +'%F %H:%M')"
           git pull --rebase origin main
           git push
 
       - uses: actions/upload-pages-artifact@v3
+        if: steps.pipeline.outputs.produced == 'yes'
         with:
           path: site/dist
 
   deploy:
     needs: brief
+    if: needs.brief.outputs.produced == 'yes'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
