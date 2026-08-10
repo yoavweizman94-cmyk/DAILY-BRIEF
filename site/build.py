@@ -204,9 +204,14 @@ def main() -> int:
         raw_dir = ROOT / "data" / "raw" / latest_date
         markets = load_json(raw_dir / "markets.json")
         te = load_json(raw_dir / "te.json")
+        # חותמת לפי תאריך הברייף ולא לפי שעת הבנייה: בנייה חוזרת בלי ברייף חדש
+        # הייתה מציגה "עודכן עכשיו" מעל תוכן של אתמול.
+        d_disp = f"{latest_date[8:10]}/{latest_date[5:7]}/{latest_date[:4]}"
+        age = (datetime.now().date() - datetime.strptime(latest_date, "%Y-%m-%d").date()).days
+        stale_note = "" if age <= 0 else f' <b class="stale">ברייף בן {age} ימים</b>'
         body = "\n".join(filter(None, [
             f'<div class="dash-head"><h1>{latest_title}</h1>'
-            f'<span class="stamp">עודכן {datetime.now():%d/%m %H:%M}</span></div>',
+            f'<span class="stamp">ברייף ל-{d_disp}{stale_note} · נבנה {datetime.now():%d/%m %H:%M}</span></div>',
             sources_panel(raw_dir),
             markets_strip(markets),
             calendar_panel(te),
