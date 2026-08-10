@@ -43,7 +43,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a> · <a href="{root}reports.html">דיווחי מאיה</a> · <a href="{root}archive.html">ארכיון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a> · <a href="{root}reports.html">דיווחים וסיכומי דוחות</a> · <a href="{root}archive.html">ארכיון</a></nav>
   <div class="brand">{site_title}</div>
 </header>
 <main>
@@ -229,9 +229,15 @@ def load_reports(day: str | None = None) -> list[dict]:
     return sorted(rows, key=lambda x: x.get("ts") or "", reverse=True)
 
 
-def reports_rows(rows: list[dict], limit: int | None = None) -> str:
-    out = []
+def reports_rows(rows: list[dict], limit: int | None = None,
+                 day_separators: bool = False) -> str:
+    out, last_day = [], None
     for r in (rows[:limit] if limit else rows):
+        if day_separators:
+            day = (r.get("ts") or "")[:10]
+            if day != last_day:
+                out.append(f'<li class="daysep">{day[8:10]}/{day[5:7]}</li>')
+                last_day = day
         mat = r.get("materiality") or 1
         cov = r.get("coverage") or []
         badge = ('<span class="cov">כיסוי</span>' if cov else "")
@@ -261,9 +267,53 @@ def reports_panel(rows: list[dict]) -> str:
             '<p><a href="reports.html">כל הדיווחים ←</a></p>')
 
 
+def load_news(days: int = 14) -> list[dict]:
+    """חדשות מסווגות מ-output/news/*.jsonl, החדשות קודם."""
+    d = ROOT / "output" / "news"
+    if not d.exists():
+        return []
+    rows = []
+    for f in sorted(d.glob("*.jsonl"), reverse=True)[:days]:
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+    return sorted(rows, key=lambda x: x.get("ts") or "", reverse=True)
+
+
+def news_items_html(rows: list[dict], limit: int | None = None) -> str:
+    out, last_day = [], None
+    for r in (rows[:limit] if limit else rows):
+        day = (r.get("ts") or "")[:10]
+        if day != last_day:
+            out.append(f'<li class="daysep">{day[8:10]}/{day[5:7]}</li>')
+            last_day = day
+        url = r.get("url") or "#"
+        out.append(
+            f'<li class="nw"><span class="t">{(r.get("ts") or "")[11:16]}</span>'
+            f'<a href="{url}" target="_blank" rel="noopener">{r.get("title","")}</a>'
+            f'<span class="src">{r.get("source","")}</span></li>')
+    return "".join(out)
+
+
+def topics_nav(topics: list[dict], counts: dict, current: str = "") -> str:
+    links = []
+    for t in topics:
+        n = counts.get(t["slug"], 0)
+        if not n:
+            continue
+        cls = ' class="cur"' if t["slug"] == current else ""
+        links.append(f'<a href="topics/{t["slug"]}.html"{cls}>{t["label"]}'
+                     f'<em>{n}</em></a>')
+    return f'<nav class="topics">{"".join(links)}</nav>' if links else ""
+
+
 def main() -> int:
     cfg = yaml.safe_load((ROOT / "config" / "sources.yaml").read_text(encoding="utf-8"))
     site_title = cfg.get("site", {}).get("title", "ברייף FOREST")
+    topics = cfg.get("topics") or []
 
     # שלוש מהדורות ביום: brief_<date>.md (בוקר, שם היסטורי) ו-brief_<date>-<edition>.md.
     # המיון הוא לפי (תאריך, סדר המהדורה) כדי שהחדשה ביותר תהיה ראשונה.
@@ -283,6 +333,27 @@ def main() -> int:
         shutil.rmtree(OUT)
     (OUT / "briefs").mkdir(parents=True)
     shutil.copy(STYLE, OUT / "style.css")
+
+    # --- עמודי נושאים -----------------------------------------------------
+    news = load_news()
+    counts = {}
+    for r in news:
+        for s in r.get("topics") or []:
+            counts[s] = counts.get(s, 0) + 1
+    (OUT / "topics").mkdir(exist_ok=True)
+    for tp in topics:
+        rows = [r for r in news if tp["slug"] in (r.get("topics") or [])]
+        if not rows:
+            continue
+        comps = ", ".join(tp.get("companies") or [])
+        body = (f'<h1>{tp["label"]}</h1>'
+                + (f'<p class="stamp">חברות כיסוי שנוגעות בנושא: {comps}</p>' if comps else "")
+                + f'<p class="stamp">{len(rows)} אייטמים מ-14 הימים האחרונים</p>'
+                + topics_nav(topics, counts, tp["slug"]).replace('topics/', '')
+                + f'<ul class="news">{news_items_html(rows)}</ul>')
+        (OUT / "topics" / f'{tp["slug"]}.html').write_text(
+            PAGE.format(title=f'{tp["label"]} · {site_title}', site_title=site_title,
+                        root="../", body=body), encoding="utf-8")
 
     entries = []
     for p in briefs:
@@ -310,6 +381,7 @@ def main() -> int:
             f'<div class="dash-head"><h1>{latest_title}</h1>'
             f'<span class="stamp">ברייף ל-{d_disp}{stale_note} · נבנה {datetime.now():%d/%m %H:%M}</span></div>',
             sources_panel(raw_dir),
+            topics_nav(topics, counts),
             markets_strip(markets, te),
             reports_panel(reports),
             indicators_panel(te),
@@ -335,14 +407,31 @@ def main() -> int:
         encoding="utf-8")
 
     all_reports = load_reports()
+    if all_reports:
+        lvl3 = [r for r in all_reports if (r.get("materiality") or 1) >= 3]
+        cov = [r for r in all_reports if r.get("coverage")]
+        comps = len({c for r in all_reports for c in (r.get("companies") or [])})
+        head = (
+            '<h1>דיווחים וסיכומי דוחות</h1>'
+            '<p class="stamp">כל דיווח מהותי שמתפרסם במאיה — <b>מכל חברה נסחרת</b>, '
+            'לא רק מחברות הכיסוי. הניטור רץ כל רבע שעה בשעות המסחר, מוריד את גוף '
+            'הדוח (כולל ה-PDF המצורף) ומסכם אותו.</p>'
+            f'<p class="stamp">{len(all_reports)} דיווחים · {comps} חברות · '
+            f'{len(lvl3)} ברמת מהותיות 3 · {len(cov)} של חברות כיסוי</p>')
+        body = head
+        if lvl3:
+            body += ('<h2>מהותיים</h2>'
+                     f'<ul class="reports">{reports_rows(lvl3, day_separators=True)}</ul>')
+        rest = [r for r in all_reports if (r.get("materiality") or 1) < 3]
+        if rest:
+            body += ('<h2>שאר הדיווחים</h2>'
+                     f'<ul class="reports">{reports_rows(rest, day_separators=True)}</ul>')
+    else:
+        body = ('<h1>דיווחים וסיכומי דוחות</h1>'
+                '<p>אין עדיין סיכומים. הניטור רץ בשעות המסחר, שני–שישי.</p>')
     (OUT / "reports.html").write_text(
-        PAGE.format(title=f"דיווחי מאיה · {site_title}", site_title=site_title, root="",
-                    body=(f'<h1>דיווחי מאיה</h1><p class="stamp">{len(all_reports)} '
-                          f'דיווחים מסוכמים מחמשת ימי המסחר האחרונים</p>'
-                          f'<ul class="reports">{reports_rows(all_reports)}</ul>')
-                         if all_reports else
-                         "<h1>דיווחי מאיה</h1><p>אין עדיין סיכומים.</p>"),
-        encoding="utf-8")
+        PAGE.format(title=f"דיווחים וסיכומי דוחות · {site_title}",
+                    site_title=site_title, root="", body=body), encoding="utf-8")
 
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
     print(f"נבנה {OUT} | {len(entries)} ברייפים | "

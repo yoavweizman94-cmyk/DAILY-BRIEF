@@ -62,6 +62,74 @@ rss:
     - {name: "Electrive",            url: "https://www.electrive.com/feed/"}
 
 # ---------------------------------------------------------------------------
+# נושאים לחלוקת האתר. הסיווג נעשה במילות מפתח (scripts/publish_news.py) ולא
+# ב-LLM: מדובר ב-~330 אייטמים ביום, וסיווג במודל היה מכפיל את עלות ההרצה
+# בלי להוסיף דיוק משמעותי על טקסונומיה צרה כל כך.
+# כל נושא מקושר לדרייברים ב-companies.yaml ולחברות שנוגעות בו.
+# ---------------------------------------------------------------------------
+topics:
+  - slug: datacenters
+    label: מרכזי נתונים
+    companies: [עזריאלי קבוצה]
+    keywords: [data center, datacenter, data centre, hyperscale, colocation,
+               "AI infrastructure", server farm, חוות שרתים, מרכזי נתונים, מרכז נתונים]
+  - slug: energy
+    label: אנרגיה וחשמל
+    companies: [סולאר אדג' US, עזריאלי קבוצה]
+    keywords: [electricity, power grid, utility, renewable, solar, photovoltaic,
+               megawatt, gigawatt, חשמל, סולארי, אנרגיה מתחדשת, רשות החשמל, מגה-וואט]
+  - slug: polymers
+    label: פולימרים ופלסטיק
+    companies: [פלרם, פלסאון תעשיות, רימוני, פלסטופיל, אבגול, ספאנטק, עלבד]
+    keywords: [polymer, plastic, resin, polyethylene, polypropylene, PVC,
+               polycarbonate, nonwoven, spunlace, פלסטיק, פולימר, לא-ארוג, פוליפרופילן]
+  - slug: building-materials
+    label: מלט וחומרי בנייה
+    companies: [שפיר הנדסה, קבוצת אקרשטיין, אינרום, קליל, חמת, בירמן]
+    keywords: [cement, concrete, aggregate, quarry, clinker, timber, lumber,
+               מלט, בטון, אגרגט, מחצבה, עץ לבנייה, תשומות בנייה]
+  - slug: metals
+    label: מתכות
+    companies: [קליל, עשות, שיכון ובינוי]
+    keywords: [aluminium, aluminum, steel, copper, LME, scrap metal, iron ore,
+               אלומיניום, פלדה, נחושת, ברזל, גרוטאות]
+  - slug: shipping
+    label: שילוח ולוגיסטיקה
+    companies: [נטו אחזקות, בירמן, פלרם]
+    keywords: [freight, shipping, container, tanker, port, supply chain,
+               logistics, שילוח, מכולות, נמל, שרשרת אספקה, הובלה ימית]
+  - slug: food-agri
+    label: מזון וחקלאות
+    companies: [מהדרין, זנלכל, מחלבות גד, נטו אחזקות]
+    keywords: [dairy, milk, crop, harvest, citrus, grain, food price, agriculture,
+               fertilizer, potash, מזון, חקלאות, חלב, יבול, הדרים, דשנים, אשלג]
+  - slug: defense
+    label: ביטחון
+    companies: [עשות]
+    keywords: [defense, defence, military, munitions, armored, procurement,
+               ביטחוני, משהב"ט, תעשייה ביטחונית, יצוא ביטחוני]
+  - slug: auto-ev
+    label: רכב וחשמלי
+    companies: [רבל]
+    keywords: [electric vehicle, " EV ", automotive, carmaker, battery, charging,
+               רכב חשמלי, תעשיית הרכב, סוללות]
+  - slug: real-estate
+    label: נדל"ן ובנייה
+    companies: []
+    keywords: [real estate, construction, housing, mortgage, property,
+               נדל"ן, בנייה, דיור, משכנתא, מגורים, התחדשות עירונית, מכרז קרקע, רמ"י]
+  - slug: tech-cyber
+    label: טק וסייבר
+    companies: [Check Point, WIX, אמדוקס US, Fivver, סרגון US, מאינד US]
+    keywords: [cybersecurity, cyber attack, ransomware, SaaS, software,
+               semiconductor, chip, artificial intelligence, סייבר, תוכנה, שבבים]
+  - slug: macro
+    label: מאקרו וריבית
+    companies: []
+    keywords: [inflation, interest rate, central bank, federal reserve, bond yield,
+               GDP, אינפלציה, ריבית, בנק ישראל, הפד, תשואות אג"ח, תוצר, מדד המחירים]
+
+# ---------------------------------------------------------------------------
 # Gmail — דורש GMAIL_CREDENTIALS בסביבה (JSON עם client_id/client_secret/refresh_token)
 # ---------------------------------------------------------------------------
 gmail:
