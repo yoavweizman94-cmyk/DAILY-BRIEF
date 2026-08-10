@@ -89,7 +89,9 @@ ul.sources li.bad span { color: #c0392b; font-weight: 700; }
 .tile.flat .chg { color: var(--muted); }
 
 table.cal { font-size: 0.84rem; }
-table.cal td.imp { letter-spacing: 0.1em; color: var(--accent); white-space: nowrap; }
+table.cal td.imp { letter-spacing: 0.1em; white-space: nowrap; text-align: center; }
+table.cal .up { color: #1f8a4c; }
+table.cal .down { color: #c0392b; }
 hr.sep { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
 footer {
   text-align: center;

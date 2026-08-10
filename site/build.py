@@ -121,11 +121,22 @@ def fmt_value(v, is_yield: bool) -> str:
     return f"{x:,.4f}"
 
 
-def markets_strip(markets: dict | None) -> str:
+def markets_strip(markets: dict | None, te: dict | None = None) -> str:
     """רצועת מספרים קומפקטית — הדבר הראשון שרואים."""
     if not markets:
         return ""
     tiles = []
+    # תשואת הממשלתי הישראלי מגיעה מ-TE ולא מ-markets.json, אבל מקומה כאן
+    # בראש הרצועה — היא עוגן התמחור של כל סקטור הנדל"ן בכיסוי.
+    il = (te or {}).get("il_gov_10y")
+    if il and il.get("yield") is not None:
+        ch = il.get("daily")
+        cls = "flat" if not ch else ("up" if ch > 0 else "down")
+        sign = "+" if (ch or 0) > 0 else ""
+        tiles.append(
+            f'<div class="tile {cls}"><span class="lbl">ממשלתי ישראלי 10ש</span>'
+            f'<span class="val" dir="ltr">{il["yield"]:.3f}%</span>'
+            f'<span class="chg" dir="ltr">{"—" if ch is None else f"{sign}{ch}"}</span></div>')
     order = ["fx_usd_ils", "fx_eur_ils", "brent", "us10y", "ta125", "ta35",
              "sp500", "nasdaq", "steel_hrc", "aluminum", "cocoa", "dry_bulk"]
     pool = {**markets.get("fx", {}), **markets.get("instruments", {})}
@@ -144,6 +155,28 @@ def markets_strip(markets: dict | None) -> str:
             f'<span class="val" dir="ltr">{fmt_value(v["value"], unit == "pp")}</span>'
             f'<span class="chg" dir="ltr">{chtxt}</span></div>')
     return f'<section class="strip">{"".join(tiles)}</section>' if tiles else ""
+
+
+def indicators_panel(te: dict | None) -> str:
+    """אינדיקטורי מאקרו לישראל מ-Trading Economics, עם כיוון מול הקריאה הקודמת."""
+    if not te or not te.get("indicators"):
+        return ""
+    rows = []
+    for i in te["indicators"]:
+        val, prev = i.get("value"), i.get("previous")
+        arrow = ""
+        if isinstance(val, (int, float)) and isinstance(prev, (int, float)):
+            arrow = ('<span class="up">▲</span>' if val > prev
+                     else '<span class="down">▼</span>' if val < prev else "—")
+        rows.append(
+            f"<tr><td>{i.get('category','')}</td>"
+            f"<td dir='ltr'>{val} {i.get('unit','') or ''}</td>"
+            f"<td class='imp'>{arrow}</td>"
+            f"<td dir='ltr'>{prev if prev is not None else '—'}</td>"
+            f"<td>{str(i.get('date') or '')[:10]}</td></tr>")
+    return ('<h2>מאקרו ישראל — אינדיקטורים</h2><table class="cal"><thead><tr>'
+            '<th>מדד</th><th>ערך</th><th>כיוון</th><th>קודם</th><th>לתאריך</th>'
+            f'</tr></thead><tbody>{"".join(rows)}</tbody></table>')
 
 
 def calendar_panel(te: dict | None) -> str:
@@ -213,7 +246,8 @@ def main() -> int:
             f'<div class="dash-head"><h1>{latest_title}</h1>'
             f'<span class="stamp">ברייף ל-{d_disp}{stale_note} · נבנה {datetime.now():%d/%m %H:%M}</span></div>',
             sources_panel(raw_dir),
-            markets_strip(markets),
+            markets_strip(markets, te),
+            indicators_panel(te),
             calendar_panel(te),
             '<hr class="sep">',
             render(briefs[0].read_text(encoding="utf-8")),

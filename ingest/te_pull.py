@@ -33,12 +33,19 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = "https://api.tradingeconomics.com"
 
 
+class NotInPlan(Exception):
+    """המנוי אינו כולל את הנתון — לא תקלה, פשוט מחוץ למסלול."""
+
+
 def fetch(session, key: str, path: str, **params):
     r = session.get(f"{BASE}{path}", params={"c": key, "f": "json", **params}, timeout=45)
-    if r.status_code in (401, 403):
-        raise SystemExit("שגיאה: TRADINGECONOMICS_KEY נדחה (401/403) — מפתח לא תקף או חסום")
-    if r.status_code == 409:
-        raise SystemExit("שגיאה: המנוי ב-Trading Economics אינו כולל את הנתון המבוקש (409)")
+    if r.status_code == 401:
+        raise SystemExit("שגיאה: TRADINGECONOMICS_KEY נדחה (401) — מפתח לא תקף")
+    # 403/409 הם "אין לך גישה לפיצ'ר הזה", ונוגעים לנתיב אחד בלבד. אסור
+    # שיפילו את כל המקור — לוח האירועים למשל אינו כלול במסלול הנוכחי,
+    # בעוד האג"ח והאינדיקטורים כן.
+    if r.status_code in (403, 409):
+        raise NotInPlan(r.text[:120].strip())
     r.raise_for_status()
     if not (r.headers.get("content-type") or "").startswith("application/json"):
         raise RuntimeError(f"תשובה לא-JSON מ-{path}: {r.text[:120]}")
@@ -75,6 +82,10 @@ def main() -> int:
             "actual": e.get("Actual"), "previous": e.get("Previous"),
             "forecast": e.get("Forecast"), "te_forecast": e.get("TEForecast"),
         } for e in events if isinstance(e, dict)]
+    except NotInPlan as ex:
+        out["calendar"] = []
+        out["calendar_unavailable"] = f"המנוי אינו כולל לוח אירועים: {ex}"
+        print("הערה: לוח האירועים אינו כלול במנוי — מדלגים עליו", file=sys.stderr)
     except SystemExit:
         raise
     except Exception as ex:
@@ -99,8 +110,11 @@ def main() -> int:
         il = next((r for r in rows if "israel" in (r["name"] or "").lower()
                    and "10y" in (r["name"] or "").lower()), None)
         out["il_gov_10y"] = il          # הנתון שהיה חסר בפייפליין
-    except SystemExit:
-        raise
+    except (SystemExit, NotInPlan) as ex:
+        if isinstance(ex, SystemExit):
+            raise
+        out["bonds"], out["il_gov_10y"] = [], None
+        out["failures"].append({"source": "bonds", "error": f"לא במנוי: {ex}"})
     except Exception as ex:
         out["bonds"], out["il_gov_10y"] = [], None
         out["failures"].append({"source": "bonds", "error": str(ex)})
@@ -116,8 +130,11 @@ def main() -> int:
             "frequency": i.get("Frequency"),
         } for i in ind if isinstance(i, dict)
             and (not wanted or (i.get("Category") or "").lower() in wanted)]
-    except SystemExit:
-        raise
+    except (SystemExit, NotInPlan) as ex:
+        if isinstance(ex, SystemExit):
+            raise
+        out["indicators"] = []
+        out["failures"].append({"source": "indicators", "error": f"לא במנוי: {ex}"})
     except Exception as ex:
         out["indicators"] = []
         out["failures"].append({"source": "indicators", "error": str(ex)})
