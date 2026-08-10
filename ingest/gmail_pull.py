@@ -116,12 +116,26 @@ def main() -> int:
 
     svc = get_service()
     label_id = find_label_id(svc, gcfg["label"])
-
+    cap = int(gcfg.get("max_messages", 50))
     days_back = max(1, (lookback + 23) // 24) + 1     # שוליים — סינון מדויק בהמשך
-    resp = svc.users().messages().list(
-        userId="me", labelIds=[label_id], q=f"newer_than:{days_back}d",
-        maxResults=int(gcfg.get("max_messages", 50))).execute()
-    ids = [m["id"] for m in resp.get("messages", [])]
+
+    # שני מסלולים: מה שתויג ידנית ללייבל, ובנוסף שולחים קבועים מהקונפיג.
+    # שאילתות נפרדות ולא OR אחד — שם לייבל בעברית בתוך q מועד לתקלות escaping.
+    ids: list[str] = []
+    seen_ids: set[str] = set()
+
+    def collect(**kw):
+        resp = svc.users().messages().list(userId="me", maxResults=cap, **kw).execute()
+        for m in resp.get("messages", []):
+            if m["id"] not in seen_ids:
+                seen_ids.add(m["id"])
+                ids.append(m["id"])
+
+    collect(labelIds=[label_id], q=f"newer_than:{days_back}d")
+    senders = [s for s in (gcfg.get("senders") or []) if s]
+    if senders:
+        from_q = " OR ".join(f"from:{s}" for s in senders)
+        collect(q=f"newer_than:{days_back}d ({from_q})")
 
     rows = []
     for mid in ids:

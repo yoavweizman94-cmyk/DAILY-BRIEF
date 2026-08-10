@@ -33,8 +33,21 @@ feedly:
 # Gmail — דורש GMAIL_CREDENTIALS בסביבה (JSON עם client_id/client_secret/refresh_token)
 # ---------------------------------------------------------------------------
 gmail:
-  label: "ברייף"
-  max_messages: 50
+  label: "ברייף"          # כל מה שמתויג ידנית נכנס תמיד
+  max_messages: 150
+  # שולחים שנמשכים אוטומטית גם בלי תיוג. זוהו בסריקת התיבה (08/2026) כמנויים
+  # פעילים שנוגעים ליקום הכיסוי. הוספה כאן חוסכת תיוג ידני יומי.
+  senders:
+    - mailtase.co.il        # סוכן חכם מאיה — התראות על חברות נסחרות
+    - mc.haaretz.com        # TheMarker + שיחת השוק של אסא ששון
+    - calcalist.co.il       # כלכליסט
+    - divenewsletter.com    # Construction / Utility / Facilities / Smart Cities / ESG / Cybersecurity Dive
+    - ittnewsletter.com     # Data Center Knowledge — דרייבר של עזריאלי
+    - e.economist.com       # מאקרו עולמי
+    - newsletters.ft.com    # FT
+    - nytimes.com           # NYT
+    - news.bloomberg.com    # Bloomberg Markets Daily
+    - stratechery.com       # ניתוח טק — רקע ל-tech_us
 
 # ---------------------------------------------------------------------------
 # מאיה — API ציבורי, ללא אימות. הסינון לפי tase_id מ-companies.yaml נעשה בסקריפט.
