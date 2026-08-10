@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -73,8 +74,9 @@ class Feedly:
                 "שגיאה: FEEDLY_TOKEN לא תקף (401) ולא ניתן לרענן — "
                 "יש להנפיק טוקן חדש ולעדכן את הסביבה או את .env")
         if r.status_code == 429:
-            # מכסת ה-API של Feedly היא 50 קריאות ליום. ריצה יומית צורכת ~7,
-            # אז 429 כמעט תמיד אומר שמישהו הריץ חקירה ידנית מול ה-API.
+            # מכסת ה-API של Feedly היא 50 קריאות ליום לחשבון. שלוש מהדורות
+            # צורכות ~15 (5 זרמים + מטמון למזהים), כך שיש מרווח — אבל חקירה
+            # ידנית מול ה-API מכלה אותו ומפילה את המקור לשארית היום.
             reset = r.headers.get("x-ratelimit-reset", "?")
             used = r.headers.get("x-ratelimit-count", "?")
             limit = r.headers.get("x-ratelimit-limit", "?")
@@ -122,10 +124,33 @@ def main() -> int:
     base = fcfg.get("api_base", "https://cloud.feedly.com/v3")
     api = Feedly(base, token, os.environ.get("FEEDLY_REFRESH_TOKEN"))
 
-    uid = api.get("/profile")["id"]
-    # Feedly מזהה קטגוריות שיצר המשתמש ב-UUID, לא בתווית. בקשה עם התווית
-    # מחזירה 200 ורשימה ריקה — כשל שקט — ולכן מתרגמים תווית→מזהה, ונכשלים במפורש.
-    by_label = {c["label"]: c["id"] for c in api.get("/categories")}
+    # מכסת ה-API היא 50 קריאות ליום לחשבון, ועם שלוש מהדורות ביום כל קריאה
+    # נחסכת נחשבת. זהות המשתמש ומיפוי הקטגוריות כמעט לא משתנים, ולכן הם
+    # נשמרים במטמון ל-24 שעות — חיסכון של 2 קריאות בכל ריצה (6 ביום).
+    meta_path = ROOT / "data" / "feedly_meta.json"
+    meta = None
+    try:
+        cached = json.loads(meta_path.read_text(encoding="utf-8"))
+        if time.time() - cached.get("cached_at", 0) < 86400:
+            meta = cached
+    except Exception:
+        meta = None
+
+    wanted_labels = [s for s in fcfg.get("stream_ids", []) if "/" not in s]
+    if meta and not all(lbl in meta.get("by_label", {}) for lbl in wanted_labels):
+        meta = None                                  # קטגוריה חדשה — לרענן
+
+    if meta:
+        uid, by_label = meta["uid"], meta["by_label"]
+    else:
+        uid = api.get("/profile")["id"]
+        # Feedly מזהה קטגוריות שיצר המשתמש ב-UUID, לא בתווית. בקשה עם התווית
+        # מחזירה 200 ורשימה ריקה — כשל שקט — ולכן מתרגמים תווית→מזהה.
+        by_label = {c["label"]: c["id"] for c in api.get("/categories")}
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
+        meta_path.write_text(json.dumps(
+            {"uid": uid, "by_label": by_label, "cached_at": time.time()},
+            ensure_ascii=False), encoding="utf-8")
 
     def resolve(stream: str) -> str:
         if "/" in stream:                       # מזהה מלא שסופק כלשונו
