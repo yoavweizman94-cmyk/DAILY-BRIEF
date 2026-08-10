@@ -100,3 +100,20 @@ footer {
   padding: 1rem;
   border-top: 1px solid var(--border);
 }
+
+/* ---- פיד דיווחי מאיה ---- */
+ul.reports { list-style: none; padding: 0; margin: 0.6rem 0; }
+li.rep { border-inline-start: 3px solid var(--border); padding: 0.5rem 0.8rem;
+  margin-bottom: 0.5rem; background: var(--table-head); border-radius: 0 6px 6px 0; }
+li.rep.m3 { border-inline-start-color: var(--accent); }
+li.rep.m1 { opacity: 0.72; }
+.rep-head { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; font-size: 0.86rem; }
+.rep-head .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+.rep-head a { font-weight: 600; text-decoration: none; }
+.rep-head .mat { color: var(--accent); letter-spacing: 0.08em; margin-inline-start: auto; }
+.rep-head .cov { font-size: 0.68rem; background: var(--accent); color: #fff;
+  border-radius: 999px; padding: 0.05rem 0.45rem; }
+.rep-head .chg.up { color: #1f8a4c; } .rep-head .chg.down { color: #c0392b; }
+.rep-head .chg.flat { color: var(--muted); }
+.rep-sum { font-size: 0.92rem; margin-top: 0.25rem; }
+.rep-why { font-size: 0.82rem; color: var(--muted); margin-top: 0.2rem; }

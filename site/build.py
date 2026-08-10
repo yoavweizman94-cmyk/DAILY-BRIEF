@@ -43,7 +43,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a> · <a href="{root}archive.html">ארכיון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a> · <a href="{root}reports.html">דיווחי מאיה</a> · <a href="{root}archive.html">ארכיון</a></nav>
   <div class="brand">{site_title}</div>
 </header>
 <main>
@@ -210,6 +210,57 @@ def archive_panel(entries: list[tuple[str, str]], limit: int = 10) -> str:
             '<p><a href="archive.html">לארכיון המלא ←</a></p>')
 
 
+def load_reports(day: str | None = None) -> list[dict]:
+    """סיכומי מאיה מ-output/reports/*.jsonl, החדש ביותר קודם."""
+    d = ROOT / "output" / "reports"
+    if not d.exists():
+        return []
+    files = sorted(d.glob("*.jsonl"), reverse=True)
+    if day:
+        files = [f for f in files if f.stem == day]
+    rows = []
+    for f in files[:5]:
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+    return sorted(rows, key=lambda x: x.get("ts") or "", reverse=True)
+
+
+def reports_rows(rows: list[dict], limit: int | None = None) -> str:
+    out = []
+    for r in (rows[:limit] if limit else rows):
+        mat = r.get("materiality") or 1
+        cov = r.get("coverage") or []
+        badge = ('<span class="cov">כיסוי</span>' if cov else "")
+        dirc = (r.get("direction") or "").strip()
+        dcls = {"חיובי": "up", "שלילי": "down"}.get(dirc, "flat")
+        out.append(
+            f'<li class="rep m{mat}">'
+            f'<div class="rep-head"><span class="t">{(r.get("ts") or "")[11:16]}</span>'
+            f'<a href="{r.get("url","#")}" target="_blank" rel="noopener">'
+            f'{", ".join(r.get("companies") or []) or "—"}</a>{badge}'
+            f'<span class="chg {dcls}">{dirc}</span>'
+            f'<span class="mat">{"●" * int(mat)}</span></div>'
+            f'<div class="rep-sum">{r.get("summary","")}</div>'
+            + (f'<div class="rep-why">{r.get("why","")}</div>'
+               if (r.get("why") or "").strip() not in ("", "טכני") else "")
+            + "</li>")
+    return "".join(out)
+
+
+def reports_panel(rows: list[dict]) -> str:
+    if not rows:
+        return ""
+    lvl3 = [r for r in rows if (r.get("materiality") or 1) >= 3]
+    head = (f'<h2>דיווחי מאיה — {len(rows)} סוכמו'
+            + (f', {len(lvl3)} מהותיים' if lvl3 else "") + "</h2>")
+    return (head + f'<ul class="reports">{reports_rows(rows, 12)}</ul>'
+            '<p><a href="reports.html">כל הדיווחים ←</a></p>')
+
+
 def main() -> int:
     cfg = yaml.safe_load((ROOT / "config" / "sources.yaml").read_text(encoding="utf-8"))
     site_title = cfg.get("site", {}).get("title", "ברייף FOREST")
@@ -237,6 +288,7 @@ def main() -> int:
         raw_dir = ROOT / "data" / "raw" / latest_date
         markets = load_json(raw_dir / "markets.json")
         te = load_json(raw_dir / "te.json")
+        reports = load_reports()
         # חותמת לפי תאריך הברייף ולא לפי שעת הבנייה: בנייה חוזרת בלי ברייף חדש
         # הייתה מציגה "עודכן עכשיו" מעל תוכן של אתמול.
         d_disp = f"{latest_date[8:10]}/{latest_date[5:7]}/{latest_date[:4]}"
@@ -247,6 +299,7 @@ def main() -> int:
             f'<span class="stamp">ברייף ל-{d_disp}{stale_note} · נבנה {datetime.now():%d/%m %H:%M}</span></div>',
             sources_panel(raw_dir),
             markets_strip(markets, te),
+            reports_panel(reports),
             indicators_panel(te),
             calendar_panel(te),
             '<hr class="sep">',
@@ -267,6 +320,16 @@ def main() -> int:
         PAGE.format(title=f"ארכיון · {site_title}", site_title=site_title, root="",
                     body=f'<h1>ארכיון</h1><ul class="archive">{items}</ul>'
                          if items else "<h1>ארכיון</h1><p>ריק.</p>"),
+        encoding="utf-8")
+
+    all_reports = load_reports()
+    (OUT / "reports.html").write_text(
+        PAGE.format(title=f"דיווחי מאיה · {site_title}", site_title=site_title, root="",
+                    body=(f'<h1>דיווחי מאיה</h1><p class="stamp">{len(all_reports)} '
+                          f'דיווחים מסוכמים מחמשת ימי המסחר האחרונים</p>'
+                          f'<ul class="reports">{reports_rows(all_reports)}</ul>')
+                         if all_reports else
+                         "<h1>דיווחי מאיה</h1><p>אין עדיין סיכומים.</p>"),
         encoding="utf-8")
 
     (OUT / ".nojekyll").write_text("", encoding="utf-8")

@@ -1,0 +1,62 @@
+name: Maya Watch
+
+# ניטור דיווחי מאיה בשעות המסחר. הבורסה פעילה ראשון–חמישי; הפרסומים נמשכים
+# גם אחרי הנעילה ולכן החלון רחב מהמסחר עצמו. cron של GitHub מתעכב לעיתים
+# בכמה דקות — לכן maya_watch עובד עם חלון lookback של 6 שעות ודה-דופ מלא,
+# כך שריצה שדולגה נאספת בריצה הבאה בלי כפילויות.
+on:
+  schedule:
+    - cron: "*/15 5,6,7,8,9,10,11,12,13,14,15 * * 0,1,2,3,4"   # UTC ≈ 08:00–18:45 ישראל
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: maya-watch
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Jerusalem
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          npm install -g @anthropic-ai/claude-code
+
+      - name: Collect new Maya reports
+        id: collect
+        run: python ingest/maya_watch.py
+
+      - name: Summarize
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/summarize_reports.py || echo "אין מה לסכם או שהסיכום נכשל"
+
+      - name: Commit summaries
+        run: |
+          git config user.name "forest-brief-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p output/reports
+          python scripts/publish_reports.py || true
+          git add data/state.sqlite output/reports
+          git diff --cached --quiet || git commit -m "maya: $(date +'%F %H:%M')"
+          git pull --rebase origin main && git push
