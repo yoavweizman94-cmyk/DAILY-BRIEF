@@ -30,6 +30,38 @@ feedly:
   # הריצה של אותו יום (429) — להוסיף פידים דרך ממשק Feedly, לא דרך ה-API.
 
 # ---------------------------------------------------------------------------
+# RSS ישיר — בלי מתווך ובלי מכסה. כל הפידים כאן נבדקו כחיים.
+# rss_pull מסמן פיד שהפריט החדש בו ישן מ-14 יום כ"מת" ומדלג עליו: WSJ למשל
+# מחזיר 200 עם 20 פריטים שכולם מינואר 2025.
+# ---------------------------------------------------------------------------
+rss:
+  feeds:
+    # --- ישראל ---
+    - {name: 'גלובס — שוק ההון',    url: "https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=585"}
+    - {name: 'גלובס — נדל"ן ותשתיות', url: "https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=607"}
+    - {name: 'גלובס — בארץ',        url: "https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=9917"}
+    - {name: 'גלובס — גלובלי',      url: "https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=1225"}
+    - {name: "TheMarker",            url: "http://www.themarker.com/cmlink/1.145"}
+    # רויטרס: הפיד הרשמי בוטל: דרך Google News מקבלים כותרות וקישורים
+    - {name: "Reuters",              url: "https://news.google.com/rss/search?q=when:1d+site:reuters.com&hl=en-US&gl=US&ceid=US:en"}
+    # --- תשומות ותעשייה ---
+    - {name: "Plastics Technology",  url: "http://www.ptonline.com/rss/home/latest"}
+    - {name: "Nonwovens Industry",   url: "http://feeds.feedburner.com/NonwovensIndustryBreakingNews"}
+    - {name: "Global Cement",        url: "https://www.globalcement.com/news?format=feed&type=rss"}
+    - {name: "Mining.com",           url: "https://www.mining.com/feed/"}
+    - {name: "Recycling Today",      url: "https://www.recyclingtoday.com/rss/"}
+    - {name: "Splash247",            url: "https://splash247.com/feed/"}
+    - {name: "FreightWaves",         url: "https://www.freightwaves.com/news/feed"}
+    - {name: "Supply Chain Dive",    url: "https://www.supplychaindive.com/feeds/news/"}
+    - {name: "Construction Dive",    url: "https://www.constructiondive.com/feeds/news/"}
+    - {name: "FreshPlaza",           url: "https://www.freshplaza.com/rss.xml"}
+    - {name: "Food Dive",            url: "https://www.fooddive.com/feeds/news/"}
+    - {name: "Just Food",            url: "https://www.just-food.com/feed/"}
+    - {name: "Defense News",         url: "https://www.defensenews.com/arc/outboundfeeds/rss/"}
+    - {name: "Breaking Defense",     url: "https://breakingdefense.com/feed/"}
+    - {name: "Electrive",            url: "https://www.electrive.com/feed/"}
+
+# ---------------------------------------------------------------------------
 # Gmail — דורש GMAIL_CREDENTIALS בסביבה (JSON עם client_id/client_secret/refresh_token)
 # ---------------------------------------------------------------------------
 gmail:

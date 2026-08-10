@@ -49,6 +49,7 @@ run_source() {
 }
 
 echo "=== FOREST brief · $DATE · מהדורת $ED_HE ($EDITION) ==="
+run_source rss     python ingest/rss_pull.py
 run_source feedly  python ingest/feedly_pull.py
 run_source gmail   python ingest/gmail_pull.py
 run_source maya    python ingest/maya_pull.py

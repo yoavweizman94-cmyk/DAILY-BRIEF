@@ -18,7 +18,8 @@ forest-brief/
 │   ├── companies.yaml         # יקום הכיסוי + פרופילי סקטור + קטלוג דרייברים
 │   └── sources.yaml           # פידים, לייבל Gmail, פרמטרים
 ├── ingest/                    # סקריפטים דטרמיניסטיים — רצים לפניך, לא באחריותך
-│   ├── feedly_pull.py         # Feedly API → feedly.jsonl
+│   ├── rss_pull.py            # RSS ישיר מ-21 פידים → rss.jsonl (ללא מכסה)
+│   ├── feedly_pull.py         # Feedly API → feedly.jsonl (משלים; מכסה 50/יום)
 │   ├── gmail_pull.py          # Gmail API (לייבל "ברייף") → gmail.jsonl
 │   ├── maya_pull.py           # הודעות מאיה מסוננות לחברות הכיסוי → maya.jsonl
 │   ├── markets_pull.py        # BOI + yfinance → markets.json (כולל שינויים מחושבים)
@@ -63,7 +64,9 @@ forest-brief/
 ## פייפליין יומי
 
 1. **טעינה.** קרא את `config/companies.yaml` ואת כל הקבצים ב-`data/raw/<היום>/`
-   (feedly.jsonl, gmail.jsonl, maya.jsonl, markets.json, rmi.json, te.json).
+   (rss.jsonl, feedly.jsonl, gmail.jsonl, maya.jsonl, markets.json, rmi.json, te.json).
+   `rss.jsonl` הוא המקור החדשותי הראשי — קריאה ישירה מהפידים, בלי מכסה.
+   `feedly.jsonl` משלים אותו ועלול להיות ריק כשמכסת ה-API מוצתה.
    `te.json` (Trading Economics) הוא המקור המוסמך ל**תשואת ממשלתי שקלי 10ש**
    (`il_gov_10y`) ול**אינדיקטורי המאקרו של ישראל** — ריבית בנק ישראל, אינפלציה,
    צמיחה, אבטלה, היתרי בנייה, מדד דיור, חוב-תוצר ומאזן סחר — כל אחד עם ערך

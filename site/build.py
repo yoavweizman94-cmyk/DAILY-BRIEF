@@ -86,7 +86,7 @@ def load_json(path: Path):
 
 def sources_panel(raw_dir: Path) -> str:
     """מצב חמשת המקורות — מה נטען היום ומה לא, בלי לפתוח לוגים."""
-    checks = [("Feedly", "feedly.jsonl"), ("Gmail", "gmail.jsonl"), ("מאיה", "maya.jsonl"),
+    checks = [("RSS", "rss.jsonl"), ("Feedly", "feedly.jsonl"), ("Gmail", "gmail.jsonl"), ("מאיה", "maya.jsonl"),
               ("שווקים", "markets.json"), ('רמ"י', "rmi.json"),
               ("Trading Economics", "te.json")]
     cells = []
