@@ -40,11 +40,13 @@ def section(md: str, title: str) -> str:
 
 
 def level3_headlines(md: str) -> list[str]:
-    """שורות פסקה שנפתחות ב-**מודגש** — כותרות אייטמי רמה 3."""
+    """כותרות אייטמי רמה 3: שורה שנפתחת ב-**מודגש**, בין כפסקה ובין כפריט רשימה.
+    שתי הצורות מופיעות בפועל בברייפים — דרישת תחילת שורה בלבד החמיצה ימים שלמים
+    והתמצית יצאה בלי 'עיקרי היום'."""
     out, seen = [], set()
     body = re.sub(r"^## (תמונת בוקר|שווקים|בקצרה|מה לעקוב היום|תקלות מקורות)\s*\n.*?(?=^## |\Z)",
                   "", md, flags=re.MULTILINE | re.DOTALL)
-    for m in re.finditer(r"^\*\*(.+?)\*\*", body, re.MULTILINE):
+    for m in re.finditer(r"^(?:[-*+]\s+)?\*\*(.+?)\*\*", body, re.MULTILINE):
         h = m.group(1).strip().rstrip(":—-")
         if h and h not in seen and not h.startswith(("כיוון", "משמעות")):
             seen.add(h)
