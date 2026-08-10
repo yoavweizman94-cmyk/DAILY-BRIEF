@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -33,19 +34,27 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = "https://api.tradingeconomics.com"
 
 
+CALL_GAP_SEC = 2.0      # TE חונק קריאות רצופות; בלי המרווח הקריאה השלישית נופלת
+
+
 class NotInPlan(Exception):
     """המנוי אינו כולל את הנתון — לא תקלה, פשוט מחוץ למסלול."""
 
 
-def fetch(session, key: str, path: str, **params):
+def fetch(session, key: str, path: str, _retry: bool = True, **params):
     r = session.get(f"{BASE}{path}", params={"c": key, "f": "json", **params}, timeout=45)
     if r.status_code == 401:
         raise SystemExit("שגיאה: TRADINGECONOMICS_KEY נדחה (401) — מפתח לא תקף")
-    # 403/409 הם "אין לך גישה לפיצ'ר הזה", ונוגעים לנתיב אחד בלבד. אסור
-    # שיפילו את כל המקור — לוח האירועים למשל אינו כלול במסלול הנוכחי,
-    # בעוד האג"ח והאינדיקטורים כן.
     if r.status_code in (403, 409):
-        raise NotInPlan(r.text[:120].strip())
+        body = r.text[:160].strip()
+        # TE מחזיר 403 גם על חנק קצב וגם על פיצ'ר שאינו במנוי, עם אותו קוד.
+        # ההבחנה היא לפי הטקסט — בלעדיה חנק זמני נרשם כ"לא במנוי" ומטעה.
+        if "slow down" in body.lower():
+            if _retry:
+                time.sleep(8)
+                return fetch(session, key, path, _retry=False, **params)
+            raise RuntimeError(f"חנק קצב של Trading Economics גם אחרי המתנה: {body}")
+        raise NotInPlan(body)
     r.raise_for_status()
     if not (r.headers.get("content-type") or "").startswith("application/json"):
         raise RuntimeError(f"תשובה לא-JSON מ-{path}: {r.text[:120]}")
@@ -93,6 +102,7 @@ def main() -> int:
         out["failures"].append({"source": "calendar", "error": str(ex)})
 
     # -- תשואות אג"ח ממשלתיות ---------------------------------------------
+    time.sleep(CALL_GAP_SEC)
     try:
         bonds = fetch(s, key, "/markets/bonds")
         rows = []
@@ -120,6 +130,7 @@ def main() -> int:
         out["failures"].append({"source": "bonds", "error": str(ex)})
 
     # -- אינדיקטורים מרכזיים לישראל ---------------------------------------
+    time.sleep(CALL_GAP_SEC)
     try:
         ind = fetch(s, key, "/country/israel")
         wanted = {w.lower() for w in (tcfg.get("indicators") or [])}
