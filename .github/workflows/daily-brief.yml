@@ -46,7 +46,9 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           FEEDLY_TOKEN: ${{ secrets.FEEDLY_TOKEN }}
+          FEEDLY_REFRESH_TOKEN: ${{ secrets.FEEDLY_REFRESH_TOKEN }}
           GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS }}
+          TRADINGECONOMICS_KEY: ${{ secrets.TRADINGECONOMICS_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: bash run_daily.sh

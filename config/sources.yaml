@@ -88,6 +88,24 @@ markets:
     note: "אין מקור חינמי אמין — לבחון BOI SDMX או נתוני TASE בהמשך"
 
 # ---------------------------------------------------------------------------
+# Trading Economics — דורש TRADINGECONOMICS_KEY בפורמט "key:secret".
+# סוגר שני חורים: תשואת ממשלתי שקלי 10ש, ולוח אירועים אמיתי ל"מה לעקוב".
+# ---------------------------------------------------------------------------
+trading_economics:
+  calendar_countries: [israel, united states, euro area, china]
+  calendar_days_ahead: 7
+  bonds: [Israel, United States, Germany]   # סינון לפי שם; ריק = הכל
+  indicators:                               # ריק = כל האינדיקטורים של ישראל
+    - Interest Rate
+    - Inflation Rate
+    - GDP Growth Rate
+    - Unemployment Rate
+    - Building Permits
+    - Housing Index
+    - Government Debt to GDP
+    - Balance of Trade
+
+# ---------------------------------------------------------------------------
 # אתר וטלגרם
 # ---------------------------------------------------------------------------
 site:

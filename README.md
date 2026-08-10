@@ -27,8 +27,9 @@ GitHub Actions (06:45 ישראל, יומי)
 | `ANTHROPIC_API_KEY` | מפתח API של Anthropic | console.anthropic.com → API Keys |
 | `FEEDLY_TOKEN` | Access token של Feedly | feedly.com/v3/auth/dev (או Feedly Pro → API) |
 | `GMAIL_CREDENTIALS` | JSON עם client_id/client_secret/refresh_token | להריץ מקומית `python scripts/gmail_authorize.py` (הוראות בראש הקובץ) ולהעתיק את הפלט |
-| `TELEGRAM_BOT_TOKEN` | טוקן בוט | @BotFather בטלגרם → ‎/newbot |
-| `TELEGRAM_CHAT_ID` | יעד השליחה | להוסיף את הבוט לקבוצה/ערוץ ולקרוא את ה-id דרך `getUpdates` |
+| `TRADINGECONOMICS_KEY` | מפתח Trading Economics בפורמט `key:secret` | developer.tradingeconomics.com → Dashboard. **חשבון האורח בוטל** — נדרש מנוי |
+| `TELEGRAM_BOT_TOKEN` | טוקן בוט (אופציונלי) | @BotFather בטלגרם → ‎/newbot |
+| `TELEGRAM_CHAT_ID` | יעד השליחה (אופציונלי) | להוסיף את הבוט לקבוצה/ערוץ ולקרוא את ה-id דרך `getUpdates` |
 
 2. **GitHub Pages**: Settings → Pages → Source = **GitHub Actions**.
 3. **Gmail**: ליצור לייבל בשם `ברייף` ולתייג אליו את הניוזלטרים הרלוונטיים

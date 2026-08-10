@@ -25,6 +25,7 @@ run_source gmail   python ingest/gmail_pull.py
 run_source maya    python ingest/maya_pull.py
 run_source markets python ingest/markets_pull.py
 run_source rmi     python ingest/rmi_pull.py
+run_source te      python ingest/te_pull.py
 if [ ${#FAILED[@]} -gt 0 ]; then
   echo "מקורות שנכשלו: ${FAILED[*]}"
 fi

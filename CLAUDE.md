@@ -23,6 +23,7 @@ forest-brief/
 │   ├── maya_pull.py           # הודעות מאיה מסוננות לחברות הכיסוי → maya.jsonl
 │   ├── markets_pull.py        # BOI + yfinance → markets.json (כולל שינויים מחושבים)
 │   ├── rmi_pull.py            # מכרזי רמ"י + תוצאות ועדה, מוצלב לכיסוי → rmi.json
+│   ├── te_pull.py             # Trading Economics: לוח אירועים, אג"ח, מדדים → te.json
 │   └── resolve_tase_ids.py    # ממלא tase_id ב-companies.yaml מול TASE
 ├── data/
 │   ├── raw/YYYY-MM-DD/        # הקלט היומי שלך: feedly.jsonl, gmail.jsonl, maya.jsonl,
@@ -45,7 +46,10 @@ forest-brief/
 ## פייפליין יומי
 
 1. **טעינה.** קרא את `config/companies.yaml` ואת כל הקבצים ב-`data/raw/<היום>/`
-   (feedly.jsonl, gmail.jsonl, maya.jsonl, markets.json, rmi.json).
+   (feedly.jsonl, gmail.jsonl, maya.jsonl, markets.json, rmi.json, te.json).
+   `te.json` (Trading Economics) הוא המקור המוסמך ל**תשואת ממשלתי שקלי 10ש**
+   (`il_gov_10y`) ול**לוח האירועים** של סעיף "מה לעקוב" — עם צפי קונצנזוס
+   וערך קודם. אם הוא חסר, אל תיקח תשואה מגוף כתבה בלי לציין זאת במפורש.
    קובץ חסר או ריק = תקלת מקור. רשום זאת בסעיף "תקלות מקורות" בסוף הברייף והמשך בלעדיו.
 2. **דה-דופ רך.** אותה ידיעה מכמה מקורות = אייטם אחד, כל המקורות מצוינים.
 3. **מאקרו ישראל.** הפעל את הסקיל `israeli-statistics` וב­דוק אם פורסמו היום או אתמול:
