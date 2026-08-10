@@ -8,7 +8,7 @@
 ```
 GitHub Actions (06:45 ישראל, יומי)
   └─ run_daily.sh
-       1. ingest/  — feedly, gmail, maya, markets, rmi  →  data/raw/<היום>/
+       1. ingest/  — feedly, gmail, maya, markets, rmi, te  →  data/raw/<היום>/
        2. claude -p — קורא את הקלט, כותב output/brief_<היום>.md
        3. site/build.py — רינדור ל-site/dist (RTL)
        4. scripts/send_telegram.py — תמצית + קישור
@@ -109,5 +109,7 @@ FEEDLY_REFRESH_TOKEN=
   `python ingest/resolve_tase_ids.py` (ממלא tase_id לחברות חדשות; שם שלא
   נמצא במאיה → שגיאה מפורשת, לא ניחוש).
 - **מכשירי שוק**: עריכת `markets.yfinance` ב-`config/sources.yaml`.
-- תשואת ממשלתי שקלי 10ש עדיין ללא מקור חינמי אמין — מסומן `enabled: false`
-  ב-sources.yaml; הברייף מציג US10Y בלבד.
+- **תשואת ממשלתי שקלי 10ש** מגיעה מ-Trading Economics (`te.json`). השדה
+  `markets.il_gov_10y` ב-sources.yaml נשאר `enabled: false` — אין לו מקור
+  חינמי, ו-TE הוא המוסמך.
+- **היקף ניטור מאיה**: `maya_watch.scope` ב-sources.yaml (ראה הטבלה למעלה).
