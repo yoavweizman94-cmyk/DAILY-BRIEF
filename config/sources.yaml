@@ -67,6 +67,17 @@ rss:
 gmail:
   label: "ברייף"          # כל מה שמתויג ידנית נכנס תמיד
   max_messages: 150
+  # אישורי הרשמה ואימות — תוכן אפס, ומגיעים בצרורות כשנרשמים לניוזלטרים.
+  # ההתאמה היא על תחילת הנושא בלבד, כדי לא לפסול כתבה שמזכירה "welcome".
+  skip_subject_prefixes:
+    - "You've subscribed"
+    - "You have subscribed"
+    - "Welcome to"
+    - "Confirm your"
+    - "Please confirm"
+    - "Verify your"
+    - "אישור הרשמה"
+    - "ברוכים הבאים"
   # שולחים שנמשכים אוטומטית גם בלי תיוג. זוהו בסריקת התיבה (08/2026) כמנויים
   # פעילים שנוגעים ליקום הכיסוי. הוספה כאן חוסכת תיוג ידני יומי.
   senders:
@@ -76,9 +87,15 @@ gmail:
     - divenewsletter.com    # Construction / Utility / Facilities / Smart Cities / ESG / Cybersecurity Dive
     - ittnewsletter.com     # Data Center Knowledge — דרייבר של עזריאלי
     - e.economist.com       # מאקרו עולמי
-    - newsletters.ft.com    # FT
+    - newsletters.ft.com    # FT — ניוזלטרים
+    - mail.ft.com           # FT — התראות
+    - news-alerts.ft.com    # FT — Breaking news
+    - haaretz.co.il         # הארץ (בנוסף ל-mc.haaretz.com)
     - nytimes.com           # NYT
     - news.bloomberg.com    # Bloomberg Markets Daily
+    - wsj.com               # WSJ — What's News, Markets A.M. (interactive.wsj.com ועוד)
+    - reuters.com           # רויטרס
+    - thomsonreuters.com    # רויטרס — ניוזלטר מנויים
     - stratechery.com       # ניתוח טק — רקע ל-tech_us
 
 # ---------------------------------------------------------------------------

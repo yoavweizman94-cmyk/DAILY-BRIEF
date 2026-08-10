@@ -137,6 +137,8 @@ def main() -> int:
         from_q = " OR ".join(f"from:{s}" for s in senders)
         collect(q=f"newer_than:{days_back}d ({from_q})")
 
+    skip_prefixes = tuple(gcfg.get("skip_subject_prefixes") or [])
+    skipped = 0
     rows = []
     for mid in ids:
         msg = svc.users().messages().get(userId="me", id=mid, format="full").execute()
@@ -145,10 +147,14 @@ def main() -> int:
             continue
         headers = {h["name"].lower(): h["value"]
                    for h in msg.get("payload", {}).get("headers", [])}
+        subject = headers.get("subject", "(ללא נושא)")
+        if skip_prefixes and subject.strip().startswith(skip_prefixes):
+            skipped += 1
+            continue
         rows.append({
             "id": mid,
             "ts": ts.isoformat(timespec="seconds"),
-            "title": headers.get("subject", "(ללא נושא)"),
+            "title": subject,
             "body": extract_body(msg.get("payload", {})),
             "url": f"https://mail.google.com/mail/u/0/#all/{mid}",
             "source": f"gmail:{headers.get('from', '?')}",
@@ -167,7 +173,8 @@ def main() -> int:
             if r["id"] in fresh:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
                 n += 1
-    print(f"נכתב {out_path} | {len(rows)} מיילים בחלון, {n} חדשים")
+    print(f"נכתב {out_path} | {len(rows)} מיילים בחלון, {n} חדשים"
+          + (f", {skipped} אישורי הרשמה סוננו" if skipped else ""))
     return 0
 
 
