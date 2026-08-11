@@ -58,6 +58,11 @@
   // "₪ למ״ר" של מיליונים שמרעיל את החציון. סף שפיות לסטטיסטיקה בלבד —
   // העסקה עצמה עדיין מוצגת בטבלה.
   var MIN_AREA_FOR_PPM = 10;
+  // חיפוש ברדיוס 2 ק"מ מחזיר אלפי עסקאות, והטבלה מרונדרת מחדש בכל מנה
+  // שמגיעה תוך כדי שליפה. בלי תקרה זה רינדור של אלפי שורות עשרות פעמים.
+  // הסטטיסטיקה וייצוא ה-CSV עובדים על כל התוצאות המסוננות, לא על המוצג.
+  var PAGE_ROWS = 200;
+  var shownRows = PAGE_ROWS;
 
   var $ = function (id) { return document.getElementById(id); };
   var msg = $("msg"), out = $("out"), stats = $("stats");
@@ -253,11 +258,13 @@
       return;
     }
     rows.sort(function (a, b) { return (b.dealDate || "").localeCompare(a.dealDate || ""); });
-    var h = '<div class="tbl-head"><span>' + rows.length + " עסקאות</span>" +
-            '<button type="button" id="csv" class="lnk">הורדה כ-CSV</button></div>' +
+    var slice = rows.slice(0, shownRows);
+    var h = '<div class="tbl-head"><span>' + rows.length + " עסקאות" +
+            (rows.length > slice.length ? " · מוצגות " + slice.length : "") + "</span>" +
+            '<button type="button" id="csv" class="lnk">הורדה כ-CSV (הכל)</button></div>' +
             "<table><thead><tr><th>תאריך</th><th>כתובת</th><th>שכונה</th><th>סוג</th>" +
             "<th>חדרים</th><th>קומה</th><th>מ״ר</th><th>מחיר</th><th>₪ למ״ר</th></tr></thead><tbody>";
-    rows.forEach(function (r) {
+    slice.forEach(function (r) {
       // בחלק ניכר מהעסקאות אין שם רחוב. שם היישוב לבדו חסר ערך בטבלה שכולה
       // אותו יישוב, ולכן נופלים לגוש/חלקה שהם זיהוי חד-משמעי.
       var addr = [r.streetNameHeb, r.houseNum].filter(Boolean).join(" ") ||
@@ -271,8 +278,15 @@
            "</td><td>" + (r.assetArea || "—") + "</td><td>" + nis(r.dealAmount) +
            "</td><td>" + nis(pm) + "</td></tr>";
     });
-    out.innerHTML = h + "</tbody></table>";
+    h += "</tbody></table>";
+    if (rows.length > slice.length) {
+      h += '<p><button type="button" id="moreRows" class="lnk">הצג עוד ' +
+           Math.min(PAGE_ROWS, rows.length - slice.length) + "</button></p>";
+    }
+    out.innerHTML = h;
     $("csv").onclick = function () { downloadCsv(rows); };
+    var mr = $("moreRows");
+    if (mr) mr.onclick = function () { shownRows += PAGE_ROWS; refresh(); };
   }
 
   function downloadCsv(rows) {
@@ -304,7 +318,10 @@
     renderTable(rows);
   }
   ["ptype", "rmin", "rmax", "pmin", "pmax", "amin", "amax", "years"].forEach(function (id) {
-    $(id).addEventListener("change", function () { if (lastDeals.length) refresh(); });
+    $(id).addEventListener("change", function () {
+      shownRows = PAGE_ROWS;          // סינון חדש מתחיל מהתחלה, לא ממה שנפרש
+      if (lastDeals.length) refresh();
+    });
   });
 
   // --- הרצה -------------------------------------------------------------
@@ -312,7 +329,7 @@
     e.preventDefault();
     var text = $("addr").value.trim();
     if (!text) return;
-    out.innerHTML = ""; stats.hidden = true; lastDeals = [];
+    out.innerHTML = ""; stats.hidden = true; lastDeals = []; shownRows = PAGE_ROWS;
     $("go").disabled = true;
     say("מאתר כתובת…", "wait");
 
