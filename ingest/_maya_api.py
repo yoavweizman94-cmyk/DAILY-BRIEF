@@ -21,6 +21,21 @@ BASE = "https://maya.tase.co.il"
 PAGE_SIZE = 30
 MAX_PAGES = 60          # תקרת בטיחות — 1,800 דיווחים לחלון
 
+# תקרת עימוד של ה-API: בקשה עם offset מעל ~1000 מוחזרת כ-HTTP 400. נמדד על
+# חלון 07–13/07/2026 שבו x-total-count=1255 — העמודים עד offset 1020 חזרו
+# תקין והבא אחריו נפל. זה נראה כמו חסימת WAF (וכך אובחן בטעות בהתחלה), אבל
+# הוא תלוי אך ורק ב-offset: חלון קצר יותר על אותם תאריכים עובר בלי בעיה.
+# המשמעות למי שמושך היסטוריה: לצמצם את החלון עד שהספירה יורדת מתחת לתקרה.
+OFFSET_CEILING = 1000
+
+
+class WindowTooLarge(Exception):
+    """טווח התאריכים מכיל יותר דיווחים ממה שהעימוד מאפשר להגיע אליהם."""
+
+    def __init__(self, total: int):
+        self.total = total
+        super().__init__(f"{total} דיווחים בחלון — מעל תקרת העימוד ({OFFSET_CEILING})")
+
 HEADERS = {
     "Accept": "application/json",
     "Accept-Language": "he-IL",
@@ -78,6 +93,10 @@ class MayaSession:
             r = self._post("/api/v1/reports/companies", {**base, "offset": offset})
             batch = r.json()
             total = int(r.headers.get("x-total-count", 0))
+            # עדיף להיכשל מפורשות מלהחזיר חלון קטוע שנראה שלם: הקורא יכול
+            # לפצל את הטווח, אבל רק אם הוא יודע שמשהו חסר.
+            if total > OFFSET_CEILING:
+                raise WindowTooLarge(total)
             for it in batch:
                 if it["id"] not in seen:
                     seen.add(it["id"])

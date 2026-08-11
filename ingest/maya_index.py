@@ -6,13 +6,17 @@
 כן מגיש עם `Access-Control-Allow-Origin: *` — ולכן הקישור להורדה עובד ישירות
 מהאתר, וכל מה שצריך לייצר כאן הוא רשימת הדוחות ונתיבי ה-PDF שלהם.
 
-ה-WAF של מאיה מגביל לפי נפח בקשות: חלון של 7 ימים (≈33 עמודים) עובר, והבקשה
-שאחריו מקבלת 403 מיידי. לכן שני מצבי הרצה:
+המגבלה שקובעת את המבנה כאן היא **תקרת עימוד**, לא חסימת WAF: בקשה עם offset
+מעל ~1000 מוחזרת כ-HTTP 400 (ראה OFFSET_CEILING ב-_maya_api.py). בנפח של
+~180 דיווחים ביום, חלון של שבוע חוצה את התקרה ומחזיר 400 שנראה כמו חסימה
+אקראית. לכן החלון הוא 4 ימים, ו-harvest מפצל אותו לבד אם בכל זאת נחצתה.
+
+שני מצבי הרצה:
 
   --recent N   חלון קצר (ברירת מחדל 3 ימים) — רץ בצנרת היומית, עלות זניחה.
                זו הדרך שבה האינדקס גדל בפועל, יום אחר יום.
-  --backfill   הליכה אחורה בחלונות שבועיים עם ויסות כבד ותקציב זמן. עוצר
-               בשקט על 403 ושומר את מה שנאסף — הרצה הבאה ממשיכה מאותה נקודה.
+  --backfill   הליכה אחורה עם תקציב זמן. שומר מצב אחרי כל חלון, כך שהפסקה
+               או כשל אינם מאבדים דבר וההרצה הבאה ממשיכה מאותה נקודה.
 
 פלט: output/filings/<שנה>.jsonl + manifest.json (נטענים ע"י site/pages/filings.html)
 """
@@ -33,7 +37,7 @@ from _tls import harden  # noqa: E402
 
 harden()
 
-from _maya_api import MayaSession  # noqa: E402
+from _maya_api import MayaSession, WindowTooLarge  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "output" / "filings"
@@ -53,10 +57,13 @@ NOISE_TITLE = re.compile(r"מועד\s+פרסום|הודעה\s+על\s+מועד|ז
 # מצגת תוצאות היא חומר שאנליסט רוצה, אבל היא לא הדוח — תיוג נפרד, לא הדרה.
 PRESENTATION = re.compile(r"מצגת|presentation", re.IGNORECASE)
 
-WINDOW_DAYS = 7          # החלון הגדול ביותר שנמדד כעובר בלי 403
-BACKFILL_PAUSE = 20.0    # שהייה בין חלונות — ה-WAF סופר בקשות, לא ימים
-THROTTLE = 1.5           # בין עמודים בתוך חלון (0.4 היא ברירת המחדל היומית)
-MAX_403_RETRIES = 2      # ניסיונות עם סשן חדש לפני שמוותרים על החלון
+# נפח נמדד: ~180 דיווחים ביום בכל הבורסה, כלומר ~1,250 לשבוע — מעל תקרת
+# העימוד של 1,000. חלון של 4 ימים (~720) נשאר מתחתיה גם בעונת הדוחות, ואם
+# בכל זאת נחצתה, harvest מפצל את החלון בעצמו.
+WINDOW_DAYS = 4
+BACKFILL_PAUSE = 6.0     # שהייה בין חלונות
+THROTTLE = 1.0           # בין עמודים בתוך חלון (0.4 היא ברירת המחדל היומית)
+MAX_RETRIES = 2          # ניסיונות עם סשן חדש לפני שמוותרים על החלון
 
 
 def classify(rep: dict) -> str | None:
@@ -128,29 +135,50 @@ def load_index() -> dict[str, dict]:
     return idx
 
 
-def save_index(idx: dict[str, dict]) -> None:
+def save_index(idx: dict[str, dict]) -> bool:
+    """כותב את האינדקס ומחזיר האם התוכן באמת השתנה.
+
+    ה-workflow מחליט לפי `git status` אם לקבע ולפרוס. כשחותמת הזמן נכתבה
+    בכל הרצה, ריצה שלא הוסיפה אף דוח עדיין נראתה כשינוי — וגררה קומיט,
+    בנייה ופריסה על לא כלום. לכן החותמת מתעדכנת רק כשהנתונים זזו.
+    """
     OUT.mkdir(parents=True, exist_ok=True)
     by_year: dict[str, list] = {}
     for e in idx.values():
         by_year.setdefault(e["d"][:4], []).append(e)
+
+    changed = False
     for f in OUT.glob("*.jsonl"):          # שנים שהתרוקנו לא נשארות מאחור
         if f.stem not in by_year:
             f.unlink()
+            changed = True
+
     years = []
     for y, rows in sorted(by_year.items()):
         rows.sort(key=lambda e: e["d"], reverse=True)
-        (OUT / f"{y}.jsonl").write_text(
-            "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n",
-            encoding="utf-8")
+        body = "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n"
+        path = OUT / f"{y}.jsonl"
+        if not path.exists() or path.read_text(encoding="utf-8") != body:
+            path.write_text(body, encoding="utf-8")
+            changed = True
         years.append({"year": y, "count": len(rows)})
+
+    prev = {}
+    try:
+        prev = json.loads((OUT / "manifest.json").read_text(encoding="utf-8"))
+    except Exception:
+        changed = True
+
     days = sorted(e["d"] for e in idx.values())
     (OUT / "manifest.json").write_text(json.dumps({
         "years": sorted(years, key=lambda x: x["year"], reverse=True),
         "total": len(idx),
         "earliest": days[0] if days else None,
         "latest": days[-1] if days else None,
-        "updated": datetime.now().isoformat(timespec="seconds"),
+        "updated": (datetime.now().isoformat(timespec="seconds") if changed
+                    else prev.get("updated")),
     }, ensure_ascii=False, indent=1), encoding="utf-8")
+    return changed
 
 
 def read_state() -> dict:
@@ -167,8 +195,21 @@ def write_state(st: dict) -> None:
 
 # --- מצבי הרצה ---------------------------------------------------------------
 
-def harvest(s: MayaSession, a: date, b: date, idx: dict, cover: set[str]) -> int:
-    rows = s.reports_days(a, b)
+def harvest(s: MayaSession, a: date, b: date, idx: dict, cover: set[str],
+            depth: int = 0) -> int:
+    """שואב חלון אחד. חלון צפוף מדי מפוצל לשניים ונשאב לחלקיו."""
+    try:
+        rows = s.reports_days(a, b)
+    except WindowTooLarge as exc:
+        if a >= b:
+            # יום בודד מעל התקרה — אין מה לפצל. עדיף לדעת מזה לשתוק.
+            print(f"  {a}: {exc.total} דיווחים ביום אחד, מעל תקרת העימוד — "
+                  f"חלק מהיום לא ייכנס לאינדקס", file=sys.stderr)
+            return 0
+        mid = a + (b - a) // 2
+        print(f"  {a}→{b}: {exc.total} דיווחים, מפוצל", file=sys.stderr)
+        return (harvest(s, a, mid, idx, cover, depth + 1) +
+                harvest(s, mid + timedelta(days=1), b, idx, cover, depth + 1))
     added = 0
     for rep in rows:
         kind = classify(rep)
@@ -207,11 +248,10 @@ def run_backfill(until: date, budget_min: float) -> int:
     while cursor > until and time.monotonic() < deadline:
         b = cursor - timedelta(days=1)
         a = max(until, b - timedelta(days=WINDOW_DAYS - 1))
-        # ה-403 של מאיה נקשר לעוגיות ה-WAF של הסשן, לא לכתובת ה-IP: סשן חדש
-        # (שמזריע עוגיות מחדש מדף הבית) עובר שוב. לכן מנסים כמה פעמים עם
-        # המתנה מתארכת לפני שמוותרים על החלון.
+        # תקלת רשת או 403 חולף: סשן חדש מזריע עוגיות WAF מחדש מדף הבית
+        # ולרוב עובר. חלון צפוף מדי כבר טופל בתוך harvest ואינו מגיע לכאן.
         ok = False
-        for attempt in range(MAX_403_RETRIES + 1):
+        for attempt in range(MAX_RETRIES + 1):
             try:
                 total += harvest(s, a, b, idx, cover)
                 windows += 1
@@ -221,7 +261,7 @@ def run_backfill(until: date, budget_min: float) -> int:
                 break
             except Exception as exc:
                 code = getattr(getattr(exc, "response", None), "status_code", None)
-                if attempt == MAX_403_RETRIES or time.monotonic() > deadline:
+                if attempt == MAX_RETRIES or time.monotonic() > deadline:
                     print(f"עצירה ב-{a}: {type(exc).__name__} {code or str(exc)[:60]}",
                           file=sys.stderr)
                     break
