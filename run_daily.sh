@@ -113,6 +113,7 @@ rm -f "$MARKER"
 
 python scripts/publish_status.py
 python scripts/publish_news.py || echo "אזהרה: סיווג החדשות נכשל"
+python scripts/summarize_topics.py || echo "אזהרה: סיכומי הנושאים נכשלו"
 python site/build.py
 python scripts/send_telegram.py --brief "$BRIEF" || echo "אזהרה: שליחת הטלגרם נכשלה"
 echo "=== הושלם: $BRIEF (מהדורת $ED_HE) ==="

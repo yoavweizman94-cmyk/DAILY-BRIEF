@@ -148,3 +148,13 @@ ul.news li.nw .src { color: var(--muted); font-size: 0.72rem; white-space: nowra
 .figs .fig { font-size: 0.78rem; background: var(--bg); border: 1px solid var(--border);
   border-radius: 6px; padding: 0.1rem 0.5rem; }
 .figs .fig b { font-weight: 600; color: var(--muted); margin-inline-end: 0.35rem; }
+
+/* ---- סיכום סקטור ---- */
+.topic-sum { background: var(--table-head); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.7rem 0.9rem; margin: 0 0 1.2rem; }
+.topic-sum-head { font-size: 0.78rem; color: var(--accent); font-weight: 700;
+  display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.3rem; }
+.topic-sum p { margin: 0.3rem 0; font-size: 0.94rem; }
+.topic-sum .takeaway { font-size: 0.88rem; color: var(--muted);
+  border-top: 1px solid var(--border); padding-top: 0.4rem; margin-top: 0.5rem; }
+.topic-sum .takeaway b { color: var(--fg); }

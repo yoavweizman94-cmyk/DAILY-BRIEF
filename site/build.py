@@ -329,6 +329,31 @@ def news_items_html(rows: list[dict], limit: int | None = None) -> str:
     return "".join(out)
 
 
+def load_topic_summaries() -> tuple[dict, str]:
+    """סיכומי הנושאים האחרונים + התאריך שלהם, לסימון טריות בעמוד."""
+    d = ROOT / "output" / "topics"
+    if not d.exists():
+        return {}, ""
+    files = sorted(d.glob("*.json"), reverse=True)
+    if not files:
+        return {}, ""
+    data = load_json(files[0]) or {}
+    return (data.get("summaries") or {}), data.get("date", "")
+
+
+def topic_summary_html(slug: str, summaries: dict, day: str) -> str:
+    s = summaries.get(slug) or {}
+    body = (s.get("summary") or "").strip()
+    if not body:
+        return ""
+    take = (s.get("takeaway") or "").strip()
+    stamp = f'<span class="stamp">סיכום ל-{day[8:10]}/{day[5:7]}</span>' if day else ""
+    return (f'<div class="topic-sum"><div class="topic-sum-head">תמונת מצב{stamp}</div>'
+            f'<p>{body}</p>'
+            + (f'<p class="takeaway"><b>משמעות לכיסוי:</b> {take}</p>' if take else "")
+            + "</div>")
+
+
 def topics_nav(topics: list[dict], counts: dict, current: str = "") -> str:
     links = []
     for t in topics:
@@ -369,6 +394,7 @@ def main() -> int:
 
     # --- עמודי נושאים -----------------------------------------------------
     news = load_news()
+    topic_sums, topic_sums_day = load_topic_summaries()
     counts = {}
     for r in news:
         for s in r.get("topics") or []:
@@ -383,6 +409,7 @@ def main() -> int:
                 + (f'<p class="stamp">חברות כיסוי שנוגעות בנושא: {comps}</p>' if comps else "")
                 + f'<p class="stamp">{len(rows)} אייטמים מ-14 הימים האחרונים</p>'
                 + topics_nav(topics, counts, tp["slug"]).replace('topics/', '')
+                + topic_summary_html(tp["slug"], topic_sums, topic_sums_day)
                 + f'<ul class="news">{news_items_html(rows)}</ul>')
         (OUT / "topics" / f'{tp["slug"]}.html').write_text(
             PAGE.format(title=f'{tp["label"]} · {site_title}', site_title=site_title,
