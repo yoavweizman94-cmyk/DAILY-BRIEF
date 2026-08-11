@@ -137,3 +137,14 @@ ul.news li.nw .t { color: var(--muted); font-variant-numeric: tabular-nums; font
 ul.news li.nw a { text-decoration: none; flex: 1; }
 ul.news li.nw a:hover { text-decoration: underline; }
 ul.news li.nw .src { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+
+/* ---- כרטיס דיווח מורחב ---- */
+.rep-hl { font-weight: 600; margin-top: 0.3rem; font-size: 0.95rem; }
+.rep-ctx { font-size: 0.84rem; color: var(--muted); margin-top: 0.25rem; }
+.rep-aff { font-size: 0.84rem; margin-top: 0.3rem; padding-inline-start: 0.6rem;
+  border-inline-start: 2px solid var(--accent); }
+.rep-watch { font-size: 0.82rem; color: var(--muted); margin-top: 0.25rem; }
+.figs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; }
+.figs .fig { font-size: 0.78rem; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 0.1rem 0.5rem; }
+.figs .fig b { font-weight: 600; color: var(--muted); margin-inline-end: 0.35rem; }

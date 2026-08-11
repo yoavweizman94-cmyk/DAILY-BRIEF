@@ -1,15 +1,15 @@
 name: Maya Watch
 
-# ניטור דיווחי מאיה בשעות המסחר. הבורסה פעילה ראשון–חמישי; הפרסומים נמשכים
-# גם אחרי הנעילה ולכן החלון רחב מהמסחר עצמו. cron של GitHub מתעכב לעיתים
-# בכמה דקות — לכן maya_watch עובד עם חלון lookback של 6 שעות ודה-דופ מלא,
-# כך שריצה שדולגה נאספת בריצה הבאה בלי כפילויות.
-# תיקון: הבורסה עברה בינואר 2026 למסחר שני–שישי (אומת מול היסטוריית ת"א-125 —
-# אפס ימי מסחר בראשון ובשבת). הגרסה הקודמת רצה ראשון–חמישי, כלומר יום מיותר
-# בראשון ופספוס יום שישי.
+# ניטור רציף — כל רבע שעה, מסביב לשעון. חברות מדווחות גם אחרי הנעילה ובסופי
+# שבוע, ולכן אין חלון "בטוח" לדלג עליו.
+#
+# עלות: ריצה מלאה נמדדה ב-4.1 דקות, וב-96 ריצות ביום זה ~11,900 דקות בחודש —
+# פי ארבעה מהמכסה הכלולה. לכן הריצה מפוצלת: שלב הזיהוי זול (checkout + pip
+# מהמטמון), ורק אם נמצאו דיווחים חדשים מותקן ה-CLI ומופעל הסיכום. רוב המחזורים
+# הלילייים מסתיימים בפחות מדקה.
 on:
   schedule:
-    - cron: "*/15 5-16 * * 1,2,3,4,5"   # UTC ≈ 08:00–19:45 ישראל, שני–שישי
+    - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -36,25 +36,53 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # רק מה שצריך לשלב הזיהוי. yfinance/google-api/pypdf אינם נדרשים כאן,
+      # ו-pip מהמטמון מסיים בשניות.
+      - name: Install collector dependencies
+        run: pip install curl_cffi pyyaml truststore certifi requests
+
+      - name: Collect new Maya reports
+        id: collect
+        run: |
+          python ingest/maya_watch.py
+          if python - <<'PY'
+          import json, sys
+          from datetime import date
+          from pathlib import Path
+          p = Path("data/raw") / date.today().isoformat() / "maya_new.jsonl"
+          rows = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()] if p.exists() else []
+          pending = [r for r in rows if r.get("summarize")]
+          done = set()
+          d = p.with_name("maya_summaries.jsonl")
+          if d.exists():
+              done = {json.loads(l).get("id") for l in d.read_text(encoding="utf-8").splitlines() if l.strip()}
+          sys.exit(0 if [r for r in pending if r["id"] not in done] else 1)
+          PY
+          then echo "new=yes" >> "$GITHUB_OUTPUT"; else echo "new=no" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Nothing new
+        if: steps.collect.outputs.new != 'yes'
+        run: echo "אין דיווחים חדשים לסיכום — יוצאים בלי להתקין את ה-CLI."
+
       - uses: actions/setup-node@v4
+        if: steps.collect.outputs.new == 'yes'
         with:
           node-version: "20"
 
-      - name: Install dependencies
+      - name: Install summarizer
+        if: steps.collect.outputs.new == 'yes'
         run: |
           pip install -r requirements.txt
           npm install -g @anthropic-ai/claude-code
 
-      - name: Collect new Maya reports
-        id: collect
-        run: python ingest/maya_watch.py
-
       - name: Summarize
+        if: steps.collect.outputs.new == 'yes'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python scripts/summarize_reports.py || echo "אין מה לסכם או שהסיכום נכשל"
+        run: python scripts/summarize_reports.py || echo "הסיכום נכשל — ייאסף במחזור הבא"
 
       - name: Commit summaries
+        if: steps.collect.outputs.new == 'yes'
         run: |
           git config user.name "forest-brief-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -243,6 +243,11 @@ def reports_rows(rows: list[dict], limit: int | None = None,
         badge = ('<span class="cov">כיסוי</span>' if cov else "")
         dirc = (r.get("direction") or "").strip()
         dcls = {"חיובי": "up", "שלילי": "down"}.get(dirc, "flat")
+        figs = "".join(
+            f'<span class="fig"><b>{f.get("label","")}</b>{f.get("value","")}</span>'
+            for f in (r.get("key_figures") or [])[:5] if isinstance(f, dict))
+        aff = ", ".join(r.get("affected") or [])
+        head = r.get("headline") or r.get("title") or ""
         out.append(
             f'<li class="rep m{mat}">'
             f'<div class="rep-head"><span class="t">{(r.get("ts") or "")[11:16]}</span>'
@@ -250,9 +255,18 @@ def reports_rows(rows: list[dict], limit: int | None = None,
             f'{", ".join(r.get("companies") or []) or "—"}</a>{badge}'
             f'<span class="chg {dcls}">{dirc}</span>'
             f'<span class="mat">{"●" * int(mat)}</span></div>'
-            f'<div class="rep-sum">{r.get("summary","")}</div>'
+            + (f'<div class="rep-hl">{head}</div>' if head else "")
+            + f'<div class="rep-sum">{r.get("summary","")}</div>'
+            + (f'<div class="figs">{figs}</div>' if figs else "")
+            + (f'<div class="rep-ctx">השוואה: {r.get("context")}</div>'
+               if (r.get("context") or "").strip() else "")
             + (f'<div class="rep-why">{r.get("why","")}</div>'
                if (r.get("why") or "").strip() not in ("", "טכני") else "")
+            + (f'<div class="rep-aff"><b>נוגע ל:</b> {aff}'
+               + (f' — {r.get("affected_why")}' if (r.get("affected_why") or "").strip() else "")
+               + "</div>" if aff else "")
+            + (f'<div class="rep-watch"><b>לעקוב:</b> {r.get("watch")}</div>'
+               if (r.get("watch") or "").strip() else "")
             + "</li>")
     return "".join(out)
 
