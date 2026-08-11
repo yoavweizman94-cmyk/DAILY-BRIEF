@@ -109,7 +109,7 @@ jobs:
           python scripts/publish_reports.py || true
           git add data/state.sqlite output/reports output/filings data/maya_index_state.json
           git diff --cached --quiet || git commit -m "maya: $(date +'%F %H:%M')"
-          git pull --rebase origin main && git push
+          bash scripts/git_sync.sh
 
       # בלי זה הסיכומים יושבים בריפו אבל האתר מציג אותם רק אחרי המהדורה הבאה —
       # עיכוב של עד שמונה שעות, שסותר את כל הרעיון של ניטור רציף.
