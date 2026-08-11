@@ -82,7 +82,9 @@
         })).then(function (chunks) {
           all = [].concat.apply([], chunks);
           all.forEach(function (e) {
-            e._s = norm((e.c || []).join(" ") + " " + e.t + " " + (e.f || ""));
+            e._cn = (e.c || []).map(norm);               // כל שם בנפרד
+            e._c = e._cn.join(" ");                      // שמות החברות בלבד
+            e._s = e._c + " " + norm(e.t + " " + (e.f || ""));
           });
           all.sort(function (a, b) { return b.d.localeCompare(a.d); });
           say(all.length.toLocaleString("he-IL") + " דוחות באינדקס · " +
@@ -95,29 +97,76 @@
       });
   }
 
+  var relaxed = false;
+
   function filtered() {
     var terms = norm($("q").value).split(" ").filter(Boolean);
     var y = $("year").value, k = $("kind").value, cov = $("covonly").checked;
-    return all.filter(function (e) {
+    var base = all.filter(function (e) {
       if (y && e.d.slice(0, 4) !== y) return false;
       if (k && e.k !== k) return false;
       if (cov && !e.cov) return false;
-      for (var i = 0; i < terms.length; i++) {
-        if (e._s.indexOf(terms[i]) < 0) return false;   // כל המילים חייבות להימצא
-      }
       return true;
     });
+
+    relaxed = false;
+    if (!terms.length) return base;
+
+    var whole = norm($("q").value);
+
+    // מי שמקליד מחפש בדרך כלל חברה, לא מילה בכותרת. לכן התאמה בשם החברה
+    // שוקלת יותר: בלי זה "בנק לאומי" החזיר את מרכנתיל ראשונה (שהתאימה
+    // ל"בנק" בכותרת) ואת לאומי אי־שם למטה.
+    function score(e) {
+      var n = 0, s = 0, exact = false;
+      for (var i = 0; i < terms.length; i++) {
+        var t = terms[i];
+        // ה' הידיעה: המשתמש כותב "בנק הפועלים", מאיה רשמה "פועלים"
+        var bare = t.length > 3 && t.charAt(0) === "ה" ? t.slice(1) : t;
+        // שם חברה ששווה למילה עצמה גובר על הכלה כתת-מחרוזת: בלי ההבחנה
+        // הזו "בינלאומי" ניצח את "לאומי" בחיפוש "בנק לאומי".
+        if (e._cn.indexOf(t) >= 0 || e._cn.indexOf(bare) >= 0) {
+          n++; s += 50; exact = true;
+        } else if (e._c.indexOf(t) >= 0) { n++; s += 10; }
+        else if (e._s.indexOf(t) >= 0) { n++; s += 1; }
+      }
+      if (e._c === whole) s += 100;                     // כל השמות בדיוק
+      return { e: e, n: n, s: s, exact: exact };
+    }
+
+    var scored = base.map(score);
+    // חברה שהשם שלה הוא בדיוק אחת המילים נשארת גם אם לא כל המילים התאימו:
+    // בחיפוש "בנק דיסקונט", הכותרת "בנק מרכנתיל דיסקונט" הכילה במקרה את שתי
+    // המילים ועברה את הסינון, בעוד החברה דיסקונט עצמה — שהיא מה שחיפשו —
+    // נפלה ממנו לגמרי.
+    var strict = scored.filter(function (x) {
+      return x.n === terms.length || x.exact;
+    });
+
+    // מאיה רושמת חברות בשם הקצר, ולכן דרישה שכל המילים יימצאו החזירה אפס
+    // על השם המקובל, בשקט. כשגם זה ריק נדרשת התאמה חלקית, והיא מוצגת.
+    var use = strict;
+    if (!strict.length && terms.length > 1) {
+      relaxed = true;
+      use = scored.filter(function (x) { return x.n > 0; });
+    }
+    return use.sort(function (a, b) {
+      return b.s - a.s || b.e.d.localeCompare(a.e.d);
+    }).map(function (x) { return x.e; });
   }
 
   function render() {
     var rows = filtered();
     if (!rows.length) {
-      out.innerHTML = '<p class="empty">אין דוחות שעונים על החיפוש.</p>';
+      out.innerHTML = '<p class="empty">אין דוחות שעונים על החיפוש. שים לב '
+        + 'שמאיה רושמת חברות בשם הקצר — "לאומי" ולא "בנק לאומי".</p>';
       return;
     }
     var slice = rows.slice(0, shown);
     var h = '<div class="tbl-head"><span>' + rows.length.toLocaleString("he-IL") +
             " תוצאות" + (rows.length > slice.length ? " · מוצגות " + slice.length : "") +
+            (relaxed ? " · אין התאמה לכל המילים — מוצגות התאמות חלקיות, "
+                     + "המדויקות ביותר ראשונות" : "") +
             '</span></div><ul class="filings">';
     slice.forEach(function (e) {
       var dl = e.p
