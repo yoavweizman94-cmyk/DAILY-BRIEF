@@ -207,6 +207,8 @@
   }
 
   function download(ev) {
+    // ctrl/cmd/shift-קליק הוא בקשה מפורשת לפתוח בלשונית — לא לחטוף אותה
+    if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey || ev.button) return;
     var a = ev.currentTarget, e = byId[a.getAttribute("data-id")];
     if (!e || !window.fetch || !window.URL || !URL.createObjectURL) return;  // ניווט רגיל
     ev.preventDefault();
