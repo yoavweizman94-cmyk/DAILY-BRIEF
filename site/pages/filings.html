@@ -40,7 +40,7 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var msg = $("fmsg"), out = $("fout");
-  var all = [], shown = PAGE;
+  var all = [], shown = PAGE, byId = {};
 
   function say(t, cls) { msg.className = "msg " + (cls || ""); msg.textContent = t || ""; }
   function heDate(s) { return s ? s.split("-").reverse().join("/") : "—"; }
@@ -170,8 +170,8 @@
             '</span></div><ul class="filings">';
     slice.forEach(function (e) {
       var dl = e.p
-        ? '<a class="dl" href="' + FILES + e.p + '" target="_blank" rel="noopener" download>' +
-          "הורד PDF" + (e.s ? " · " + size(e.s) : "") + "</a>"
+        ? '<a class="dl" href="' + FILES + e.p + '" target="_blank" rel="noopener" ' +
+          'data-id="' + e.id + '">הורד PDF' + (e.s ? " · " + size(e.s) : "") + "</a>"
         : '<span class="d">אין PDF</span>';
       h += '<li class="fil">' +
            '<span class="d">' + heDate(e.d) + "</span>" +
@@ -191,6 +191,42 @@
     out.innerHTML = h;
     var more = $("more");
     if (more) more.onclick = function () { shown += PAGE; render(); };
+    byId = {};
+    slice.forEach(function (e) { byId[e.id] = e; });
+    [].forEach.call(out.querySelectorAll("a.dl"), function (a) {
+      a.addEventListener("click", download);
+    });
+  }
+
+  // שם קובץ קריא. מאיה מגישה את הדוחות בשם כמו P1762792-00.pdf, ומי ששומר
+  // כמה דוחות נשאר עם תיקייה שאי אפשר להתמצא בה.
+  function fileName(e) {
+    var s = [(e.c || []).join("-"), e.t, e.d].join(" ")
+      .replace(/[\\\/:*?"<>|]/g, " ").replace(/\s+/g, " ").trim();
+    return s.slice(0, 120) + ".pdf";
+  }
+
+  function download(ev) {
+    var a = ev.currentTarget, e = byId[a.getAttribute("data-id")];
+    if (!e || !window.fetch || !window.URL || !URL.createObjectURL) return;  // ניווט רגיל
+    ev.preventDefault();
+    var label = a.textContent;
+    a.textContent = "מוריד…";
+    fetch(a.href).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.blob();
+    }).then(function (blob) {
+      var u = URL.createObjectURL(blob);
+      var t = document.createElement("a");
+      t.href = u; t.download = fileName(e);
+      document.body.appendChild(t); t.click(); document.body.removeChild(t);
+      setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
+      a.textContent = label;
+    }).catch(function () {
+      // נפילה לאחור: פתיחה בלשונית. עדיף מכפתור שלא עושה דבר.
+      a.textContent = label;
+      window.open(a.href, "_blank", "noopener");
+    });
   }
 
   ["q", "year", "kind", "covonly"].forEach(function (id) {
