@@ -1,0 +1,161 @@
+<h1>חיפוש דוחות כספיים</h1>
+
+<p class="lead">דוחות רבעוניים, תקופתיים ומצגות תוצאות של <b>כל חברה נסחרת</b>,
+לא רק חברות הכיסוי. ההורדה היא ישירות מקובצי מאיה.</p>
+
+<form class="srch" id="ff" autocomplete="off">
+  <div class="row">
+    <label class="grow">
+      חברה או מילה בכותרת
+      <input type="text" id="q" placeholder="לדוגמה: מקס סטוק · בנק · רבעון 2">
+    </label>
+    <label>
+      תקופה
+      <select id="year"><option value="">הכל</option></select>
+    </label>
+    <label>
+      סוג
+      <select id="kind">
+        <option value="">הכל</option>
+        <option value="דוח">דוחות בלבד</option>
+        <option value="מצגת">מצגות בלבד</option>
+      </select>
+    </label>
+    <label class="chk">
+      <input type="checkbox" id="covonly">
+      <span>כיסוי בלבד</span>
+    </label>
+  </div>
+</form>
+
+<div id="fmsg" class="msg"></div>
+<div id="fout"></div>
+
+<script>
+(function () {
+  "use strict";
+  var FILES = "https://mayafiles.tase.co.il/";
+  var MAYA = "https://maya.tase.co.il/he/reports/";
+  var PAGE = 60;                 // תוצאות לעמוד; "עוד" מוסיף עוד מנה
+
+  var $ = function (id) { return document.getElementById(id); };
+  var msg = $("fmsg"), out = $("fout");
+  var all = [], shown = PAGE;
+
+  function say(t, cls) { msg.className = "msg " + (cls || ""); msg.textContent = t || ""; }
+  function heDate(s) { return s ? s.split("-").reverse().join("/") : "—"; }
+  function size(kb) {
+    if (!kb) return "";
+    return kb >= 1024 ? (kb / 1024).toFixed(1) + " MB" : kb + " KB";
+  }
+
+  // נרמול לחיפוש: גרשיים ומקפים בעברית נכתבים בכמה צורות (ש"ח מול ש״ח,
+  // ג'י מול ג׳י), וחיפוש מילולי היה מחמיץ התאמות ברורות.
+  function norm(s) {
+    return (s || "").replace(/["'״׳`]/g, "").replace(/[-–—]/g, " ")
+                    .replace(/\s+/g, " ").trim().toLowerCase();
+  }
+
+  function load() {
+    say("טוען אינדקס…", "wait");
+    return fetch("filings/manifest.json", { cache: "no-cache" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("manifest " + r.status);
+        return r.json();
+      })
+      .then(function (man) {
+        var years = (man.years || []).map(function (y) { return y.year; });
+        var sel = $("year");
+        years.forEach(function (y) {
+          var o = document.createElement("option");
+          o.value = o.textContent = y;
+          sel.appendChild(o);
+        });
+        return Promise.all(years.map(function (y) {
+          return fetch("filings/" + y + ".jsonl", { cache: "no-cache" })
+            .then(function (r) { return r.ok ? r.text() : ""; })
+            .then(function (txt) {
+              return txt.split("\n").filter(Boolean).map(function (l) {
+                try { return JSON.parse(l); } catch (e) { return null; }
+              }).filter(Boolean);
+            });
+        })).then(function (chunks) {
+          all = [].concat.apply([], chunks);
+          all.forEach(function (e) {
+            e._s = norm((e.c || []).join(" ") + " " + e.t + " " + (e.f || ""));
+          });
+          all.sort(function (a, b) { return b.d.localeCompare(a.d); });
+          say(all.length.toLocaleString("he-IL") + " דוחות באינדקס · " +
+              (man.earliest ? heDate(man.earliest) + " – " + heDate(man.latest) : ""), "ok");
+          render();
+        });
+      })
+      .catch(function (e) {
+        say("טעינת האינדקס נכשלה (" + e.message + "). ייתכן שהאתר עדיין נבנה.", "err");
+      });
+  }
+
+  function filtered() {
+    var terms = norm($("q").value).split(" ").filter(Boolean);
+    var y = $("year").value, k = $("kind").value, cov = $("covonly").checked;
+    return all.filter(function (e) {
+      if (y && e.d.slice(0, 4) !== y) return false;
+      if (k && e.k !== k) return false;
+      if (cov && !e.cov) return false;
+      for (var i = 0; i < terms.length; i++) {
+        if (e._s.indexOf(terms[i]) < 0) return false;   // כל המילים חייבות להימצא
+      }
+      return true;
+    });
+  }
+
+  function render() {
+    var rows = filtered();
+    if (!rows.length) {
+      out.innerHTML = '<p class="empty">אין דוחות שעונים על החיפוש.</p>';
+      return;
+    }
+    var slice = rows.slice(0, shown);
+    var h = '<div class="tbl-head"><span>' + rows.length.toLocaleString("he-IL") +
+            " תוצאות" + (rows.length > slice.length ? " · מוצגות " + slice.length : "") +
+            '</span></div><ul class="filings">';
+    slice.forEach(function (e) {
+      var dl = e.p
+        ? '<a class="dl" href="' + FILES + e.p + '" target="_blank" rel="noopener" download>' +
+          "הורד PDF" + (e.s ? " · " + size(e.s) : "") + "</a>"
+        : '<span class="d">אין PDF</span>';
+      h += '<li class="fil">' +
+           '<span class="d">' + heDate(e.d) + "</span>" +
+           '<span class="co">' + (e.c || []).join(", ") + "</span>" +
+           (e.cov ? '<span class="cov">כיסוי</span>' : "") +
+           '<span class="ti"><a href="' + MAYA + e.id + '" target="_blank" rel="noopener">' +
+           e.t + "</a></span>" +
+           (e.k === "מצגת" ? '<span class="form">מצגת</span>' : "") +
+           '<span class="form">' + (e.f || "—") + "</span>" +
+           dl + "</li>";
+    });
+    h += "</ul>";
+    if (rows.length > slice.length) {
+      h += '<p><button type="button" id="more" class="lnk">הצג עוד ' +
+           Math.min(PAGE, rows.length - slice.length) + "</button></p>";
+    }
+    out.innerHTML = h;
+    var more = $("more");
+    if (more) more.onclick = function () { shown += PAGE; render(); };
+  }
+
+  ["q", "year", "kind", "covonly"].forEach(function (id) {
+    $(id).addEventListener("input", function () { shown = PAGE; render(); });
+    $(id).addEventListener("change", function () { shown = PAGE; render(); });
+  });
+  $("ff").addEventListener("submit", function (e) { e.preventDefault(); });
+
+  load();
+})();
+</script>
+
+<p class="fineprint">
+מקור: מאיה (הבורסה לניירות ערך בת"א). האינדקס נבנה אוטומטית — הדוחות של היום
+נוספים בכל ריצת ניטור, וההיסטוריה מתמלאת אחורה ברקע. קישור ההורדה מפנה ישירות
+לקובץ במאיה ולא לעותק מקומי, כך שמה שיורד הוא הקובץ המקורי.
+</p>

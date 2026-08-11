@@ -158,3 +158,65 @@ ul.news li.nw .src { color: var(--muted); font-size: 0.72rem; white-space: nowra
 .topic-sum .takeaway { font-size: 0.88rem; color: var(--muted);
   border-top: 1px solid var(--border); padding-top: 0.4rem; margin-top: 0.5rem; }
 .topic-sum .takeaway b { color: var(--fg); }
+
+/* ---- עמודי חיפוש (עסקאות, דוחות) ---- */
+p.lead { color: var(--muted); font-size: 0.92rem; margin-top: -0.3rem; }
+form.srch { border: 1px solid var(--border); border-radius: 8px;
+  padding: 0.8rem 0.9rem; background: var(--table-head); margin-bottom: 1rem; }
+form.srch .row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-end; }
+form.srch .row + .row { margin-top: 0.7rem; padding-top: 0.7rem;
+  border-top: 1px solid var(--border); }
+form.srch label { display: flex; flex-direction: column; gap: 0.2rem;
+  font-size: 0.76rem; color: var(--muted); position: relative; }
+form.srch label.grow { flex: 1 1 16rem; }
+form.srch input, form.srch select {
+  font: inherit; font-size: 0.92rem; padding: 0.3rem 0.5rem; color: var(--fg);
+  background: var(--bg); border: 1px solid var(--border); border-radius: 5px; }
+form.srch .filters input { width: 5.2rem; }
+form.srch button {
+  font: inherit; font-size: 0.92rem; font-weight: 600; cursor: pointer;
+  padding: 0.35rem 1.3rem; border-radius: 5px; border: 1px solid var(--accent);
+  background: var(--accent); color: #fff; }
+form.srch button:disabled { opacity: 0.5; cursor: default; }
+
+ul.ac { list-style: none; margin: 0; padding: 0; position: absolute;
+  top: 100%; inset-inline: 0; z-index: 20; max-height: 15rem; overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 5px; }
+ul.ac li { padding: 0.3rem 0.6rem; font-size: 0.9rem; color: var(--fg); cursor: pointer; }
+ul.ac li:hover { background: var(--table-head); color: var(--accent); }
+
+.msg { font-size: 0.85rem; min-height: 1.3rem; margin-bottom: 0.5rem; }
+.msg.wait { color: var(--muted); }
+.msg.ok   { color: var(--accent); }
+.msg.warn { color: #b8860b; }
+.msg.err  { color: #c0392b; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.5rem; margin-bottom: 1rem; }
+
+.tbl-head { display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 0.82rem; color: var(--muted); margin-bottom: 0.3rem; }
+button.lnk { font: inherit; font-size: 0.82rem; background: none; border: 0;
+  color: var(--accent); cursor: pointer; padding: 0; text-decoration: underline; }
+p.empty { color: var(--muted); font-size: 0.9rem; }
+p.fineprint { color: var(--muted); font-size: 0.78rem; margin-top: 2rem;
+  border-top: 1px solid var(--border); padding-top: 0.6rem; }
+
+/* ---- תוצאות חיפוש דוחות ---- */
+ul.filings { list-style: none; padding: 0; margin: 0.5rem 0; }
+li.fil { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap;
+  padding: 0.45rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+li.fil .d { color: var(--muted); font-size: 0.78rem; font-variant-numeric: tabular-nums;
+  white-space: nowrap; }
+li.fil .co { font-weight: 600; }
+li.fil .ti { flex: 1 1 14rem; }
+li.fil .form { font-size: 0.7rem; color: var(--muted); border: 1px solid var(--border);
+  border-radius: 999px; padding: 0.05rem 0.45rem; white-space: nowrap; }
+li.fil .cov { font-size: 0.68rem; background: var(--accent); color: #fff;
+  border-radius: 999px; padding: 0.05rem 0.45rem; }
+li.fil .dl { text-decoration: none; font-size: 0.8rem; white-space: nowrap;
+  border: 1px solid var(--accent); border-radius: 5px; padding: 0.1rem 0.6rem; }
+li.fil .dl:hover { background: var(--accent); color: #fff; }
+form.srch label.chk { flex-direction: row; align-items: center; gap: 0.35rem;
+  font-size: 0.84rem; color: var(--fg); padding-bottom: 0.35rem; }
+form.srch label.chk input { width: auto; }

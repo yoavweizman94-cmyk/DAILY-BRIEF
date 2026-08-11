@@ -21,6 +21,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "site" / "dist"
 STYLE = Path(__file__).parent / "style.css"
+PAGES = Path(__file__).parent / "pages"
 
 # בלי smarty: הוא ממיר גרשיים אנגליים טיפוגרפיים ומשבש עברית —
 # ש"ח הפך ל-ש&rdquo;ח וג'י סיטי ל-ג&rsquo;י סיטי.
@@ -43,7 +44,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a> · <a href="{root}reports.html">דיווחים וסיכומי דוחות</a> · <a href="{root}archive.html">ארכיון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a> · <a href="{root}reports.html">דיווחים וסיכומי דוחות</a> · <a href="{root}filings.html">חיפוש דוחות</a> · <a href="{root}deals.html">עסקאות נדל"ן</a> · <a href="{root}archive.html">ארכיון</a></nav>
   <div class="brand">{site_title}</div>
 </header>
 <main>
@@ -492,6 +493,23 @@ def main() -> int:
     (OUT / "reports.html").write_text(
         PAGE.format(title=f"דיווחים וסיכומי דוחות · {site_title}",
                     site_title=site_title, root="", body=body), encoding="utf-8")
+
+    # --- עמודי חיפוש -------------------------------------------------------
+    # פרגמנטים סטטיים עם ה-JS שלהם, נעטפים ב-PAGE כדי לשמור ניווט ועיצוב אחידים.
+    # ה-JS מכיל סוגריים מסולסלים, אבל הוא נכנס כערך ל-format ולא עובר עיבוד שני.
+    # אינדקס הדוחות נטען ע"י filings.html מהדפדפן, ולכן חייב להיפרס לצד הדף.
+    filings_src = ROOT / "output" / "filings"
+    if filings_src.is_dir():
+        shutil.copytree(filings_src, OUT / "filings")
+
+    for name, title in (("deals", "חיפוש עסקאות נדל\"ן"),
+                        ("filings", "חיפוש דוחות כספיים")):
+        frag = PAGES / f"{name}.html"
+        if frag.exists():
+            (OUT / f"{name}.html").write_text(
+                PAGE.format(title=f"{title} · {site_title}", site_title=site_title,
+                            root="", body=frag.read_text(encoding="utf-8")),
+                encoding="utf-8")
 
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
     print(f"נבנה {OUT} | {len(entries)} ברייפים | "

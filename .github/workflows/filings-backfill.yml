@@ -1,0 +1,95 @@
+name: Filings Backfill
+
+# מילוי היסטוריית הדוחות אחורה, לילה אחר לילה.
+#
+# ה-WAF של מאיה מגביל לפי נפח בקשות ולא לפי טווח תאריכים: חלון של 7 ימים
+# (≈33 עמודים) עובר, והבקשה שאחריו מקבלת 403. לכן אי אפשר למשוך שנתיים
+# בהרצה אחת, והסקריפט מתקדם בחלונות עם שהייה, שומר מצב אחרי כל חלון וממשיך
+# מאותה נקודה בהרצה הבאה. כמה לילות והאינדקס מגיע ל-`until`.
+#
+# הריפו ציבורי ולכן דקות ה-Actions חינם — התקציב כאן הוא זמן ריצה, לא עלות.
+on:
+  schedule:
+    - cron: "0 0 * * *"        # 02:00/03:00 בישראל, אחרי מהדורת הלילה
+  workflow_dispatch:
+    inputs:
+      until:
+        description: "עד לאיזה תאריך למלא אחורה (YYYY-MM-DD)"
+        default: "2024-01-01"
+      budget_minutes:
+        description: "תקציב זמן להרצה"
+        default: "45"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: filings-backfill
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Jerusalem
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      changed: ${{ steps.run.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install curl_cffi pyyaml truststore certifi requests markdown
+
+      - name: Backfill
+        id: run
+        run: |
+          python ingest/maya_index.py --backfill \
+            --until "${{ inputs.until || '2024-01-01' }}" \
+            --budget-minutes "${{ inputs.budget_minutes || 45 }}"
+          if [ -n "$(git status --porcelain output/filings)" ]; then
+            echo "changed=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit
+        if: steps.run.outputs.changed == 'yes'
+        run: |
+          git config user.name "forest-brief-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output/filings data/maya_index_state.json
+          git diff --cached --quiet || git commit -m "filings: מילוי אחורה $(date +'%F')"
+          git pull --rebase origin main && git push
+
+      - name: Rebuild site
+        if: steps.run.outputs.changed == 'yes'
+        run: python site/build.py
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.run.outputs.changed == 'yes'
+        with:
+          path: site/dist
+
+  deploy:
+    needs: backfill
+    if: needs.backfill.outputs.changed == 'yes'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages-deploy        # אותה קבוצה כמו שאר הפריסות — בלי דריסה הדדית
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

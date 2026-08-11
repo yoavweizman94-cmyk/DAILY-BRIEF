@@ -30,6 +30,7 @@ jobs:
     timeout-minutes: 25
     outputs:
       new: ${{ steps.collect.outputs.new }}
+      idx: ${{ steps.filings.outputs.idx }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,9 +42,10 @@ jobs:
           cache: pip
 
       # רק מה שצריך לשלב הזיהוי. yfinance/google-api/pypdf אינם נדרשים כאן,
-      # ו-pip מהמטמון מסיים בשניות.
+      # ו-pip מהמטמון מסיים בשניות. markdown נכלל כי מחזור שבו רק אינדקס
+      # הדוחות השתנה בונה את האתר בלי לעבור בשלב ההתקנה המלא.
       - name: Install collector dependencies
-        run: pip install curl_cffi pyyaml truststore certifi requests
+        run: pip install curl_cffi pyyaml truststore certifi requests markdown
 
       - name: Collect new Maya reports
         id: collect
@@ -64,9 +66,22 @@ jobs:
           PY
           then echo "new=yes" >> "$GITHUB_OUTPUT"; else echo "new=no" >> "$GITHUB_OUTPUT"; fi
 
+      # אינדקס הדוחות מתעדכן בכל מחזור ולא רק כשיש מה לסכם: דוח כספי חדש שייך
+      # לאינדקס גם אם אינו עובר את סף המהותיות לסיכום. השלב זול — 1–3 קריאות
+      # API ובלי מודל — ולכן הוא רץ תמיד.
+      - name: Update filings index
+        id: filings
+        run: |
+          python ingest/maya_index.py --recent 2 || echo "אינדקס הדוחות נכשל — ייאסף במחזור הבא"
+          if [ -n "$(git status --porcelain output/filings)" ]; then
+            echo "idx=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "idx=no" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Nothing new
-        if: steps.collect.outputs.new != 'yes'
-        run: echo "אין דיווחים חדשים לסיכום — יוצאים בלי להתקין את ה-CLI."
+        if: steps.collect.outputs.new != 'yes' && steps.filings.outputs.idx != 'yes'
+        run: echo "אין דיווחים חדשים לסיכום ולא השתנה האינדקס — יוצאים בלי להתקין את ה-CLI."
 
       - uses: actions/setup-node@v4
         if: steps.collect.outputs.new == 'yes'
@@ -86,30 +101,30 @@ jobs:
         run: python scripts/summarize_reports.py || echo "הסיכום נכשל — ייאסף במחזור הבא"
 
       - name: Commit summaries
-        if: steps.collect.outputs.new == 'yes'
+        if: steps.collect.outputs.new == 'yes' || steps.filings.outputs.idx == 'yes'
         run: |
           git config user.name "forest-brief-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           mkdir -p output/reports output/news
           python scripts/publish_reports.py || true
-          git add data/state.sqlite output/reports
+          git add data/state.sqlite output/reports output/filings data/maya_index_state.json
           git diff --cached --quiet || git commit -m "maya: $(date +'%F %H:%M')"
           git pull --rebase origin main && git push
 
       # בלי זה הסיכומים יושבים בריפו אבל האתר מציג אותם רק אחרי המהדורה הבאה —
       # עיכוב של עד שמונה שעות, שסותר את כל הרעיון של ניטור רציף.
       - name: Rebuild site
-        if: steps.collect.outputs.new == 'yes'
+        if: steps.collect.outputs.new == 'yes' || steps.filings.outputs.idx == 'yes'
         run: python site/build.py
 
       - uses: actions/upload-pages-artifact@v3
-        if: steps.collect.outputs.new == 'yes'
+        if: steps.collect.outputs.new == 'yes' || steps.filings.outputs.idx == 'yes'
         with:
           path: site/dist
 
   deploy:
     needs: watch
-    if: needs.watch.outputs.new == 'yes'
+    if: needs.watch.outputs.new == 'yes' || needs.watch.outputs.idx == 'yes'
     runs-on: ubuntu-latest
     concurrency:
       group: pages-deploy      # מונע התנגשות עם פריסת ה-Daily Brief

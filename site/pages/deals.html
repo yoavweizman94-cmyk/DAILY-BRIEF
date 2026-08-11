@@ -1,0 +1,359 @@
+<h1>חיפוש עסקאות נדל"ן</h1>
+
+<p class="lead">נתוני רשות המסים דרך Govmap. החיפוש רץ חי בדפדפן מול ה-API —
+אין כאן עותק שמור, מה שמוצג הוא מה שיש במקור ברגע זה.</p>
+
+<form class="srch" id="f" autocomplete="off">
+  <div class="row">
+    <label class="grow">
+      כתובת
+      <input type="text" id="addr" placeholder="לדוגמה: רוטשילד 1 תל אביב" required>
+      <ul id="ac" class="ac" hidden></ul>
+    </label>
+    <label>
+      רדיוס
+      <select id="radius">
+        <option value="300">300 מ׳</option>
+        <option value="500" selected>500 מ׳</option>
+        <option value="1000">1 ק״מ</option>
+        <option value="2000">2 ק״מ</option>
+      </select>
+    </label>
+    <label>
+      שנים אחורה
+      <select id="years">
+        <option value="1">1</option>
+        <option value="2" selected>2</option>
+        <option value="5">5</option>
+        <option value="0">הכל</option>
+      </select>
+    </label>
+    <button type="submit" id="go">חפש</button>
+  </div>
+  <div class="row filters">
+    <label>סוג נכס <select id="ptype"><option value="">הכל</option></select></label>
+    <label>חדרים מ־ <input type="number" id="rmin" min="0" step="0.5" placeholder="—"></label>
+    <label>עד <input type="number" id="rmax" min="0" step="0.5" placeholder="—"></label>
+    <label>מחיר מ׳ ₪ מ־ <input type="number" id="pmin" min="0" step="0.1" placeholder="—"></label>
+    <label>עד <input type="number" id="pmax" min="0" step="0.1" placeholder="—"></label>
+    <label>מ״ר מ־ <input type="number" id="amin" min="0" placeholder="—"></label>
+    <label>עד <input type="number" id="amax" min="0" placeholder="—"></label>
+  </div>
+</form>
+
+<div id="msg" class="msg"></div>
+<div id="stats" class="stats" hidden></div>
+<div id="out"></div>
+
+<script>
+(function () {
+  "use strict";
+  var API = "https://www.govmap.gov.il/api";
+  // כל חלקה היא בקשה נפרדת, ו-Govmap מחזיר עד 100 חלקות לחיפוש. אין בהן
+  // קואורדינטות, ולכן אי אפשר למיין לפי מרחק ולקצץ — נמדד שברדיוס 500 מ׳
+  // 30 החלקות הראשונות מכילות 72 עסקאות מתוך 635, כלומר קיצוץ הוא איבוד
+  // של 89% מהנתונים בלי שהמשתמש יידע. לכן נשלפות כולן, עם התקדמות גלויה.
+  var MAX_POLY = 100, CONCURRENCY = 8, PER_POLY = 300;
+  // עסקאות קרקע נרשמות לעיתים עם שטח 1 מ״ר, ומחיר חלקי שטח כזה מייצר
+  // "₪ למ״ר" של מיליונים שמרעיל את החציון. סף שפיות לסטטיסטיקה בלבד —
+  // העסקה עצמה עדיין מוצגת בטבלה.
+  var MIN_AREA_FOR_PPM = 10;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var msg = $("msg"), out = $("out"), stats = $("stats");
+  var chosen = null;   // {x, y, label} מתוך ה-autocomplete
+  var lastDeals = [];
+
+  function say(t, cls) { msg.className = "msg " + (cls || ""); msg.textContent = t || ""; }
+  function nis(n) { return n == null ? "—" : Number(n).toLocaleString("he-IL"); }
+  function mil(n) { return n == null ? "—" : (n / 1e6).toFixed(2); }
+
+  function median(a) {
+    if (!a.length) return null;
+    var s = a.slice().sort(function (x, y) { return x - y; }), m = s.length >> 1;
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  }
+
+  function jget(url) {
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+
+  // --- השלמת כתובת -----------------------------------------------------
+  var acBox = $("ac"), acTimer = null;
+
+  function parsePoint(res) {
+    if (res.coordinates && res.coordinates.longitude != null)
+      return [res.coordinates.longitude, res.coordinates.latitude];
+    var m = /POINT\(([-\d.]+)\s+([-\d.]+)\)/.exec(res.shape || "");
+    return m ? [parseFloat(m[1]), parseFloat(m[2])] : null;
+  }
+
+  function showAc(items) {
+    acBox.innerHTML = "";
+    if (!items.length) { acBox.hidden = true; return; }
+    items.forEach(function (it) {
+      var li = document.createElement("li");
+      li.textContent = it.text;
+      li.onclick = function () {
+        $("addr").value = it.text;
+        chosen = { x: it.pt[0], y: it.pt[1], label: it.text };
+        acBox.hidden = true;
+      };
+      acBox.appendChild(li);
+    });
+    acBox.hidden = false;
+  }
+
+  function lookup(text) {
+    return fetch(API + "/search-service/autocomplete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ searchText: text, language: "he", isAccurate: false, maxResults: 10 })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      return (d.results || []).map(function (res) {
+        return { text: res.text, pt: parsePoint(res) };
+      }).filter(function (r) { return r.pt; });
+    });
+  }
+
+  $("addr").addEventListener("input", function () {
+    chosen = null;
+    var v = this.value.trim();
+    clearTimeout(acTimer);
+    if (v.length < 3) { acBox.hidden = true; return; }
+    acTimer = setTimeout(function () {
+      lookup(v).then(function (items) { showAc(items.slice(0, 8)); })
+               .catch(function () { acBox.hidden = true; });
+    }, 250);
+  });
+  document.addEventListener("click", function (e) {
+    if (!acBox.contains(e.target) && e.target !== $("addr")) acBox.hidden = true;
+  });
+
+  // --- שליפה ------------------------------------------------------------
+  function pool(items, worker, onEach) {
+    var i = 0, done = 0;
+    function next() {
+      if (i >= items.length) return Promise.resolve();
+      var k = i++;
+      return worker(items[k]).then(function (r) { onEach(r); }, function () {})
+        .then(function () { done++; onEach.progress(done, items.length); })
+        .then(next);
+    }
+    var runners = [];
+    for (var n = 0; n < Math.min(CONCURRENCY, items.length); n++) runners.push(next());
+    return Promise.all(runners);
+  }
+
+  function fetchDeals(pt, radius, onPartial) {
+    return jget(API + "/real-estate/deals/" + pt[0] + "," + pt[1] + "/" + radius)
+      .then(function (d) {
+        var polys = Array.isArray(d) ? d : (d.data || []);
+        var ids = [], expected = 0;
+        polys.forEach(function (p) {
+          var id = p.polygon_id || p.polygonId;
+          var n = parseInt(p.dealscount || 0, 10);
+          // חלקה בלי עסקאות היא בקשה מבוזבזת
+          if (id && n > 0 && ids.indexOf(id) < 0) { ids.push(id); expected += n; }
+        });
+        var capped = ids.slice(0, MAX_POLY);
+        var seen = {}, deals = [];
+
+        var collect = function (page) {
+          var fresh = false;
+          (((page && page.data) || [])).forEach(function (dl) {
+            var k = dl.dealId || dl.objectid;
+            if (k && !seen[k]) { seen[k] = 1; deals.push(dl); fresh = true; }
+          });
+          if (fresh) onPartial(deals);
+        };
+        collect.progress = function (n, total) {
+          say("נשלפות חלקות: " + n + "/" + total + " · " + deals.length + " עסקאות", "wait");
+        };
+
+        say("נמצאו " + ids.length + " חלקות עם עסקאות (" + expected + " עסקאות צפויות)…", "wait");
+        return pool(capped, function (id) {
+          return jget(API + "/real-estate/street-deals/" + id + "?limit=" + PER_POLY + "&dealType=2");
+        }, collect).then(function () {
+          return { deals: deals, total: ids.length, scanned: capped.length };
+        });
+      });
+  }
+
+  // --- סינון ותצוגה -----------------------------------------------------
+  function num(id) { var v = parseFloat($(id).value); return isNaN(v) ? null : v; }
+
+  function applyFilters(deals) {
+    var years = parseInt($("years").value, 10);
+    var cutoff = null;
+    if (years > 0) {
+      cutoff = new Date();
+      cutoff.setFullYear(cutoff.getFullYear() - years);
+    }
+    var pt = $("ptype").value,
+        rmin = num("rmin"), rmax = num("rmax"),
+        pmin = num("pmin"), pmax = num("pmax"),
+        amin = num("amin"), amax = num("amax");
+    return deals.filter(function (d) {
+      var dt = d.dealDate ? new Date(d.dealDate) : null;
+      if (cutoff && (!dt || dt < cutoff)) return false;
+      if (pt && d.propertyTypeDescription !== pt) return false;
+      if (rmin != null && !(d.assetRoomNum >= rmin)) return false;
+      if (rmax != null && !(d.assetRoomNum <= rmax)) return false;
+      if (pmin != null && !(d.dealAmount >= pmin * 1e6)) return false;
+      if (pmax != null && !(d.dealAmount <= pmax * 1e6)) return false;
+      if (amin != null && !(d.assetArea >= amin)) return false;
+      if (amax != null && !(d.assetArea <= amax)) return false;
+      return true;
+    });
+  }
+
+  function fillTypes(deals) {
+    var sel = $("ptype"), cur = sel.value, types = {};
+    deals.forEach(function (d) {
+      if (d.propertyTypeDescription) types[d.propertyTypeDescription] = 1;
+    });
+    sel.innerHTML = '<option value="">הכל</option>';
+    Object.keys(types).sort().forEach(function (t) {
+      var o = document.createElement("option");
+      o.value = o.textContent = t;
+      sel.appendChild(o);
+    });
+    sel.value = cur;
+  }
+
+  function renderStats(rows) {
+    if (!rows.length) { stats.hidden = true; return; }
+    var prices = rows.map(function (r) { return r.dealAmount; }).filter(Boolean);
+    var ppmRows = rows.filter(function (r) {
+      return r.dealAmount && r.assetArea >= MIN_AREA_FOR_PPM;
+    });
+    var ppm = ppmRows.map(function (r) { return r.dealAmount / r.assetArea; });
+    var dates = rows.map(function (r) { return r.dealDate; }).filter(Boolean).sort();
+    function d(s) { return s ? s.slice(0, 10).split("-").reverse().join("/") : "—"; }
+    var ppmLbl = "חציון ₪ למ״ר" +
+      (ppmRows.length < rows.length ? " <b>(" + ppmRows.length + ")</b>" : "");
+    stats.innerHTML =
+      tile("עסקאות", rows.length) +
+      tile("חציון מחיר", mil(median(prices)) + " מ׳ ₪") +
+      tile(ppmLbl, ppm.length ? nis(Math.round(median(ppm))) : "—") +
+      tile("טווח תאריכים", d(dates[0]) + " – " + d(dates[dates.length - 1]));
+    stats.hidden = false;
+  }
+  function tile(l, v) {
+    return '<div class="tile"><span class="lbl">' + l + '</span><span class="val">' + v + "</span></div>";
+  }
+
+  function renderTable(rows) {
+    if (!rows.length) {
+      out.innerHTML = '<p class="empty">אין עסקאות שעונות על הסינון.</p>';
+      return;
+    }
+    rows.sort(function (a, b) { return (b.dealDate || "").localeCompare(a.dealDate || ""); });
+    var h = '<div class="tbl-head"><span>' + rows.length + " עסקאות</span>" +
+            '<button type="button" id="csv" class="lnk">הורדה כ-CSV</button></div>' +
+            "<table><thead><tr><th>תאריך</th><th>כתובת</th><th>שכונה</th><th>סוג</th>" +
+            "<th>חדרים</th><th>קומה</th><th>מ״ר</th><th>מחיר</th><th>₪ למ״ר</th></tr></thead><tbody>";
+    rows.forEach(function (r) {
+      // בחלק ניכר מהעסקאות אין שם רחוב. שם היישוב לבדו חסר ערך בטבלה שכולה
+      // אותו יישוב, ולכן נופלים לגוש/חלקה שהם זיהוי חד-משמעי.
+      var addr = [r.streetNameHeb, r.houseNum].filter(Boolean).join(" ") ||
+                 (r.gushNum ? "גוש " + r.gushNum + " חלקה " + (r.parcelNum || "—") : "") ||
+                 r.settlementNameHeb || "—";
+      var pm = r.dealAmount && r.assetArea > 0 ? Math.round(r.dealAmount / r.assetArea) : null;
+      h += "<tr><td>" + (r.dealDate ? r.dealDate.slice(0, 10).split("-").reverse().join("/") : "—") +
+           "</td><td>" + addr + "</td><td>" + (r.neighborhood || "—") +
+           "</td><td>" + (r.propertyTypeDescription || "—") +
+           "</td><td>" + (r.assetRoomNum || "—") + "</td><td>" + (r.floorNo || "—") +
+           "</td><td>" + (r.assetArea || "—") + "</td><td>" + nis(r.dealAmount) +
+           "</td><td>" + nis(pm) + "</td></tr>";
+    });
+    out.innerHTML = h + "</tbody></table>";
+    $("csv").onclick = function () { downloadCsv(rows); };
+  }
+
+  function downloadCsv(rows) {
+    var cols = ["dealDate", "settlementNameHeb", "streetNameHeb", "houseNum", "neighborhood",
+                "propertyTypeDescription", "assetRoomNum", "floorNo", "assetArea", "dealAmount",
+                "gushNum", "parcelNum"];
+    var head = ["תאריך", "יישוב", "רחוב", "מספר", "שכונה", "סוג", "חדרים", "קומה", "מ״ר",
+                "מחיר", "גוש", "חלקה"];
+    var lines = [head.join(",")];
+    rows.forEach(function (r) {
+      lines.push(cols.map(function (c) {
+        var v = r[c] == null ? "" : String(r[c]);
+        if (c === "dealDate") v = v.slice(0, 10);
+        return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+      }).join(","));
+    });
+    // BOM: בלעדיו אקסל פותח עברית כג'יבריש
+    var blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "deals.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function refresh() {
+    var rows = applyFilters(lastDeals);
+    renderStats(rows);
+    renderTable(rows);
+  }
+  ["ptype", "rmin", "rmax", "pmin", "pmax", "amin", "amax", "years"].forEach(function (id) {
+    $(id).addEventListener("change", function () { if (lastDeals.length) refresh(); });
+  });
+
+  // --- הרצה -------------------------------------------------------------
+  $("f").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var text = $("addr").value.trim();
+    if (!text) return;
+    out.innerHTML = ""; stats.hidden = true; lastDeals = [];
+    $("go").disabled = true;
+    say("מאתר כתובת…", "wait");
+
+    var start = chosen && chosen.label === text
+      ? Promise.resolve([chosen.x, chosen.y])
+      : lookup(text).then(function (items) {
+          if (!items.length) throw new Error("no-address");
+          $("addr").value = items[0].text;
+          return items[0].pt;
+        });
+
+    start.then(function (pt) {
+      return fetchDeals(pt, parseInt($("radius").value, 10), function (partial) {
+        // תצוגה מתעדכנת תוך כדי — 100 חלקות הן ~15 שניות, ומסך ריק כל הזמן הזה
+        // נראה כמו תקלה
+        lastDeals = partial;
+        fillTypes(partial);
+        refresh();
+      });
+    }).then(function (res) {
+      lastDeals = res.deals;
+      fillTypes(res.deals);
+      var note = res.total > res.scanned
+        ? " · נסרקו " + res.scanned + " מתוך " + res.total + " חלקות"
+        : "";
+      say(res.deals.length + " עסקאות נשלפו" + note +
+          (res.deals.length ? " · הסינון למטה חל על התצוגה" : ""),
+          res.deals.length ? "ok" : "warn");
+      refresh();
+    }).catch(function (err) {
+      say(err && err.message === "no-address"
+        ? "לא נמצאה כתובת כזו. נסה ניסוח אחר, למשל 'הרצל 50 רמת גן'."
+        : "השליפה נכשלה: " + (err && err.message || err) +
+          ". ייתכן ש-Govmap אינו זמין כרגע.", "err");
+    }).then(function () { $("go").disabled = false; });
+  });
+})();
+</script>
+
+<p class="fineprint">
+מקור: Govmap — נתוני רשות המסים. הדיווח מפגר כ-6 שבועות אחרי מועד העסקה,
+ולכן החודשיים האחרונים חלקיים. רדיוס קטן מ-300 מ׳ מחזיר לעיתים קרובות אפס
+עסקאות גם בכתובות מרכזיות, ולכן אינו מוצע כאן. עסקאות מכר בלבד.
+</p>
