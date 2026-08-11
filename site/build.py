@@ -84,26 +84,43 @@ def load_json(path: Path):
 # מקטעי הדשבורד
 # --------------------------------------------------------------------------
 
-def sources_panel(raw_dir: Path) -> str:
-    """מצב חמשת המקורות — מה נטען היום ומה לא, בלי לפתוח לוגים."""
-    checks = [("RSS", "rss.jsonl"), ("Feedly", "feedly.jsonl"), ("Gmail", "gmail.jsonl"), ("מאיה", "maya.jsonl"),
-              ("שווקים", "markets.json"), ('רמ"י', "rmi.json"),
-              ("Trading Economics", "te.json")]
+def sources_panel(day: str, raw_dir: Path) -> str:
+    """מצב המקורות של הריצה.
+
+    קורא מ-output/status/<date>.json ולא מ-data/raw/, כי data/raw מוחרג מגיט:
+    כש-maya-watch בונה את האתר, ה-runner שלו לא ראה את קבצי הברייף כלל
+    וכל המקורות הופיעו כ-✗.
+    """
+    st = load_json(ROOT / "output" / "status" / f"{day}.json")
+    stamp = ""
+    if not (st and st.get("sources")):
+        # בין חצות למהדורת הבוקר עוד אין קובץ ליום החדש, ו-maya-watch בונה
+        # את האתר בינתיים. נופלים לסטטוס האחרון הקיים ומסמנים את תאריכו.
+        d = ROOT / "output" / "status"
+        prev = sorted(d.glob("*.json"), reverse=True) if d.exists() else []
+        if prev:
+            st = load_json(prev[0])
+            if st and st.get("date") != day:
+                stamp = (f'<li class="bad" title="לא נאסף מחדש">'
+                         f'<span>·</span>נכון ל-{st["date"][8:10]}/{st["date"][5:7]}</li>')
+    if st and st.get("sources"):
+        rows = st["sources"]
+    else:                                   # נפילה לאחור: הרצה מקומית
+        rows = []
+        for label, fname in [("RSS", "rss.jsonl"), ("Gmail", "gmail.jsonl"),
+                             ("מאיה", "maya.jsonl"), ("שווקים", "markets.json"),
+                             ('רמ"י', "rmi.json"), ("Trading Economics", "te.json")]:
+            p = raw_dir / fname
+            rows.append({"label": label, "ok": p.exists() and p.stat().st_size > 0,
+                         "detail": ""})
     cells = []
-    for label, fname in checks:
-        p = raw_dir / fname
-        if not p.exists() or p.stat().st_size == 0:
-            cells.append(f'<li class="bad"><span>✗</span>{label}</li>')
-            continue
-        if fname.endswith(".jsonl"):
-            n = sum(1 for _ in p.open(encoding="utf-8"))
-            detail = f"{n} פריטים"
+    for s in rows:
+        if s.get("ok"):
+            cells.append(f'<li class="ok"><span>✓</span>{s["label"]}'
+                         f'<em>{s.get("detail","")}</em></li>')
         else:
-            d = load_json(p) or {}
-            n = len(d.get("instruments", d.get("results", d.get("calendar", []))))
-            detail = f"{n} רשומות" if n else "נטען"
-        cells.append(f'<li class="ok"><span>✓</span>{label}<em>{detail}</em></li>')
-    return f'<ul class="sources">{"".join(cells)}</ul>'
+            cells.append(f'<li class="bad"><span>✗</span>{s["label"]}</li>')
+    return f'<ul class="sources">{"".join(cells)}{stamp}</ul>'
 
 
 def fmt_value(v, is_yield: bool) -> str:
@@ -396,7 +413,7 @@ def main() -> int:
         body = "\n".join(filter(None, [
             f'<div class="dash-head"><h1>{latest_title}</h1>'
             f'<span class="stamp">ברייף ל-{d_disp}{stale_note} · נבנה {datetime.now():%d/%m %H:%M}</span></div>',
-            sources_panel(raw_dir),
+            sources_panel(latest_date, raw_dir),
             topics_nav(topics, counts),
             markets_strip(markets, te),
             reports_panel(reports),

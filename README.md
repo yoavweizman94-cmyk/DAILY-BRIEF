@@ -8,7 +8,7 @@
 ```
 GitHub Actions — שלוש מהדורות ביום (בוקר 06:45 · נעילה 18:00/14:30 · לילה 00:00)
   └─ run_daily.sh
-       1. ingest/  — feedly, gmail, maya, markets, rmi, te  →  data/raw/<היום>/
+       1. ingest/  — rss, gmail, maya, markets, rmi, te  →  data/raw/<היום>/
        2. claude -p — קורא את הקלט, כותב output/brief_<היום>.md
        3. site/build.py — רינדור ל-site/dist (RTL)
        4. scripts/send_telegram.py — תמצית + קישור
@@ -25,7 +25,6 @@ GitHub Actions — שלוש מהדורות ביום (בוקר 06:45 · נעיל�
 | Secret | מה זה | איך משיגים |
 |--------|-------|------------|
 | `ANTHROPIC_API_KEY` | מפתח API של Anthropic | console.anthropic.com → API Keys |
-| `FEEDLY_TOKEN` | Access token של Feedly | feedly.com/v3/auth/dev (או Feedly Pro → API) |
 | `GMAIL_CREDENTIALS` | JSON עם client_id/client_secret/refresh_token | להריץ מקומית `python scripts/gmail_authorize.py` (הוראות בראש הקובץ) ולהעתיק את הפלט |
 | `TRADINGECONOMICS_KEY` | מפתח Trading Economics בפורמט `key:secret` | developer.tradingeconomics.com → Dashboard. **חשבון האורח בוטל** — נדרש מנוי |
 | `TELEGRAM_BOT_TOKEN` | טוקן בוט (אופציונלי) | @BotFather בטלגרם → ‎/newbot |
@@ -52,7 +51,7 @@ pip install -r requirements.txt
 python ingest/markets_pull.py      # עובד בלי סודות
 python ingest/maya_pull.py         # עובד בלי סודות
 python ingest/rmi_pull.py          # עובד בלי סודות
-python ingest/feedly_pull.py       # קורא FEEDLY_TOKEN מ-.env
+python ingest/rss_pull.py          # עובד בלי סודות
 python scripts/gmail_authorize.py  # פעם אחת; אח"כ gmail_pull עובד מקומית
 bash run_daily.sh                  # הצנרת המלאה (דורש claude CLI)
 ```
@@ -61,13 +60,12 @@ bash run_daily.sh                  # הצנרת המלאה (דורש claude CLI)
 כך שב-CI ה-Secrets תמיד מנצחים:
 
 ```
-FEEDLY_TOKEN=
-FEEDLY_REFRESH_TOKEN=
+TRADINGECONOMICS_KEY=key:secret
 ```
 
-טוקן גישה של Feedly תקף כ-31 יום. אם `FEEDLY_REFRESH_TOKEN` מוגדר, קבלת 401
-מפעילה רענון אוטומטי, הבקשה נשלחת שוב, והטוקן החדש נשמר חזרה ל-`.env`
-(ב-CI, שבו אין קובץ, הרענון תקף לריצה הנוכחית — וזה מספיק).
+**Feedly הוסר מהפרויקט** (08/2026). הוא היה מוגבל ל-50 קריאות API ליום לחשבון,
+ועם שלוש מהדורות ביום המכסה נשברה כמעט מדי יום. `ingest/rss_pull.py` קורא את
+אותם פידים ישירות מהמקור — בלי מכסה, בלי תלות בצד שלישי, ובנפח כפול.
 
 הערות סביבה:
 

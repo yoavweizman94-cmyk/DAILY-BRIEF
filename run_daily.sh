@@ -50,7 +50,6 @@ run_source() {
 
 echo "=== FOREST brief · $DATE · מהדורת $ED_HE ($EDITION) ==="
 run_source rss     python ingest/rss_pull.py
-run_source feedly  python ingest/feedly_pull.py
 run_source gmail   python ingest/gmail_pull.py
 run_source maya    python ingest/maya_pull.py
 run_source markets python ingest/markets_pull.py
@@ -112,6 +111,7 @@ if [ ! "$BRIEF" -nt "$MARKER" ]; then
 fi
 rm -f "$MARKER"
 
+python scripts/publish_status.py
 python scripts/publish_news.py || echo "אזהרה: סיווג החדשות נכשל"
 python site/build.py
 python scripts/send_telegram.py --brief "$BRIEF" || echo "אזהרה: שליחת הטלגרם נכשלה"

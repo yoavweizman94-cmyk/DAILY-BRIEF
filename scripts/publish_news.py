@@ -22,7 +22,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCES = ("rss.jsonl", "gmail.jsonl", "feedly.jsonl")
+SOURCES = ("rss.jsonl", "gmail.jsonl")
 MAX_MATCH_CHARS = 4000        # מספיק לכותרת ולפתיח; מייל שלם רק מרעיש
 
 
