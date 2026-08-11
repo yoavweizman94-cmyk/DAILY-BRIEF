@@ -18,15 +18,19 @@ on:
         default: "2024-01-01"
       budget_minutes:
         description: "תקציב זמן להרצה"
-        default: "45"
+        default: "20"
 
 permissions:
   contents: write
   pages: write
   id-token: write
 
+# אותה קבוצה כמו maya-watch, בכוונה: שניהם כותבים ל-output/filings, ושתי
+# ריצות חופפות מייצרות קונפליקט על manifest.json ועל קובצי השנה. עדיף
+# להשהות מחזור ניטור אחד בשעת לילה מאשר לפתור קונפליקט על קבצים מחוללים.
+# התקציב מוגבל ל-20 דקות כדי שהחלון הזה יישאר קצר.
 concurrency:
-  group: filings-backfill
+  group: maya-watch
   cancel-in-progress: false
 
 env:
@@ -55,7 +59,7 @@ jobs:
         run: |
           python ingest/maya_index.py --backfill \
             --until "${{ inputs.until || '2024-01-01' }}" \
-            --budget-minutes "${{ inputs.budget_minutes || 45 }}"
+            --budget-minutes "${{ inputs.budget_minutes || 20 }}"
           if [ -n "$(git status --porcelain output/filings)" ]; then
             echo "changed=yes" >> "$GITHUB_OUTPUT"
           else
