@@ -14,6 +14,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: maya-watch
@@ -26,6 +28,8 @@ jobs:
   watch:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    outputs:
+      new: ${{ steps.collect.outputs.new }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -91,3 +95,28 @@ jobs:
           git add data/state.sqlite output/reports
           git diff --cached --quiet || git commit -m "maya: $(date +'%F %H:%M')"
           git pull --rebase origin main && git push
+
+      # בלי זה הסיכומים יושבים בריפו אבל האתר מציג אותם רק אחרי המהדורה הבאה —
+      # עיכוב של עד שמונה שעות, שסותר את כל הרעיון של ניטור רציף.
+      - name: Rebuild site
+        if: steps.collect.outputs.new == 'yes'
+        run: python site/build.py
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.collect.outputs.new == 'yes'
+        with:
+          path: site/dist
+
+  deploy:
+    needs: watch
+    if: needs.watch.outputs.new == 'yes'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages-deploy      # מונע התנגשות עם פריסת ה-Daily Brief
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

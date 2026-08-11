@@ -331,7 +331,9 @@ def main() -> int:
 
     # שלוש מהדורות ביום: brief_<date>.md (בוקר, שם היסטורי) ו-brief_<date>-<edition>.md.
     # המיון הוא לפי (תאריך, סדר המהדורה) כדי שהחדשה ביותר תהיה ראשונה.
-    ED_ORDER = {"": 0, "morning": 0, "close": 1, "night": 2}
+    # סדר כרונולוגי בתוך היום: מהדורת הלילה נכתבת ב-00:00 ולכן היא הראשונה,
+    # לא האחרונה. מיון הפוך שהניח night>morning הציג ברייף ישן כעדכני ביותר.
+    ED_ORDER = {"night": 0, "": 1, "morning": 1, "close": 2}
     ED_HE = {"": "בוקר", "morning": "בוקר", "close": "נעילה", "night": "לילה"}
     found = []
     for f in ROOT.glob("output/brief_*.md"):
