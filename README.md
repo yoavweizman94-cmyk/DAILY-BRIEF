@@ -78,10 +78,20 @@ TRADINGECONOMICS_KEY=key:secret
   (וזו הסיבה ששרת ה-MCP remy-mcp נכשל מולו). המשיכה נעשית ב-[ingest/rmi_pull.py](ingest/rmi_pull.py):
   חיקוי דפדפן, `Accept: application/json` מפורש (אחרת חוזר XML של 6.6MB),
   וסינון תאריכים מקומי — פילטרי התאריכים בצד השרת אינם מיושמים.
-- **MCP**: רק `israel-statistics`, ודורש Node.js (ב-CI מותקן אוטומטית).
+- **MCP**: שניים. `israel-statistics` (למ"ס, דורש Node.js — ב-CI מותקן אוטומטית)
+  ו-`nadlan` (עסקאות נדל"ן מ-Govmap/רשות המסים, פייתון).
   שרת `remy-land-authority` הוסר מ-`.mcp.json` — ה-API של רמ"י חוסם את
   ספריית ה-HTTP שהוא משתמש בה, ובמקומו יש `ingest/rmi_pull.py`. ה-clone של
   `vendor/remy-mcp` עדיין מתבצע ב-run_daily.sh, אך רק בשביל טבלת קודי היישוב שבו.
+- **nadlan (עסקאות נדל"ן)**: clone של [nitzpo/nadlan-mcp](https://github.com/nitzpo/nadlan-mcp)
+  ל-`vendor/`, מורץ דרך [scripts/nadlan_server.py](scripts/nadlan_server.py).
+  העוטף קיים כי השרת משתמש ב-requests רגיל, ו-subprocess של MCP אינו יורש את
+  ה-CA bundle של הפרוקסי הארגוני — בלעדיו הכלים נופלים ב-`CERTIFICATE_VERIFY_FAILED`.
+  בניגוד לרמ"י, Govmap אינו חוסם requests, ולכן השרת עצמו כן שמיש. שתי מלכודות:
+  `radius_meters` שמתחת ל-300 מחזיר 0 עסקאות גם בכתובות מרכזיות, והוולידטור
+  הפנימי מדפיס אזהרות "outside Israeli ITM bounds" על קואורדינטות תקינות
+  (Govmap עבר להחזיר Web Mercator) — רעש, לא תקלה. שליפה לפי דרישה בלבד,
+  לא מקור ingest.
 
 ## ניטור דיווחי מאיה (רציף)
 

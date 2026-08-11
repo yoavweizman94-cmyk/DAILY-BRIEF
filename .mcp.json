@@ -4,6 +4,11 @@
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@reuvennaor85/israel-statistics-mcp"]
+    },
+    "nadlan": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["scripts/nadlan_server.py"]
     }
   }
 }

@@ -68,6 +68,17 @@ if [ ! -d vendor/remy-mcp ]; then
     echo "אזהרה: clone של remy-mcp נכשל — שמות יישובים יוצגו כקודים"
 fi
 
+# nadlan-mcp — עסקאות נדל"ן מ-Govmap, לשליפה לפי דרישה (לא מקור ingest).
+# בניגוד לרמ"י, Govmap אינו חוסם את requests, ולכן השרת עצמו כן פעיל.
+if [ ! -d vendor/nadlan-mcp ]; then
+  if git clone --depth 1 https://github.com/nitzpo/nadlan-mcp vendor/nadlan-mcp; then
+    python -m pip install --quiet "fastmcp>=2.13.0,<3.0.0" || \
+      echo "אזהרה: התקנת fastmcp נכשלה — שרת nadlan לא יעלה"
+  else
+    echo "אזהרה: clone של nadlan-mcp נכשל — אין שליפת עסקאות נדל\"ן"
+  fi
+fi
+
 PROMPT="היום $DATE, מהדורת $ED_HE, השעה $(date +%H:%M) שעון ישראל. \
 בצע את הפייפליין היומי לפי CLAUDE.md: קרא את config/companies.yaml ואת הקבצים \
 ב-data/raw/$DATE/, הפעל את הסקיל israeli-statistics לבדיקת פרסומי למ\"ס, \
@@ -90,7 +101,7 @@ MARKER="$(mktemp)"
 claude -p "$PROMPT" \
   --mcp-config .mcp.json \
   --permission-mode acceptEdits \
-  --allowedTools "Read,Write,Edit,Glob,Grep,Skill,WebFetch,WebSearch,Bash(python:*),mcp__israel-statistics__*" \
+  --allowedTools "Read,Write,Edit,Glob,Grep,Skill,WebFetch,WebSearch,Bash(python:*),mcp__israel-statistics__*,mcp__nadlan__*" \
   ${CLAUDE_MODEL:+--model "$CLAUDE_MODEL"}
 CLAUDE_RC=$?
 
