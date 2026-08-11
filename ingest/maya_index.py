@@ -78,14 +78,28 @@ def classify(rep: dict) -> str | None:
     return "דוח" if FIN_TITLE.search(title) else None
 
 
+def norm_name(s: str) -> str:
+    """נרמול שם חברה להשוואה.
+
+    companies.yaml כותב "אלקטרה נדלן" ומאיה כותבת "אלקטרה נדל\"ן". השוואת
+    מחרוזות גולמית סימנה שלוש חברות כיסוי (אלרוב, ארי ואלקטרה נדל"ן) כאילו
+    אינן בכיסוי, וסינון "כיסוי בלבד" באתר הסתיר את הדוחות שלהן.
+    """
+    s = re.sub(r"[\"'״׳`]", "", s or "")
+    return re.sub(r"\s+", " ", s.replace("-", " ")).strip().lower()
+
+
 def coverage_names() -> set[str]:
     cfg = yaml.safe_load((ROOT / "config" / "companies.yaml").read_text(encoding="utf-8"))
     names = set()
     for c in cfg.get("companies") or []:
         for k in ("name_he", "name_en"):
             if c.get(k):
-                names.add(str(c[k]).strip())
-    return names
+                names.add(norm_name(str(c[k])))
+        for a in c.get("aliases") or []:
+            if a:
+                names.add(norm_name(str(a)))
+    return {n for n in names if n}
 
 
 def pdf_of(rep: dict) -> tuple[str | None, int]:
@@ -116,13 +130,13 @@ def to_entry(rep: dict, cover: set[str], kind: str) -> dict | None:
         "p": pdf,                                   # יחסי ל-mayafiles.tase.co.il
         "s": size,                                  # KB
         "k": kind,                                  # דוח / מצגת
-        "cov": 1 if any(n in cover for n in comps) else 0,
+        "cov": 1 if any(norm_name(n) in cover for n in comps) else 0,
     }
 
 
 # --- קריאה/כתיבה של האינדקס -------------------------------------------------
 
-def load_index() -> dict[str, dict]:
+def load_index(cover: set[str] | None = None) -> dict[str, dict]:
     idx = {}
     for f in OUT.glob("*.jsonl"):
         for line in f.read_text(encoding="utf-8").splitlines():
@@ -132,6 +146,12 @@ def load_index() -> dict[str, dict]:
                     idx[e["id"]] = e
                 except (json.JSONDecodeError, KeyError):
                     pass
+    # דגל הכיסוי מחושב מחדש בכל טעינה ולא רק לרשומות חדשות: רשימת הכיסוי
+    # ב-companies.yaml משתנה, וכללי ההתאמה עצמם השתנו כאן — בלי חישוב מחדש
+    # רשומות ישנות היו נשארות עם דגל שגוי לנצח.
+    if cover is not None:
+        for e in idx.values():
+            e["cov"] = 1 if any(norm_name(n) in cover for n in (e.get("c") or [])) else 0
     return idx
 
 
@@ -225,7 +245,8 @@ def harvest(s: MayaSession, a: date, b: date, idx: dict, cover: set[str],
 
 
 def run_recent(days: int) -> int:
-    cover, idx = coverage_names(), load_index()
+    cover = coverage_names()
+    idx = load_index(cover)
     before = len(idx)
     s = MayaSession()
     today = date.today()
@@ -237,7 +258,8 @@ def run_recent(days: int) -> int:
 
 
 def run_backfill(until: date, budget_min: float) -> int:
-    cover, idx = coverage_names(), load_index()
+    cover = coverage_names()
+    idx = load_index(cover)
     st = read_state()
     cursor = date.fromisoformat(st["backfill_earliest"]) if st.get("backfill_earliest") \
         else date.today()
