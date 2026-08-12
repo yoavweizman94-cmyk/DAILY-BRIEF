@@ -56,10 +56,29 @@ jobs:
           pip install -r requirements.txt
           npm install -g @anthropic-ai/claude-code
 
+      # המהדורה נגזרת מביטוי ה-cron שהפעיל את הריצה, לא משעת הביצוע בפועל.
+      # ב-12/08/2026 ריצת הבוקר (cron 03:45 UTC) יצאה לפועל רק ב-05:19 UTC —
+      # איחור של 94 דקות מצד GitHub — ואז השעה המקומית הייתה 08:19, מחוץ
+      # לחלון "בוקר" ב-run_daily.sh, והברייף לא הופק בלי שאיש ידע. ביטוי
+      # ה-cron ידוע מראש ואינו מושפע מעומס או משעון קיץ.
+      - name: Resolve edition
+        id: ed
+        run: |
+          case "${{ github.event.schedule }}" in
+            "45 3,4 * * *")                          ED=morning ;;
+            "0 15,16 * * 1,2,3,4"|"30 11,12 * * 5")  ED=close ;;
+            "0 21,22 * * *")                         ED=night ;;
+            *)                                       ED="${{ github.event.inputs.edition }}" ;;
+          esac
+          echo "edition=$ED" >> "$GITHUB_OUTPUT"
+          echo "מהדורה: ${ED:-לפי השעה המקומית}"
+
       - name: Run daily pipeline
         id: pipeline
         env:
-          BRIEF_EDITION: ${{ github.event.inputs.edition }}
+          BRIEF_EDITION: ${{ steps.ed.outputs.edition }}
+          # הרצה ידנית תמיד מפיקה מחדש; מתוזמנת מדלגת אם כבר יש ברייף טרי
+          BRIEF_FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS }}
           TRADINGECONOMICS_KEY: ${{ secrets.TRADINGECONOMICS_KEY }}
