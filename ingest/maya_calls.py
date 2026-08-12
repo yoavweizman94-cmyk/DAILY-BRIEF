@@ -266,6 +266,11 @@ def main() -> int:
     floor = (today - timedelta(days=KEEP_PAST_DAYS)).isoformat()
     calls = [c for c in merged.values() if (c.get("date") or "") >= floor]
     calls.sort(key=lambda c: (c["date"] or "", c["time"] or "", c["company"] or ""))
+
+    # הקאש מקובע לריפו כדי שריצה בענן לא תמשוך מחדש עשרות קובצי PDF בכל
+    # פעם. גיזום לדיווחים שעדיין מופיעים ברשימה מונע ממנו לתפוח לנצח.
+    live = {str(c["report_id"]) for c in calls if c.get("report_id")}
+    cache = {k: v for k, v in cache.items() if k in live}
     CACHE.parent.mkdir(parents=True, exist_ok=True)
     CACHE.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
 
