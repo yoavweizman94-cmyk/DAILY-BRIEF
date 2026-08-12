@@ -220,3 +220,14 @@ li.fil .dl:hover { background: var(--accent); color: #fff; }
 form.srch label.chk { flex-direction: row; align-items: center; gap: 0.35rem;
   font-size: 0.84rem; color: var(--fg); padding-bottom: 0.35rem; }
 form.srch label.chk input { width: auto; }
+
+/* ---- שיחות ועידה ---- */
+table.calls { font-size: 0.88rem; }
+table.calls td.t { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); }
+table.calls td.q { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+table.calls tr.daysep td { background: var(--table-head); font-weight: 700;
+  font-size: 0.8rem; color: var(--accent); }
+table.calls a.join { text-decoration: none; font-weight: 600; white-space: nowrap; }
+table.calls a.rep-lnk { font-size: 0.76rem; color: var(--muted); margin-inline-start: 0.4rem; }
+table.calls .amb { color: #b8860b; font-size: 0.8rem; }
+table.calls .none { color: var(--muted); font-size: 0.82rem; }

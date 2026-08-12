@@ -55,6 +55,7 @@ run_source maya    python ingest/maya_pull.py
 run_source markets python ingest/markets_pull.py
 run_source rmi     python ingest/rmi_pull.py
 run_source te      python ingest/te_pull.py
+run_source calls   python ingest/maya_calls.py
 # אינדקס הדוחות מתוחזק ע"י maya-watch (כל רבע שעה) ולא כאן: כותב שלישי
 # לאותם קבצים היה מוסיף מרוץ בלי להוסיף טריות.
 if [ ${#FAILED[@]} -gt 0 ]; then

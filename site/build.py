@@ -12,7 +12,7 @@ import json
 import re
 import shutil
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import markdown
@@ -44,7 +44,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a> · <a href="{root}reports.html">דיווחים וסיכומי דוחות</a> · <a href="{root}filings.html">חיפוש דוחות</a> · <a href="{root}deals.html">עסקאות נדל"ן</a> · <a href="{root}archive.html">ארכיון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a> · <a href="{root}reports.html">דיווחים וסיכומי דוחות</a> · <a href="{root}filings.html">חיפוש דוחות</a> · <a href="{root}calls.html">שיחות ועידה</a> · <a href="{root}deals.html">עסקאות נדל"ן</a> · <a href="{root}archive.html">ארכיון</a></nav>
   <div class="brand">{site_title}</div>
 </header>
 <main>
@@ -355,6 +355,87 @@ def topic_summary_html(slug: str, summaries: dict, day: str) -> str:
             + "</div>")
 
 
+def load_calls() -> list[dict]:
+    data = load_json(ROOT / "output" / "calls" / "upcoming.json") or {}
+    return data.get("calls") or []
+
+
+def call_link_cell(c: dict, root: str = "") -> str:
+    """התא שמסביר איך נכנסים לשיחה — כולל המקרים שבהם אי אפשר לדעת.
+
+    שלושה מצבים שאסור לכווץ לאחד: קישור ודאי, קישור משוער (נמצא אצל ספק
+    שאינו ברשימת המארחים המוכרים), וחוסר הכרעה — חברה שמקיימת שיחה בעברית
+    ושיחה באנגלית באותו יום מפרסמת שני קישורים בדיווח אחד, והלוח אינו אומר
+    איזה שייך לאיזו. שיוך שרירותי היה נותן קישור שגוי לאחת מהן.
+    """
+    rep = c.get("report_url")
+    rep_a = f'<a class="rep-lnk" href="{rep}" target="_blank" rel="noopener">דיווח</a>' if rep else ""
+    if c.get("ambiguous"):
+        links = " · ".join(
+            f'<a href="{u}" target="_blank" rel="noopener">קישור {i + 1}</a>'
+            for i, u in enumerate((c.get("other_links") or [])[:2]))
+        return f'<span class="amb">שני קישורים בדיווח:</span> {links} {rep_a}'
+    if c.get("link"):
+        tag = "" if c.get("link_certain") else '<span class="amb">(משוער)</span> '
+        return (f'{tag}<a class="join" href="{c["link"]}" target="_blank" '
+                f'rel="noopener">כניסה / הרשמה</a> {rep_a}')
+    return f'<span class="none">לא פורסם קישור</span> {rep_a}'
+
+
+def calls_panel(calls: list[dict], day: str) -> str:
+    todays = [c for c in calls if c.get("date") == day]
+    if not todays:
+        return ""
+    rows = "".join(
+        f'<tr><td class="t">{c.get("time") or "—"}</td>'
+        f'<td>{c.get("company") or "—"}</td>'
+        f'<td class="q">{c.get("period") or ""}</td>'
+        f'<td>{call_link_cell(c)}</td></tr>' for c in todays)
+    return ('<h2>שיחות ועידה היום</h2>'
+            f'<table class="calls"><thead><tr><th>שעה</th><th>חברה</th>'
+            f'<th>רבעון</th><th>כניסה</th></tr></thead><tbody>{rows}</tbody></table>'
+            '<p class="stamp"><a href="calls.html">כל השיחות הקרובות →</a></p>')
+
+
+def calls_page(calls: list[dict], today: str) -> str:
+    upcoming = [c for c in calls if (c.get("date") or "") >= today]
+    past = [c for c in calls if (c.get("date") or "") < today]
+    if not calls:
+        return ('<h1>שיחות ועידה</h1><p>אין נתונים. '
+                '<code>ingest/maya_calls.py</code> לא רץ עדיין.</p>')
+
+    def table(rows: list[dict]) -> str:
+        out, seen_day = [], None
+        for c in rows:
+            if c.get("date") != seen_day:
+                seen_day = c.get("date")
+                d = "/".join(reversed((seen_day or "").split("-")))
+                out.append(f'<tr class="daysep"><td colspan="4">{d}</td></tr>')
+            out.append(f'<tr><td class="t">{c.get("time") or "—"}</td>'
+                       f'<td>{c.get("company") or "—"}</td>'
+                       f'<td class="q">{c.get("period") or ""}</td>'
+                       f'<td>{call_link_cell(c)}</td></tr>')
+        return ('<table class="calls"><thead><tr><th>שעה</th><th>חברה</th>'
+                f'<th>רבעון</th><th>כניסה</th></tr></thead>'
+                f'<tbody>{"".join(out)}</tbody></table>')
+
+    n_link = sum(1 for c in upcoming if c.get("link"))
+    body = ('<h1>שיחות ועידה</h1>'
+            '<p class="lead">שיחות סיכום רבעון של חברות נסחרות, לפי לוח האירועים '
+            'של מאיה. קישור הכניסה נשלף מדיווח החברה עצמו.</p>'
+            f'<p class="stamp">{len(upcoming)} שיחות קרובות · '
+            f'{n_link} עם קישור כניסה</p>')
+    body += table(upcoming) if upcoming else "<p>אין שיחות קרובות.</p>"
+    if past:
+        body += f'<h2>שיחות שהתקיימו</h2>{table(past[::-1])}'
+    body += ('<p class="fineprint">מקור: מאיה. לוח האירועים אינו כולל את קישור '
+             'הכניסה — הוא מחולץ מגוף דיווח החברה, ולכן חברה שלא פרסמה קישור '
+             'מסומנת ככזו במקום לנחש. חברה עם שתי שיחות באותו יום (עברית '
+             'ואנגלית) מפרסמת בדרך כלל שני קישורים בדיווח אחד, ואי אפשר לדעת '
+             'איזה שייך לאיזו — שניהם מוצגים.</p>')
+    return body
+
+
 def topics_nav(topics: list[dict], counts: dict, current: str = "") -> str:
     links = []
     for t in topics:
@@ -395,6 +476,7 @@ def main() -> int:
 
     # --- עמודי נושאים -----------------------------------------------------
     news = load_news()
+    calls = load_calls()
     topic_sums, topic_sums_day = load_topic_summaries()
     counts = {}
     for r in news:
@@ -445,6 +527,7 @@ def main() -> int:
             topics_nav(topics, counts),
             markets_strip(markets, te),
             reports_panel(reports),
+            calls_panel(calls, date.today().isoformat()),
             indicators_panel(te),
             calendar_panel(te),
             '<hr class="sep">',
@@ -510,6 +593,11 @@ def main() -> int:
                 PAGE.format(title=f"{title} · {site_title}", site_title=site_title,
                             root="", body=frag.read_text(encoding="utf-8")),
                 encoding="utf-8")
+
+    (OUT / "calls.html").write_text(
+        PAGE.format(title=f"שיחות ועידה · {site_title}", site_title=site_title,
+                    root="", body=calls_page(calls, date.today().isoformat())),
+        encoding="utf-8")
 
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
     print(f"נבנה {OUT} | {len(entries)} ברייפים | "
