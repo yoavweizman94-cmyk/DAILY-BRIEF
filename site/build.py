@@ -39,7 +39,11 @@ PAGE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
 <title>{title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700;800&display=swap">
 <link rel="stylesheet" href="{root}style.css">
 </head>
 <body>
@@ -65,8 +69,22 @@ def _isolate_signed_numbers(html_text: str) -> str:
     return _CELL.sub(fix, html_text)
 
 
+_TABLE = re.compile(r"<table\b.*?</table>", re.S)
+
+
+def wrap_tables(html_text: str) -> str:
+    """עוטף כל טבלה בגולל אופקי משלה.
+
+    בלי זה טבלת השווקים דוחפת את כל העמוד לרוחב במסך צר, וכל הטקסט נגלל
+    לצדדים. גלילה על ה-table עצמו (display:block) שוברת את פריסת העמודות,
+    ולכן העטיפה היא ב-div חיצוני.
+    """
+    return _TABLE.sub(lambda m: f'<div class="tw">{m.group(0)}</div>', html_text)
+
+
 def render(md_text: str) -> str:
-    return _isolate_signed_numbers(markdown.markdown(md_text, extensions=MD_EXT))
+    return wrap_tables(_isolate_signed_numbers(
+        markdown.markdown(md_text, extensions=MD_EXT)))
 
 
 def brief_title(md_text: str, fallback: str) -> str:
@@ -392,8 +410,8 @@ def calls_panel(calls: list[dict], day: str) -> str:
         f'<td class="q">{c.get("period") or ""}</td>'
         f'<td>{call_link_cell(c)}</td></tr>' for c in todays)
     return ('<h2>שיחות ועידה היום</h2>'
-            f'<table class="calls"><thead><tr><th>שעה</th><th>חברה</th>'
-            f'<th>רבעון</th><th>כניסה</th></tr></thead><tbody>{rows}</tbody></table>'
+            f'<div class="tw"><table class="calls"><thead><tr><th>שעה</th><th>חברה</th>'
+            f'<th>רבעון</th><th>כניסה</th></tr></thead><tbody>{rows}</tbody></table></div>'
             '<p class="stamp"><a href="calls.html">כל השיחות הקרובות →</a></p>')
 
 
@@ -415,9 +433,9 @@ def calls_page(calls: list[dict], today: str) -> str:
                        f'<td>{c.get("company") or "—"}</td>'
                        f'<td class="q">{c.get("period") or ""}</td>'
                        f'<td>{call_link_cell(c)}</td></tr>')
-        return ('<table class="calls"><thead><tr><th>שעה</th><th>חברה</th>'
+        return ('<div class="tw"><table class="calls"><thead><tr><th>שעה</th><th>חברה</th>'
                 f'<th>רבעון</th><th>כניסה</th></tr></thead>'
-                f'<tbody>{"".join(out)}</tbody></table>')
+                f'<tbody>{"".join(out)}</tbody></table></div>')
 
     n_link = sum(1 for c in upcoming if c.get("link"))
     body = ('<h1>שיחות ועידה</h1>'
