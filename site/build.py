@@ -99,6 +99,24 @@ def load_json(path: Path):
         return None
 
 
+def load_published(sub: str, day: str, raw_fallback: Path):
+    """תוצר ingest מ-output/<sub>/, עם נפילה ל-data/raw ואז ליום האחרון שיש.
+
+    data/raw מוחרג מגיט, ולכן בנייה שאינה ריצת ברייף (maya-watch, כל רבע
+    שעה) לא רואה אותו כלל. בלי הנפילה לאחור רצועת השווקים ופאנל
+    האינדיקטורים פשוט נעלמו מהדשבורד עד ריצת הברייף הבאה.
+    """
+    d = load_json(ROOT / "output" / sub / f"{day}.json")
+    if d:
+        return d
+    d = load_json(raw_fallback)
+    if d:
+        return d
+    files = sorted((ROOT / "output" / sub).glob("*.json"), reverse=True) \
+        if (ROOT / "output" / sub).is_dir() else []
+    return load_json(files[0]) if files else None
+
+
 # --------------------------------------------------------------------------
 # מקטעי הדשבורד
 # --------------------------------------------------------------------------
@@ -530,8 +548,8 @@ def main() -> int:
         latest_slug, latest_title = entries[0]
         latest_date = latest_slug[:10]
         raw_dir = ROOT / "data" / "raw" / latest_date
-        markets = load_json(raw_dir / "markets.json")
-        te = load_json(raw_dir / "te.json")
+        markets = load_published("markets", latest_date, raw_dir / "markets.json")
+        te = load_published("te", latest_date, raw_dir / "te.json")
         reports = load_reports()
         # חותמת לפי תאריך הברייף ולא לפי שעת הבנייה: בנייה חוזרת בלי ברייף חדש
         # הייתה מציגה "עודכן עכשיו" מעל תוכן של אתמול.

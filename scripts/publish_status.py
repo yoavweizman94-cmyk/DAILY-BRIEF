@@ -1,9 +1,18 @@
 # -*- coding: utf-8 -*-
-"""שומר את מצב המקורות של הריצה כתוצר קבוע ב-output/status/<date>.json.
+"""משמר תוצרי ingest שהאתר צריך, כדי שכל בנייה תוכל להציג אותם.
 
-למה: לוח המקורות באתר בדק קבצים ב-`data/raw/`, שמוחרג מגיט. כש-maya-watch
-בונה את האתר ה-runner שלו לא ראה מעולם את markets.json או rss.jsonl — הם
-נוצרו בריצת הברייף על מכונה אחרת — וכל המקורות הופיעו כ-✗ אדום.
+`data/raw/` מוחרג מגיט. כש-maya-watch בונה את האתר (כל רבע שעה) ה-runner
+שלו לא ראה מעולם את markets.json — הוא נוצר בריצת הברייף על מכונה אחרת.
+כתוצאה מכך כל בנייה שאינה ריצת ברייף איבדה חלקים מהדשבורד:
+
+- לוח המקורות הופיע כולו ב-✗ אדום (תוקן כאן קודם)
+- **רצועת השווקים ופאנל האינדיקטורים נעלמו לגמרי** — נמדד באתר החי:
+  הרצועה קיימת אחרי ריצת ברייף ונעלמת במחזור הניטור הבא, 96 פעמים ביום
+
+לכן שלושת התוצרים נשמרים ל-output/ ומקובעים לריפו:
+  output/status/<date>.json   — מצב המקורות
+  output/markets/<date>.json  — שערים ומדדים
+  output/te/<date>.json       — Trading Economics
 
 נקרא מ-run_daily.sh מיד אחרי ה-ingest, כשהקבצים עוד קיימים.
 """
@@ -62,7 +71,20 @@ def main() -> int:
     (out_dir / f"{day}.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
     ok = sum(1 for s in payload["sources"] if s["ok"])
-    print(f"נכתב סטטוס מקורות: {ok}/{len(payload['sources'])} תקינים")
+
+    # שימור התוצרים שהדשבורד מציג. העתקה ולא קישור: הקובץ ב-data/raw נמחק
+    # עם ה-runner, וזה שב-output מקובע לריפו וזמין לכל בנייה עתידית.
+    kept = []
+    for src, sub in (("markets.json", "markets"), ("te.json", "te")):
+        p = raw_dir / src
+        if not p.exists() or p.stat().st_size == 0:
+            continue
+        d = ROOT / "output" / sub
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{day}.json").write_text(p.read_text(encoding="utf-8"), encoding="utf-8")
+        kept.append(sub)
+    print(f"נכתב סטטוס מקורות: {ok}/{len(payload['sources'])} תקינים"
+          + (f" · נשמרו לאתר: {', '.join(kept)}" if kept else ""))
     return 0
 
 
