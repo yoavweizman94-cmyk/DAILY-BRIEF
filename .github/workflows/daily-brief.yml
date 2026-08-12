@@ -89,6 +89,15 @@ jobs:
           # site/dist נוצר רק כשהופק ברייף; ריצת "skip" יוצאת לפני כן.
           if [ -d site/dist ]; then echo "produced=yes" >> "$GITHUB_OUTPUT"; fi
 
+      # ההעלאה לפני הקיבוע, בכוונה. בריצה 31568684938 הברייף הופק במלואו
+      # ואז שלב הגיט נפל על קונפליקט — התוצר היקר ביותר בצנרת נזרק בגלל
+      # תקלת גיט, ולא הגיע לאתר. בסדר הזה כשל בקיבוע משאיר את האתר מעודכן
+      # והריפו הוא שמפגר, מצב שמתקן את עצמו בריצה הבאה.
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.pipeline.outputs.produced == 'yes'
+        with:
+          path: site/dist
+
       - name: Commit state and output back to repo
         if: steps.pipeline.outputs.produced == 'yes'
         run: |
@@ -97,11 +106,6 @@ jobs:
           git add data/state.sqlite data/calls_links.json output
           git diff --cached --quiet || git commit -m "brief: $(date +'%F %H:%M')"
           bash scripts/git_sync.sh
-
-      - uses: actions/upload-pages-artifact@v3
-        if: steps.pipeline.outputs.produced == 'yes'
-        with:
-          path: site/dist
 
   deploy:
     needs: brief

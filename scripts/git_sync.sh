@@ -1,22 +1,31 @@
 #!/usr/bin/env bash
 # דחיפה בטוחה כשכמה workflows מקבעים לאותו ענף.
 #
-# הבעיה שנצפתה בפועל (ריצה 31494461643): maya-watch רץ כל רבע שעה ומקבע את
-# data/state.sqlite. כששתי ריצות חופפות, `git pull --rebase` נופל על
-# "CONFLICT (content): Merge conflict in data/state.sqlite" — קובץ בינארי
-# שאין דרך למזג — הצעד מסתיים בקוד 1, וכל הסיכומים של אותו מחזור אובדים.
+# שתי תקלות אמת שהובילו לקובץ הזה:
+# - ריצה 31494461643: maya-watch רץ כל רבע שעה ומקבע את data/state.sqlite.
+#   שתי ריצות חופפות → "CONFLICT (content)" על קובץ בינארי שאין דרך למזג,
+#   הצעד נופל, וכל הסיכומים של המחזור אובדים.
+# - ריצה 31568684938: מהדורת הבוקר הופקה במלואה ואז נפלה על קונפליקט
+#   ב-output/calls/upcoming.json. הברייף כבר היה כתוב — ואבד.
 #
-# ההכרעה: בקונפליקט על קובץ בינארי מנצחת הגרסה של הקומיט שמוחל (--theirs
-# ברביס), שהיא המאוחרת והמצטברת יותר. מה שמפסידים הוא נקודת מחיר אחת של
-# מחזור חופף; מה שמרוויחים הוא שהמחזור לא נופל כולו.
+# ההכללה הנכונה אינה "קבצים בינאריים" אלא **תוצרים מחוללים**: קבצים שאף
+# אחד לא כותב ביד, שנבנים מחדש בכל ריצה, ושהגרסה המאוחרת שלהם היא הנכונה
+# מעצם הגדרתם. בהם הקונפליקט נפתר לטובת הקומיט שמוחל (--theirs ברביס).
+# בכל קובץ אחר — קוד, קונפיג, ברייף — הסקריפט עוצר במפורש ואינו מנחש.
 set -uo pipefail
 
-BINARY_PATHS=("data/state.sqlite")
+GENERATED_PATHS=(
+  "data/state.sqlite"              # היסטוריית מחירים + IDs שדווחו
+  "data/calls_links.json"          # קאש קישורי שיחות ועידה
+  "data/maya_index_state.json"     # מצב מילוי היסטוריית הדוחות
+  "output/calls/upcoming.json"     # לוח שיחות — נבנה מה-API בכל ריצה
+  "output/filings/manifest.json"   # נגזר לחלוטין מקובצי השנה
+)
 ATTEMPTS=4
 
-resolve_binaries() {
+resolve_generated() {
   local resolved=1
-  for p in "${BINARY_PATHS[@]}"; do
+  for p in "${GENERATED_PATHS[@]}"; do
     if git ls-files -u -- "$p" | grep -q .; then
       git checkout --theirs -- "$p" 2>/dev/null || git checkout --ours -- "$p" 2>/dev/null || true
       git add -- "$p"
@@ -37,12 +46,12 @@ for i in $(seq 1 $ATTEMPTS); do
     continue
   fi
 
-  # ה-rebase נעצר. אם כל הקונפליקטים הם בקבצים הבינאריים המוכרים — נפתרים
-  # וממשיכים; אחרת זו התנגשות אמיתית בקוד ואין לפתור אותה אוטומטית.
-  if resolve_binaries && ! git diff --name-only --diff-filter=U | grep -q .; then
+  # ה-rebase נעצר. אם כל הקונפליקטים הם בתוצרים מחוללים — נפתרים וממשיכים;
+  # אחרת זו התנגשות אמיתית שאין לפתור אותה בניחוש.
+  if resolve_generated && ! git diff --name-only --diff-filter=U | grep -q .; then
     GIT_EDITOR=true git rebase --continue || { git rebase --abort; continue; }
   else
-    echo "קונפליקט שאינו בקובץ בינארי מוכר — לא נפתר אוטומטית" >&2
+    echo "קונפליקט בקובץ שאינו תוצר מחולל — לא נפתר אוטומטית" >&2
     git diff --name-only --diff-filter=U >&2
     git rebase --abort
     exit 1
