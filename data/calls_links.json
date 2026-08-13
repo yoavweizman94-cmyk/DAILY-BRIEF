@@ -359,5 +359,16 @@
    "https://www.abra-it.com/investor-relations/",
    "https://abra-it.com/"
   ]
+ },
+ "1763188": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_eBRNfOTMQZC1si1Q6UtCeg#/registration",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_eBRNfOTMQZC1si1Q6UtCeg#/registration",
+   "https://us06web.zoom.us/webinar/register/WN_UmzuBUMgSxCxIyE-3zBOeQ#/registration"
+  ],
+  "others": [
+   "https://newmedenergy.com/"
+  ]
  }
 }
