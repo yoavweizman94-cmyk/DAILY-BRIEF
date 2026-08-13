@@ -370,5 +370,74 @@
   "others": [
    "https://newmedenergy.com/"
   ]
+ },
+ "1761475": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_aXa51SJeQnyc9P5MDFsAQg",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_aXa51SJeQnyc9P5MDFsAQg"
+  ],
+  "others": [
+   "https://bsel.co.il"
+  ]
+ },
+ "1760661": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_9YkTbFjYSbGG6n3O8iR0-g#/registration",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_9YkTbFjYSbGG6n3O8iR0-g#/registration"
+  ],
+  "others": [
+   "https://ashot.co.il/investor-relations/"
+  ]
+ },
+ "1753348": {
+  "link": "https://zoom.us/j/93701336538",
+  "certain": true,
+  "known": [
+   "https://zoom.us/j/93701336538"
+  ],
+  "others": [
+   "https://castrohoodies.com"
+  ]
+ },
+ "1757860": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": []
+ },
+ "1758136": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_-FbfTymoRl6apiPJHZrhZw",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_-FbfTymoRl6apiPJHZrhZw",
+   "https://register-conf.media-server.com/register/BI6005b369e73d4329a4aada6cb9bcaae6"
+  ],
+  "others": [
+   "http://www.azrieligroup.com/"
+  ]
+ },
+ "1760893": {
+  "link": "https://malamteam.zoom.us/webinar/register/WN_pSM0xiqnTXumN38CrUFxtA#/registration",
+  "certain": true,
+  "known": [
+   "https://malamteam.zoom.us/webinar/register/WN_pSM0xiqnTXumN38CrUFxtA#/registration"
+  ],
+  "others": []
+ },
+ "1762218": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": []
+ },
+ "1761897": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_ypPGT5ukQLOTJNTddevriw",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_ypPGT5ukQLOTJNTddevriw"
+  ],
+  "others": []
  }
 }
