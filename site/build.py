@@ -662,7 +662,7 @@ def main() -> int:
         md_text = p.read_text(encoding="utf-8")
         title = brief_title(md_text, f"ברייף {slug}")
         (OUT / "briefs" / f"{slug}.html").write_text(
-            PAGE.format(title=title, site_title=site_title, root="../", body=render(md_text)),
+            PAGE.format(title=title, site_title=site_title, root="../", body=_render_brief(md_text)),
             encoding="utf-8")
         entries.append((slug, f"{title}" if ed_of[p] in title else f"{title} · {ed_of[p]}"))
 
