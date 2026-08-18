@@ -1,0 +1,41 @@
+name: Content Check
+
+# אימות נתיב הכתיבה לריפו התוכן הפרטי, בלי קריאת מודל.
+# בלי זה, כשל בכתיבה היה מתגלה רק כשמהדורה שלמה כבר הופקה ואבדה.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Write heartbeat and push
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: |
+          date -u +'%FT%TZ' > output/.pipeline-heartbeat
+          bash scripts/content_repo.sh push heartbeat
+
+      - name: Confirm it landed
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: |
+          rm -rf output
+          bash scripts/content_repo.sh pull
+          if [ -f output/.pipeline-heartbeat ]; then
+            echo "נתיב הכתיבה תקין · $(cat output/.pipeline-heartbeat)"
+          else
+            echo "::error::הקובץ לא הגיע לריפו הפרטי"
+            exit 1
+          fi
