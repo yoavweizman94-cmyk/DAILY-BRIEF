@@ -31,4 +31,5 @@ jobs:
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           OWNER: ${{ inputs.owner_email }}
           RELEASE: ${{ inputs.release_apex }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: python3 scripts/setup_domains.py

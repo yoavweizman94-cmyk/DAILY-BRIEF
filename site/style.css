@@ -558,3 +558,17 @@ section.request button { padding-inline: 2rem; }
   .facts { gap: 1.2rem; }
   section.request { padding: 1.1rem 1rem 1.3rem; border-radius: 12px; }
 }
+
+/* ---- ניווט סעיפים בברייף ---- */
+nav.toc {
+  display: flex; flex-wrap: wrap; gap: 0.3rem;
+  margin: 0 0 1.6rem; padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+nav.toc a {
+  font-size: 0.79rem; text-decoration: none; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 0.15rem 0.65rem; background: var(--surface); white-space: nowrap;
+}
+nav.toc a:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+main h2[id] { scroll-margin-top: 4rem; }

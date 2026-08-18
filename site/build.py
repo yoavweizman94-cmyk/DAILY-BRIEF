@@ -166,9 +166,43 @@ def wrap_tables(html_text: str) -> str:
     return _TABLE.sub(lambda m: f'<div class="tw">{m.group(0)}</div>', html_text)
 
 
-def render(md_text: str) -> str:
-    return wrap_tables(_isolate_signed_numbers(
+_H2 = re.compile(r"<h2>(.*?)</h2>", re.S)
+
+
+def _slug(text: str, seen: dict) -> str:
+    base = re.sub(r"<[^>]+>", "", text).strip()
+    base = re.sub(r"[^\w֐-׿]+", "-", base).strip("-")[:40] or "s"
+    seen[base] = seen.get(base, 0) + 1
+    return base if seen[base] == 1 else f"{base}-{seen[base]}"
+
+
+def render(md_text: str, with_toc: bool = False) -> str:
+    """מרנדר את הברייף, ואופציונלית מוסיף ניווט סעיפים.
+
+    הברייף הוא מסמך של אלפי תווים שנקרא בסריקה שלוש פעמים ביום. רשימת
+    קפיצה לסעיפים היא ההבדל בין גלילה לחיפוש לבין הגעה ישירה למה שמעניין.
+    """
+    html = wrap_tables(_isolate_signed_numbers(
         markdown.markdown(md_text, extensions=MD_EXT)))
+    if not with_toc:
+        return html
+    seen, items = {}, []
+
+    def anchor(m):
+        inner = m.group(1)
+        sid = _slug(inner, seen)
+        items.append((sid, re.sub(r"<[^>]+>", "", inner).strip()))
+        return f'<h2 id="{sid}">{inner}</h2>'
+
+    html = _H2.sub(anchor, html)
+    if len(items) < 3:
+        return html
+    nav = "".join(f'<a href="#{sid}">{label}</a>' for sid, label in items)
+    return f'<nav class="toc">{nav}</nav>{html}'
+
+
+def _render_brief(md_text: str) -> str:
+    return render(md_text, with_toc=True)
 
 
 def brief_title(md_text: str, fallback: str) -> str:
@@ -655,7 +689,7 @@ def main() -> int:
             indicators_panel(te),
             calendar_panel(te),
             '<hr class="sep">',
-            render(briefs[0].read_text(encoding="utf-8")),
+            _render_brief(briefs[0].read_text(encoding="utf-8")),
             '<hr class="sep">',
             archive_panel(entries),
         ]))
