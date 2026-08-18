@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FOREST Daily Brief — ingestion → Claude → רינדור אתר → טלגרם
+# TLV TASE View — ingestion → Claude → רינדור אתר → טלגרם
 # מקור שנכשל לא עוצר את הצנרת; הסוכן מדווח עליו בסעיף "תקלות מקורות".
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -65,7 +65,7 @@ run_source() {
   fi
 }
 
-echo "=== FOREST brief · $DATE · מהדורת $ED_HE ($EDITION) ==="
+echo "=== TLV TASE View · $DATE · מהדורת $ED_HE ($EDITION) ==="
 run_source rss     python ingest/rss_pull.py
 run_source gmail   python ingest/gmail_pull.py
 run_source maya    python ingest/maya_pull.py

@@ -1,4 +1,4 @@
-# sources.yaml — FOREST Daily Brief
+# sources.yaml — TLV TASE View
 # פרמטרי מקורות לסקריפטי ה-ingest. הסוכן לא קורא מכאן — רק הסקריפטים.
 
 meta:
@@ -229,8 +229,9 @@ trading_economics:
 # אתר וטלגרם
 # ---------------------------------------------------------------------------
 site:
-  base_url: https://yoavweizman94-cmyk.github.io/DAILY-BRIEF
-  title: "ברייף FOREST"
+  base_url: https://app.tlvtaseview.com
+  title: "TLV TASE View"
+  landing_url: https://tlvtaseview.com
 
 telegram:
   parse_mode: HTML

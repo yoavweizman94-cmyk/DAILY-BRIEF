@@ -54,7 +54,7 @@ PAGE = """<!DOCTYPE html>
 <main>
 {body}
 </main>
-<footer>נוצר אוטומטית · לשימוש פנימי · אין לראות באמור המלצת השקעה</footer>
+<footer>{site_title} · הנתונים נאספים אוטומטית ממקורות ציבוריים · אין באמור ייעוץ או שיווק השקעות ואין בו תחליף לייעוץ אישי</footer>
 </body>
 </html>
 """
@@ -486,7 +486,7 @@ def topics_nav(topics: list[dict], counts: dict, current: str = "") -> str:
 
 def main() -> int:
     cfg = yaml.safe_load((ROOT / "config" / "sources.yaml").read_text(encoding="utf-8"))
-    site_title = cfg.get("site", {}).get("title", "ברייף FOREST")
+    site_title = cfg.get("site", {}).get("title", "TLV TASE View")
     topics = cfg.get("topics") or []
 
     # שלוש מהדורות ביום: brief_<date>.md (בוקר, שם היסטורי) ו-brief_<date>-<edition>.md.
