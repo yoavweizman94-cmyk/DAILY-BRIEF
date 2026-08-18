@@ -14,7 +14,12 @@ const APP = "app.tlvtaseview.com";
 
 // הנתיבים שמותר להגיש באפקס: העמוד עצמו, הנכסים שהוא צריך, וה-API
 // של בקשת הגישה. כל השאר שייך לאפליקציה.
-const PUBLIC = /^\/(landing\.html)?$|^\/(style\.css|favicon\.ico|robots\.txt)$|^\/api\//;
+//
+// `/landing` ללא הסיומת חייב להיכלל: Pages מבצע הפניית 308 אוטומטית
+// מ-`/landing.html` ל-`/landing`, וברשימה שכללה רק את הסיומת ההפניה הזו
+// נפלה מחוץ לרשימה והוסטה לאפליקציה המוגנת — כלומר עמוד הנחיתה הציבורי
+// שלח את המבקר למסך התחברות.
+const PUBLIC = /^\/(landing(\.html)?)?$|^\/(style\.css|favicon\.ico|robots\.txt)$|^\/api\//;
 
 export async function onRequest(context) {
   const { request, next } = context;
@@ -31,7 +36,8 @@ export async function onRequest(context) {
       return Response.redirect(`https://${APP}${url.pathname}${url.search}`, 302);
     }
     if (url.pathname === "/") {
-      url.pathname = "/landing.html";
+      // בלי הסיומת: כך Pages מגיש את הנכס ישירות במקום להפנות אליו
+      url.pathname = "/landing";
       return next(new Request(url.toString(), request));
     }
     return next();

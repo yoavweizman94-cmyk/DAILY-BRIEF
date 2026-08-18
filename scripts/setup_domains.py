@@ -91,17 +91,31 @@ def main() -> int:
             fail(f"יצירת רשומת DNS נכשלה: {json.dumps(r, ensure_ascii=False)[:300]}")
         print(f"נוצרה רשומת CNAME: {APP} → {PROJECT}.pages.dev (proxied)")
 
+    # www — בלי רשומה, כל מי שמקליד אותו מקבל שגיאת רשת
+    code, recs = call("GET", f"/zones/{zid}/dns_records?name=www.{APEX}")
+    if ok(code, recs) and (recs.get("result") or []):
+        print("רשומת DNS ל-www כבר קיימת")
+    else:
+        code, r = call("POST", f"/zones/{zid}/dns_records", {
+            "type": "CNAME", "name": "www", "content": f"{PROJECT}.pages.dev",
+            "proxied": True, "ttl": 1, "comment": "TLV TASE View — www"})
+        print("נוצרה רשומת www" if ok(code, r) else f"www נכשל: {str(r)[:200]}")
+
     # --- חיבור הדומיין לפרויקט ---------------------------------------------
     base = f"/accounts/{ACCOUNT}/pages/projects/{PROJECT}/domains"
     code, d = call("GET", base)
     have = {x.get("name") for x in (d.get("result") or [])}
-    if APP in have:
-        print(f"{APP} כבר מחובר לפרויקט")
-    else:
-        code, r = call("POST", base, {"name": APP})
+    for host in (APP, f"www.{APEX}"):
+        if host in have:
+            print(f"{host} כבר מחובר לפרויקט")
+            continue
+        code, r = call("POST", base, {"name": host})
         if not ok(code, r):
-            fail(f"חיבור {APP} נכשל: {json.dumps(r, ensure_ascii=False)[:300]}")
-        print(f"{APP} חובר לפרויקט")
+            if host == APP:
+                fail(f"חיבור {host} נכשל: {json.dumps(r, ensure_ascii=False)[:300]}")
+            print(f"חיבור {host} נכשל (לא קריטי): {str(r)[:150]}")
+        else:
+            print(f"{host} חובר לפרויקט")
 
     # --- הגנת Access על האפליקציה ------------------------------------------
     code, apps = call("GET", f"/accounts/{ACCOUNT}/access/apps")
