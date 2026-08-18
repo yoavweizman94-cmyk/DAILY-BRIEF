@@ -1,0 +1,95 @@
+name: Access Setup
+
+# הקמת ההגנה על האתר: אפליקציית Cloudflare Access לכל דומיין, עם רשימת
+# מיילים מאושרים. חוסם כברירת מחדל — מי שאינו ברשימה לא מקבל אפילו קוד.
+#
+# חשוב ששני הדומיינים יוגנו: אם רק tlvtaseview.com מוגן, הכתובת
+# forest-brief.pages.dev ממשיכה להגיש את אותו אתר בלי הזדהות — דלת אחורית.
+on:
+  workflow_dispatch:
+    inputs:
+      emails:
+        description: "מיילים מורשים, מופרדים בפסיק"
+        required: true
+        default: "yoavweizman94@gmail.com"
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify site reachable
+        run: |
+          for h in tlvtaseview.com forest-brief.pages.dev; do
+            printf '%s -> ' "$h"
+            curl -s -o /dev/null -w '%{http_code}\n' --max-time 25 "https://$h/" || echo 000
+          done
+
+      - name: Create Access applications
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EMAILS: ${{ inputs.emails }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+
+          token, acct = os.environ["CF_TOKEN"], os.environ["CF_ACCOUNT"]
+          emails = [e.strip() for e in os.environ["EMAILS"].split(",") if e.strip()]
+          api = f"https://api.cloudflare.com/client/v4/accounts/{acct}/access/apps"
+
+          def call(method, url, payload=None):
+              data = json.dumps(payload).encode() if payload else None
+              req = urllib.request.Request(url, data=data, method=method, headers={
+                  "Authorization": f"Bearer {token}",
+                  "Content-Type": "application/json"})
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      return r.status, json.loads(r.read())
+              except urllib.error.HTTPError as e:
+                  return e.code, json.loads(e.read() or b"{}")
+
+          code, existing = call("GET", api)
+          if code != 200:
+              print(f"אין גישה ל-Access API (HTTP {code}): "
+                    f"{json.dumps(existing, ensure_ascii=False)[:400]}")
+              print("::error::לטוקן חסרה ההרשאה Account -> Access: Apps and Policies -> Edit, "
+                    "או ש-Zero Trust טרם הופעל בחשבון")
+              raise SystemExit(1)
+
+          have = {a.get("domain") for a in (existing.get("result") or [])}
+          print(f"אפליקציות קיימות: {have or 'אין'}")
+
+          for host in ("tlvtaseview.com", "forest-brief.pages.dev"):
+              if host in have:
+                  print(f"{host}: כבר מוגן")
+                  continue
+              code, res = call("POST", api, {
+                  "name": f"FOREST Brief - {host}",
+                  "domain": host,
+                  "type": "self_hosted",
+                  "session_duration": "24h",
+                  "policies": [{
+                      "name": "approved-emails",
+                      "decision": "allow",
+                      "include": [{"email": {"email": e}} for e in emails],
+                  }],
+              })
+              ok = res.get("success")
+              print(f"{host}: HTTP {code} · {'הוגן' if ok else json.dumps(res, ensure_ascii=False)[:400]}")
+              if not ok:
+                  raise SystemExit(1)
+
+          print(f"\nמורשים: {', '.join(emails)}")
+          PY
+
+      - name: Confirm protection
+        run: |
+          # אתר מוגן מחזיר הפניה למסך ההתחברות של Cloudflare Access
+          for h in tlvtaseview.com forest-brief.pages.dev; do
+            loc=$(curl -s -o /dev/null -w '%{redirect_url}' --max-time 25 "https://$h/")
+            printf '%s -> %s\n' "$h" "${loc:-אין הפניה}"
+          done
