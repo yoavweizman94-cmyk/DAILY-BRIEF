@@ -1,0 +1,79 @@
+name: Probe Capabilities
+
+# מיפוי מה הטוקן מסוגל לעשות. בלי זה אני מנחש איזה שלב אפשר לבצע לבד
+# ואיזה דורש את יואב — וניחוש כזה כבר עלה בסבב מיותר של טוקנים.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Probe
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          tok, acct = os.environ["CF_TOKEN"], os.environ["CF_ACCOUNT"]
+          B = "https://api.cloudflare.com/client/v4"
+
+          def call(method, path, payload=None):
+              data = json.dumps(payload).encode() if payload else None
+              req = urllib.request.Request(B + path, data=data, method=method,
+                  headers={"Authorization": f"Bearer {tok}",
+                           "Content-Type": "application/json"})
+              try:
+                  with urllib.request.urlopen(req, timeout=25) as r:
+                      return r.status, json.loads(r.read())
+              except urllib.error.HTTPError as e:
+                  try: return e.code, json.loads(e.read() or b"{}")
+                  except Exception: return e.code, {}
+
+          def show(label, code, ok=None):
+              mark = "יש" if (ok if ok is not None else code == 200) else "אין"
+              print(f"  {mark:4} {label}  (HTTP {code})")
+
+          print("=== יכולות הטוקן ===")
+          c, zones = call("GET", "/zones")
+          show("קריאת zones", c)
+          zid = None
+          for z in (zones.get("result") or []):
+              if z["name"] == "tlvtaseview.com":
+                  zid = z["id"]
+          print(f"       zone id: {zid or 'לא נמצא'}")
+
+          c, _ = call("GET", f"/accounts/{acct}/pages/projects")
+          show("Pages", c)
+
+          if zid:
+              c, _ = call("GET", f"/zones/{zid}/dns_records")
+              show("קריאת DNS", c)
+              c, r = call("POST", f"/zones/{zid}/dns_records",
+                          {"type": "TXT", "name": "_probe-caps",
+                           "content": "capability probe", "ttl": 60})
+              can_write = c == 200
+              show("כתיבת DNS", c, can_write)
+              if can_write:
+                  rid = r["result"]["id"]
+                  call("DELETE", f"/zones/{zid}/dns_records/{rid}")
+                  print("       (רשומת הבדיקה נמחקה)")
+
+          c, apps = call("GET", f"/accounts/{acct}/access/apps")
+          show("קריאת Access", c)
+          if c == 200:
+              print(f"       אפליקציות: {[a.get('domain') for a in apps.get('result') or []]}")
+          c, r = call("POST", f"/accounts/{acct}/access/apps",
+                      {"name": "probe-delete-me", "domain": "probe.tlvtaseview.com",
+                       "type": "self_hosted", "session_duration": "1h"})
+          can_access = c == 200
+          show("כתיבת Access", c, can_access)
+          if can_access:
+              call("DELETE", f"/accounts/{acct}/access/apps/{r['result']['id']}")
+              print("       (אפליקציית הבדיקה נמחקה)")
+          PY
