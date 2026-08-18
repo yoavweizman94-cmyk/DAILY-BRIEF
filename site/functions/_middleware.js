@@ -1,23 +1,44 @@
-// שומר סף לכתובת ה-pages.dev.
+// ניתוב לפי שם המארח.
 //
-// Cloudflare Access מגן על tlvtaseview.com, אבל אותו פרויקט מוגש גם
-// בכתובת forest-brief.pages.dev — ושם אין הגנה. נמדד: הדומיין החזיר 302
-// למסך ההתחברות בעוד ה-pages.dev החזיר 200 עם האתר המלא. כלומר כל מי
-// שיודע את הכתובת הזו עוקף את ההזדהות לחלוטין.
+// אותו פרויקט Pages מגיש שלושה דברים שונים, והפרדה ביניהם היא מה שמאפשר
+// לעמוד הנחיתה להיות ציבורי בעוד התוכן מוגן:
 //
-// הפונקציה הזו רצה לפני כל בקשה. בקשה שהגיעה דרך pages.dev מוסטת
-// לדומיין המוגן במקום לקבל תוכן, כך שאין נתיב שמגיש את הברייפים בלי
-// הזדהות. סגירה בשכבת האתר ולא בשכבת Access, כי היא אינה דורשת הרשאות
-// נוספות ונפרסת יחד עם התוכן.
-const CANONICAL = "tlvtaseview.com";
+//   tlvtaseview.com       → עמוד הנחיתה. ציבורי. Access אינו חוסם אותו.
+//   app.tlvtaseview.com   → הדשבורד והחיפושים. מאחורי Cloudflare Access.
+//   *.pages.dev           → מוסט, כדי שלא ישמש כניסה עוקפת לתוכן.
+//
+// ההפרדה חייבת להיות כאן ולא רק ב-Access: בלעדיה, ברגע שהאפקס משוחרר
+// מהגנה הוא היה מגיש את הדשבורד עצמו לכל אחד.
+const APEX = "tlvtaseview.com";
+const APP = "app.tlvtaseview.com";
+
+// הנתיבים שמותר להגיש באפקס: העמוד עצמו, הנכסים שהוא צריך, וה-API
+// של בקשת הגישה. כל השאר שייך לאפליקציה.
+const PUBLIC = /^\/(landing\.html)?$|^\/(style\.css|favicon\.ico|robots\.txt)$|^\/api\//;
 
 export async function onRequest(context) {
-  const url = new URL(context.request.url);
-  if (url.hostname.endsWith(".pages.dev")) {
-    url.hostname = CANONICAL;
-    url.protocol = "https:";
-    url.port = "";
-    return Response.redirect(url.toString(), 301);
+  const { request, next } = context;
+  const url = new URL(request.url);
+  const host = url.hostname;
+
+  if (host.endsWith(".pages.dev")) {
+    return Response.redirect(`https://${APP}${url.pathname}${url.search}`, 301);
   }
-  return context.next();
+
+  if (host === APEX || host === `www.${APEX}`) {
+    if (!PUBLIC.test(url.pathname)) {
+      // תוכן האפליקציה אינו מוגש כאן — מפנים לכתובת המוגנת
+      return Response.redirect(`https://${APP}${url.pathname}${url.search}`, 302);
+    }
+    if (url.pathname === "/") {
+      url.pathname = "/landing.html";
+      return next(new Request(url.toString(), request));
+    }
+    return next();
+  }
+
+  if (host === APP && url.pathname === "/landing.html") {
+    return Response.redirect(`https://${APEX}/`, 302);
+  }
+  return next();
 }
