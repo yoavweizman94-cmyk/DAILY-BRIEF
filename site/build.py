@@ -571,6 +571,10 @@ def main() -> int:
     # --- עמודי נושאים -----------------------------------------------------
     news = load_news()
     calls = load_calls()
+    # מאותחלים כאן ולא בענף: עמוד הנחיתה נבנה גם בפריסה שאין בה
+    # ברייפים, ובלי האתחול הוא נופל על משתנה לא מוגדר.
+    markets = te = None
+    all_reports = []
     topic_sums, topic_sums_day = load_topic_summaries()
     counts = {}
     for r in news:

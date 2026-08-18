@@ -92,6 +92,7 @@ TLV TASE View מספק מידע, נתונים וניתוח השפעה על בס�
 (function () {
   "use strict";
   var f = document.getElementById("req"), msg = document.getElementById("rmsg");
+  var OWNER = "yoavweizman94@gmail.com";
   function say(t, c) { msg.className = "msg " + (c || ""); msg.textContent = t; }
   f.addEventListener("submit", function (e) {
     e.preventDefault();
@@ -114,8 +115,18 @@ TLV TASE View מספק מידע, נתונים וניתוח השפעה על בס�
         say("הבקשה נשלחה. תקבל מייל כשהיא תיבחן.", "ok");
       })
       .catch(function (err) {
+        // נפילה לאחור לתוכנת המייל של המבקר. בלי זה, תקלה בצד השרת או
+        // הגדרה חסרה משאירות אותו בלי שום דרך ליצור קשר — והוא פשוט הולך.
         document.getElementById("rsend").disabled = false;
-        say("השליחה נכשלה: " + err.message + ". נסה שוב, או פנה ישירות.", "err");
+        var subject = encodeURIComponent("בקשת גישה ל-TLV TASE View");
+        var lines = ["שם: " + body.name, "מייל: " + body.email,
+                     "גוף: " + (body.org || "—"), "", body.why || ""];
+        var mailto = "mailto:" + OWNER + "?subject=" + subject +
+                     "&body=" + encodeURIComponent(lines.join("
+"));
+        msg.className = "msg err";
+        msg.innerHTML = "השליחה האוטומטית נכשלה. " +
+          '<a href="' + mailto + '">שלח את הבקשה במייל</a> ואחזור אליך.';
       });
   });
 })();

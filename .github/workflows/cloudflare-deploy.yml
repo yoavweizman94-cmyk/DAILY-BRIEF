@@ -40,6 +40,12 @@ jobs:
 
       - run: pip install pyyaml markdown
 
+      # בלי זה output/ ריק והאתר נבנה בלי ברייפים ובלי נתוני שוק
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
       - name: Build site
         run: python site/build.py
 
