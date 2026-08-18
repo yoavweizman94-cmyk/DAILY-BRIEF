@@ -39,6 +39,13 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # ריפו התוכן הפרטי משוכפל אל output/, כך שכל הסקריפטים ממשיכים לעבוד
+      # על אותם נתיבים בעוד המחקר עצמו כבר אינו בריפו הציבורי.
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
       # רק מה שצריך לשלב הזיהוי. yfinance/google-api/pypdf אינם נדרשים כאן,
       # ו-pip מהמטמון מסיים בשניות. markdown נכלל כי מחזור שבו רק אינדקס
       # הדוחות השתנה בונה את האתר בלי לעבור בשלב ההתקנה המלא.
@@ -105,9 +112,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           mkdir -p output/reports output/news
           python scripts/publish_reports.py || true
-          git add data/state.sqlite output/reports output/filings data/maya_index_state.json
+          git add data/state.sqlite data/maya_index_state.json
           git diff --cached --quiet || git commit -m "maya: $(date +'%F %H:%M')"
           bash scripts/git_sync.sh
+          CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push maya
 
       # בלי זה הסיכומים יושבים בריפו אבל האתר מציג אותם רק אחרי המהדורה הבאה —
       # עיכוב של עד שמונה שעות, שסותר את כל הרעיון של ניטור רציף.

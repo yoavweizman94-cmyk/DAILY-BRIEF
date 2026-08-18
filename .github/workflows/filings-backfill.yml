@@ -50,6 +50,13 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # ריפו התוכן הפרטי משוכפל אל output/, כך שכל הסקריפטים ממשיכים לעבוד
+      # על אותם נתיבים בעוד המחקר עצמו כבר אינו בריפו הציבורי.
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
       - run: pip install curl_cffi pyyaml truststore certifi requests markdown
 
       - name: Backfill
@@ -69,9 +76,10 @@ jobs:
         run: |
           git config user.name "forest-brief-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add output/filings data/maya_index_state.json
+          git add data/maya_index_state.json
           git diff --cached --quiet || git commit -m "filings: מילוי אחורה $(date +'%F')"
           bash scripts/git_sync.sh
+          CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push filings
 
       - name: Rebuild site
         if: steps.run.outputs.changed == 'yes'
