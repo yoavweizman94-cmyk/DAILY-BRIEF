@@ -42,8 +42,16 @@ def call(method: str, path: str, payload=None):
             return e.code, {}
 
 
-def ok(code: int) -> bool:
-    return code in (200, 201)
+def ok(code: int, body=None) -> bool:
+    """הצלחה נקבעת לפי גוף התשובה, לא לפי ניחוש קודי סטטוס.
+
+    Cloudflare מחזיר 200 ליצירה אחת, 201 לאחרת ו-202 למחיקה, ובדיקה
+    שמונה קודים ידנית פסלה כאן פעמיים פעולות שהצליחו — פעם POST של Access
+    שחזר 201, ופעם DELETE שחזר עם success:true. השדה success הוא הסמכות.
+    """
+    if isinstance(body, dict) and "success" in body:
+        return bool(body["success"])
+    return 200 <= code < 300
 
 
 def fail(msg: str):
@@ -72,14 +80,14 @@ def main() -> int:
 
     # --- רשומת DNS ל-app ----------------------------------------------------
     code, recs = call("GET", f"/zones/{zid}/dns_records?name={APP}")
-    if ok(code) and (recs.get("result") or []):
+    if ok(code, recs) and (recs.get("result") or []):
         print(f"רשומת DNS ל-{APP} כבר קיימת")
     else:
         code, r = call("POST", f"/zones/{zid}/dns_records", {
             "type": "CNAME", "name": "app", "content": f"{PROJECT}.pages.dev",
             "proxied": True, "ttl": 1,
             "comment": "TLV TASE View — האפליקציה המוגנת"})
-        if not ok(code):
+        if not ok(code, r):
             fail(f"יצירת רשומת DNS נכשלה: {json.dumps(r, ensure_ascii=False)[:300]}")
         print(f"נוצרה רשומת CNAME: {APP} → {PROJECT}.pages.dev (proxied)")
 
@@ -91,7 +99,7 @@ def main() -> int:
         print(f"{APP} כבר מחובר לפרויקט")
     else:
         code, r = call("POST", base, {"name": APP})
-        if not ok(code):
+        if not ok(code, r):
             fail(f"חיבור {APP} נכשל: {json.dumps(r, ensure_ascii=False)[:300]}")
         print(f"{APP} חובר לפרויקט")
 
@@ -108,7 +116,7 @@ def main() -> int:
             "session_duration": "720h",
             "policies": [{"name": "approved", "decision": "allow",
                           "include": [{"email": {"email": OWNER}}]}]})
-        if not ok(code):
+        if not ok(code, r):
             fail(f"יצירת הגנת Access נכשלה: {json.dumps(r, ensure_ascii=False)[:400]}")
         app_id = r["result"]["id"]
         print(f"נוצרה הגנת Access על {APP} · מורשה: {OWNER}")
@@ -151,7 +159,7 @@ def main() -> int:
             fail("האפליקציה מגישה תוכן ללא הזדהות — לא משחררים את האפקס")
         if APEX in by_domain:
             code, r = call("DELETE", f"/accounts/{ACCOUNT}/access/apps/{by_domain[APEX]['id']}")
-            if not ok(code):
+            if not ok(code, r):
                 fail(f"הסרת ההגנה מהאפקס נכשלה: {json.dumps(r, ensure_ascii=False)[:300]}")
             print(f"ההגנה הוסרה מ-{APEX} — עמוד הנחיתה ציבורי")
         else:
