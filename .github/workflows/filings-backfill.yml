@@ -22,8 +22,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 # אותה קבוצה כמו maya-watch, בכוונה: שניהם כותבים ל-output/filings, ושתי
 # ריצות חופפות מייצרות קונפליקט על manifest.json ועל קובצי השנה. עדיף
@@ -79,21 +77,21 @@ jobs:
         if: steps.run.outputs.changed == 'yes'
         run: python site/build.py
 
-      - uses: actions/upload-pages-artifact@v3
+      # פריסה ל-Cloudflare Pages. החליף את GitHub Pages, שאינו יודע לבקש
+      # הזדהות בכלל — Cloudflare Access יושב לפני האתר וחוסם כברירת מחדל.
+      - uses: actions/setup-node@v4
         if: steps.run.outputs.changed == 'yes'
         with:
-          path: site/dist
+          node-version: "20"
 
-  deploy:
-    needs: backfill
-    if: needs.backfill.outputs.changed == 'yes'
-    runs-on: ubuntu-latest
-    concurrency:
-      group: pages-deploy        # אותה קבוצה כמו שאר הפריסות — בלי דריסה הדדית
-      cancel-in-progress: false
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to Cloudflare Pages
+        if: steps.run.outputs.changed == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # pipefail: בלי זה קוד היציאה הוא של tee ופריסה שנכשלה נראית ירוקה
+          set -o pipefail
+          npx --yes wrangler@4 pages deploy site/dist             --project-name forest-brief --branch main 2>&1 | tee dep.log
+          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
+            echo "::error::הפריסה לא החזירה כתובת"; exit 1; }

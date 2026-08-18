@@ -19,8 +19,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: daily-brief
@@ -89,15 +87,6 @@ jobs:
           # site/dist נוצר רק כשהופק ברייף; ריצת "skip" יוצאת לפני כן.
           if [ -d site/dist ]; then echo "produced=yes" >> "$GITHUB_OUTPUT"; fi
 
-      # ההעלאה לפני הקיבוע, בכוונה. בריצה 31568684938 הברייף הופק במלואו
-      # ואז שלב הגיט נפל על קונפליקט — התוצר היקר ביותר בצנרת נזרק בגלל
-      # תקלת גיט, ולא הגיע לאתר. בסדר הזה כשל בקיבוע משאיר את האתר מעודכן
-      # והריפו הוא שמפגר, מצב שמתקן את עצמו בריצה הבאה.
-      - uses: actions/upload-pages-artifact@v3
-        if: steps.pipeline.outputs.produced == 'yes'
-        with:
-          path: site/dist
-
       - name: Commit state and output back to repo
         if: steps.pipeline.outputs.produced == 'yes'
         run: |
@@ -107,16 +96,21 @@ jobs:
           git diff --cached --quiet || git commit -m "brief: $(date +'%F %H:%M')"
           bash scripts/git_sync.sh
 
-  deploy:
-    needs: brief
-    if: needs.brief.outputs.produced == 'yes'
-    runs-on: ubuntu-latest
-    concurrency:
-      group: pages-deploy
-      cancel-in-progress: false
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      # פריסה ל-Cloudflare Pages. החליף את GitHub Pages, שאינו יודע לבקש
+      # הזדהות בכלל — Cloudflare Access יושב לפני האתר וחוסם כברירת מחדל.
+      - uses: actions/setup-node@v4
+        if: steps.pipeline.outputs.produced == 'yes'
+        with:
+          node-version: "20"
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.pipeline.outputs.produced == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # pipefail: בלי זה קוד היציאה הוא של tee ופריסה שנכשלה נראית ירוקה
+          set -o pipefail
+          npx --yes wrangler@4 pages deploy site/dist             --project-name forest-brief --branch main 2>&1 | tee dep.log
+          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
+            echo "::error::הפריסה לא החזירה כתובת"; exit 1; }
