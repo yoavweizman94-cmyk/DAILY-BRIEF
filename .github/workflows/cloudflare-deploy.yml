@@ -45,15 +45,23 @@ jobs:
           # פנייה ישירה ל-API במקום דרך wrangler: גוף התשובה אומר במפורש
           # מה חסר, בעוד wrangler מקצר ל-"Authentication error".
           echo "--- תקפות הטוקן ---"
-          curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             https://api.cloudflare.com/client/v4/user/tokens/verify | head -c 400
+          curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             https://api.cloudflare.com/client/v4/user/tokens/verify | head -c 300
           echo
+          # 403 יכול לנבוע משתי סיבות שונות לגמרי: הרשאה חסרה, או Account ID
+          # שגוי. רשימת החשבונות שהטוקן רואה מפרידה ביניהן חד-משמעית.
+          echo "--- חשבונות שהטוקן רואה ---"
+          curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             https://api.cloudflare.com/client/v4/accounts | head -c 600
+          echo
+          echo "--- מה שמוגדר אצלנו ---"
+          echo "אורך ה-ACCOUNT_ID המוגדר: ${#CLOUDFLARE_ACCOUNT_ID} תווים (אמור להיות 32)"
+          echo "ארבעת התווים הראשונים: ${CLOUDFLARE_ACCOUNT_ID:0:4}"
           echo "--- גישה ל-Pages ---"
           code=$(curl -s -o body.json -w '%{http_code}'             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects")
           echo "HTTP $code"
-          head -c 600 body.json
+          head -c 400 body.json
           echo
           if [ "$code" != "200" ]; then
-            echo "::error::הטוקן אינו מורשה ל-Pages. ראה את גוף התשובה למעלה."
+            echo "::error::הגישה ל-Pages נדחתה. ראה את שני הסעיפים למעלה."
             exit 1
           fi
 
