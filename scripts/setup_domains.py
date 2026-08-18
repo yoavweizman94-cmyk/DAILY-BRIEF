@@ -117,29 +117,38 @@ def main() -> int:
 
     # --- אימות בפועל --------------------------------------------------------
     time.sleep(20)
-    import ssl
-    ctx = ssl.create_default_context()
 
     def probe(host):
-        try:
-            req = urllib.request.Request(f"https://{host}/", method="GET")
-            with urllib.request.urlopen(req, timeout=25, context=ctx) as r:
-                return r.status, r.geturl()
-        except urllib.error.HTTPError as e:
-            return e.code, e.url
-        except Exception as e:
-            return 0, type(e).__name__
+        """האם המארח מגיש את התוכן שלנו, או שמשהו חוסם לפניו.
 
+        זיהוי לפי הפניה ל-cloudflareaccess.com אינו אמין: Access מחזיר 403
+        ישירות לבקשה שאינה נראית כדפדפן, ואז נראה כאילו אין הגנה. הבדיקה
+        ההפוכה חד-משמעית — אם הגוף מכיל סמן של האתר שלנו, הוא מוגש.
+        """
+        req = urllib.request.Request(f"https://{host}/", headers={
+            "User-Agent": "Mozilla/5.0 (compatible; setup-check)"})
+        try:
+            with urllib.request.urlopen(req, timeout=25) as r:
+                body = r.read(4000).decode("utf-8", "replace")
+                served = ('class="tile"' in body or "TLV TASE View" in body
+                          or "ברייף" in body)
+                return r.status, served, r.geturl()
+        except urllib.error.HTTPError as e:
+            return e.code, False, getattr(e, "url", "")
+        except Exception as e:
+            return 0, False, type(e).__name__
+
+    status = {}
     for host in (APP, APEX):
-        st, where = probe(host)
-        guarded = "cloudflareaccess.com" in str(where)
-        print(f"  {host}: {st} · {'מוגן' if guarded else 'פתוח'}")
+        st, served, where = probe(host)
+        status[host] = served
+        print(f"  {host}: HTTP {st} · {'מגיש תוכן' if served else 'חסום'}"
+              + (f" · {where}" if "cloudflareaccess" in str(where) else ""))
 
     # --- שחרור האפקס, רק בדגל מפורש ----------------------------------------
     if RELEASE_APEX:
-        st, where = probe(APP)
-        if "cloudflareaccess.com" not in str(where):
-            fail("האפליקציה אינה מוגנת עדיין — לא משחררים את האפקס")
+        if status.get(APP):
+            fail("האפליקציה מגישה תוכן ללא הזדהות — לא משחררים את האפקס")
         if APEX in by_domain:
             code, r = call("DELETE", f"/accounts/{ACCOUNT}/access/apps/{by_domain[APEX]['id']}")
             if not ok(code):

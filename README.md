@@ -1,4 +1,4 @@
-# FOREST Daily Brief
+# TLV TASE View
 
 ברייף בעברית למנהל השקעות, שלוש פעמים ביום: חדשות, מאקרו, סחורות ומט"ח — דרך העדשה של
 82 חברות הכיסוי ב-[config/companies.yaml](config/companies.yaml). ההוראות המלאות לסוכן: [CLAUDE.md](CLAUDE.md).
