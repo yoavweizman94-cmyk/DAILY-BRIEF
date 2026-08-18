@@ -635,6 +635,12 @@ def main() -> int:
                     root="", body=calls_page(calls, date.today().isoformat())),
         encoding="utf-8")
 
+    # Pages Functions: קוד שרץ לפני כל בקשה. כאן הוא סוגר את כתובת
+    # ה-pages.dev, שאחרת מגישה את אותו אתר בלי ההגנה של Access.
+    fn_src = Path(__file__).parent / "functions"
+    if fn_src.is_dir():
+        shutil.copytree(fn_src, OUT / "functions")
+
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
     print(f"נבנה {OUT} | {len(entries)} ברייפים | "
           f"{datetime.now().isoformat(timespec='seconds')}")
