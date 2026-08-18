@@ -6,7 +6,13 @@ name: Cloudflare Deploy
 # נבדק בבידוד לפני שנוגעים במה שעובד. אחרי שהוא מוכח, הצעד הזה נכנס
 # לשלושת ה-workflows במקום הפריסה ל-GitHub Pages.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      custom_domain:
+        description: "דומיין לחיבור לאתר (ריק = לדלג)"
+        required: false
+        default: ""
+
 
 concurrency:
   group: cloudflare-deploy
@@ -102,3 +108,23 @@ jobs:
 
       - name: Report
         run: 'echo "כתובת הפריסה - ${{ steps.dep.outputs.url }}"'
+
+      - name: Attach custom domain
+        if: inputs.custom_domain != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DOMAIN: ${{ inputs.custom_domain }}
+        run: |
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT/domains"
+          code=$(curl -s -o res.json -w '%{http_code}' -X POST "$api"             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             -H "Content-Type: application/json"             --data "{\"name\":\"$DOMAIN\"}")
+          echo "HTTP $code"
+          head -c 700 res.json; echo
+          if [ "$code" = "200" ] || grep -q "already exists\|already been added" res.json; then
+            echo "הדומיין מחובר"
+          else
+            echo "::error::חיבור הדומיין נכשל — ראה את גוף התשובה"
+            exit 1
+          fi
+          echo "--- דומיינים מחוברים כעת ---"
+          curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$api" | head -c 700
