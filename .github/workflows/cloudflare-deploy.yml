@@ -37,19 +37,37 @@ jobs:
       - name: Build site
         run: python site/build.py
 
+      - name: Diagnose token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # פנייה ישירה ל-API במקום דרך wrangler: גוף התשובה אומר במפורש
+          # מה חסר, בעוד wrangler מקצר ל-"Authentication error".
+          echo "--- תקפות הטוקן ---"
+          curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             https://api.cloudflare.com/client/v4/user/tokens/verify | head -c 400
+          echo
+          echo "--- גישה ל-Pages ---"
+          code=$(curl -s -o body.json -w '%{http_code}'             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects")
+          echo "HTTP $code"
+          head -c 600 body.json
+          echo
+          if [ "$code" != "200" ]; then
+            echo "::error::הטוקן אינו מורשה ל-Pages. ראה את גוף התשובה למעלה."
+            exit 1
+          fi
+
       - name: Create Pages project if missing
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          # "כבר קיים" הוא מצב תקין; שגיאת הרשאה אינה. בלי ההבחנה הזו
-          # ריצה שנכשלה על טוקן חסר-הרשאות נראית ירוקה.
           out=$(npx --yes wrangler@4 pages project create "$PROJECT" --production-branch main 2>&1) || true
-          echo "$out" | tail -5
-          if echo "$out" | grep -qiE "already exists|already in use"; then
+          echo "$out"
+          if echo "$out" | grep -qiE "already exists|already in use|duplicate"; then
             echo "הפרויקט קיים — ממשיכים"
-          elif echo "$out" | grep -qiE "authentication error|code: 10000|not authorized|10001"; then
-            echo "::error::לטוקן חסרה ההרשאה Account -> Cloudflare Pages -> Edit"
+          elif echo "$out" | grep -qiE "authentication error|code: 10000|not authorized"; then
+            echo "::error::יצירת הפרויקט נכשלה באימות"
             exit 1
           fi
 
