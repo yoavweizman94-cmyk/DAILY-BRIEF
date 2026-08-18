@@ -130,6 +130,6 @@ jobs:
         run: |
           # pipefail: בלי זה קוד היציאה הוא של tee ופריסה שנכשלה נראית ירוקה
           set -o pipefail
-          (cd site/dist && npx --yes wrangler@4 pages deploy . --project-name forest-brief --branch main) 2>&1 | tee dep.log
+          (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
           grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
             echo "::error::הפריסה לא החזירה כתובת"; exit 1; }

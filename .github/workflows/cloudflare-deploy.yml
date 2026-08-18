@@ -94,7 +94,7 @@ jobs:
           # pipefail הכרחי: בלעדיו קוד היציאה הוא של tee, ופריסה שנכשלה
           # לגמרי דיווחה "success". זה בדיוק מה שקרה בריצה הראשונה.
           set -o pipefail
-          (cd site/dist && npx --yes wrangler@4 pages deploy . --project-name "$PROJECT" --branch main) 2>&1 | tee deploy.log
+          (cd site && npx --yes wrangler@4 pages deploy dist --project-name "$PROJECT" --branch main) 2>&1 | tee deploy.log
           url=$(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' deploy.log | tail -1)
           if [ -z "$url" ]; then
             echo "::error::הפריסה לא החזירה כתובת — משהו נכשל בשקט"

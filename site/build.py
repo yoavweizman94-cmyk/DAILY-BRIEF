@@ -635,11 +635,9 @@ def main() -> int:
                     root="", body=calls_page(calls, date.today().isoformat())),
         encoding="utf-8")
 
-    # Pages Functions: קוד שרץ לפני כל בקשה. כאן הוא סוגר את כתובת
-    # ה-pages.dev, שאחרת מגישה את אותו אתר בלי ההגנה של Access.
-    fn_src = Path(__file__).parent / "functions"
-    if fn_src.is_dir():
-        shutil.copytree(fn_src, OUT / "functions")
+    # site/functions/ נשאר מחוץ ל-dist בכוונה: הוא קוד שרץ לפני כל בקשה,
+    # לא נכס סטטי. העתקה לתוך תיקיית הפריסה גרמה לו להיות שניהם בו-זמנית,
+    # ואז הוא הועלה כקובץ ולא הופעל. wrangler רץ מ-site/ ומוצא אותו שם.
 
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
     print(f"נבנה {OUT} | {len(entries)} ברייפים | "
