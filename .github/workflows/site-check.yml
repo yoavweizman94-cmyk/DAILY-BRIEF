@@ -21,6 +21,10 @@ jobs:
             curl -sL -o p.html --max-time 30 -w '  אחרי הפניות: %{http_code}   סופי: %{url_effective}\n' "https://$h/" || true
             echo "  אריחי שווקים: $(grep -c 'class="tile' p.html || true)"
             echo "  כותרת: $(grep -o '<title>[^<]*' p.html | head -1 | cut -c8-70)"
+            for marker in 'id="req"' 'class="shot"' 'class="facts"' 'name="remail"' 'class="toc"'; do
+              n=$(grep -o "$marker" p.html | wc -l)
+              [ "$n" -gt 0 ] && echo "    $marker × $n"
+            done
           done
 
       - name: Pages domain status
