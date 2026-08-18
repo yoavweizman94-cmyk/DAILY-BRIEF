@@ -87,6 +87,32 @@ LANDING = """<!DOCTYPE html>
 """
 
 
+def landing_facts() -> str:
+    """מספרי היקף מהנתונים בפועל.
+
+    נקראים מהאינדקסים עצמם ולא נכתבים ביד — מספר שיווקי שמתיישן גרוע
+    מלא לכתוב אותו כלל, ובאתר שמוכר דיוק הוא גם סותר את עצמו.
+    """
+    import json as _json
+    facts = []
+    man = load_json(ROOT / "output" / "filings" / "manifest.json") or {}
+    if man.get("total"):
+        facts.append((f"{man['total']:,}", "דוחות כספיים באינדקס"))
+    briefs = len(list(ROOT.glob("output/brief_*.md")))
+    if briefs:
+        facts.append((str(briefs), "ברייפים שפורסמו"))
+    reports_dir = ROOT / "output" / "reports"
+    if reports_dir.is_dir():
+        n = sum(1 for f in reports_dir.glob("*.jsonl")
+                for l in f.read_text(encoding="utf-8").splitlines() if l.strip())
+        if n:
+            facts.append((f"{n:,}", "דיווחי מאיה שסוכמו"))
+    facts.append(("3", "מהדורות ביום"))
+    return ('<div class="facts">' +
+            "".join(f"<div><b>{v}</b><span>{k}</span></div>" for v, k in facts) +
+            "</div>") if facts else ""
+
+
 def preview_blocks(markets, te, reports, calls) -> str:
     """תצוגות מקדימות מרכיבי האתר עצמם.
 
@@ -686,8 +712,9 @@ def main() -> int:
     frag = PAGES / "landing.html"
     if frag.exists():
         upcoming = [c for c in calls if (c.get("date") or "") >= date.today().isoformat()]
-        body = frag.read_text(encoding="utf-8").replace(
-            "{previews}", preview_blocks(markets, te, all_reports or [], upcoming))
+        body = (frag.read_text(encoding="utf-8")
+                .replace("{previews}", preview_blocks(markets, te, all_reports or [], upcoming))
+                .replace("{facts}", landing_facts()))
         (OUT / "landing.html").write_text(
             LANDING.format(title=f"{site_title} · מחקר יומי על הבורסה בתל אביב",
                            desc="שלוש סקירות ביום על הבורסה בתל אביב, ניטור דיווחי "
