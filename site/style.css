@@ -1,4 +1,4 @@
-/* FOREST Daily Brief — גיליון סגנון
+/* TLV TASE View — גיליון סגנון
  *
  * קהל היעד הוא מנהל השקעות שקורא את זה שלוש פעמים ביום, לרוב בסריקה מהירה
  * ולעיתים בטלפון. שלושת העקרונות שמנחים כאן:
@@ -477,3 +477,41 @@ table.calls .none { color: var(--faint); font-size: 0.82rem; }
   li.rep, .tile, .topic-sum { break-inside: avoid; box-shadow: none; }
   h2 { break-after: avoid; }
 }
+
+/* ---- עמוד נחיתה ---- */
+.hero { padding: 2.5rem 0 1.5rem; max-width: 46rem; }
+.hero .eyebrow { color: var(--accent); font-weight: 700; font-size: 0.82rem;
+  letter-spacing: 0.04em; margin: 0 0 0.5rem; }
+.hero h1 { font-size: clamp(1.6rem, 1.1rem + 2.2vw, 2.4rem); line-height: 1.2;
+  letter-spacing: -0.02em; margin: 0 0 0.9rem; }
+.hero .sub { font-size: 1.05rem; color: var(--muted); line-height: 1.75; margin: 0 0 1.6rem; }
+a.cta { display: inline-block; background: var(--accent); color: #fff;
+  text-decoration: none; font-weight: 700; font-size: 1rem;
+  padding: 0.6rem 1.8rem; border-radius: 8px; }
+a.cta:hover { filter: brightness(1.08); }
+.hero .cta-note { font-size: 0.8rem; color: var(--faint); margin: 0.6rem 0 0; }
+
+section.what, section.preview, section.request { margin-top: 3rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.9rem; margin-top: 1rem; }
+.grid article { background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1rem 1.1rem; box-shadow: var(--shadow); }
+.grid h3 { margin: 0 0 0.4rem; font-size: 0.98rem; color: var(--accent); }
+.grid p { margin: 0; font-size: 0.9rem; color: var(--muted); line-height: 1.65; }
+.grid em { font-style: normal; color: var(--fg); font-weight: 600; }
+
+/* התצוגות המקדימות — רכיבי האתר האמיתיים, בקנה מידה מוקטן */
+.shot { border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  background: var(--surface); box-shadow: var(--shadow); margin: 1rem 0 1.6rem; }
+.shot-bar { display: flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.8rem;
+  background: var(--table-head); border-bottom: 1px solid var(--border);
+  font-size: 0.78rem; color: var(--muted); }
+.shot-bar b { font-weight: 600; color: var(--fg); }
+.shot-body { padding: 0.9rem 1rem; }
+.shot-body .strip { margin-bottom: 0; }
+.shot-body ul.reports, .shot-body table { margin: 0; }
+
+form.srch textarea { font: inherit; font-size: 0.92rem; padding: 0.4rem 0.55rem;
+  color: var(--fg); background: var(--bg); border: 1px solid var(--border-strong);
+  border-radius: 7px; resize: vertical; }
+form.srch textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }

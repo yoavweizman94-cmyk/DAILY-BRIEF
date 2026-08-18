@@ -1,0 +1,122 @@
+<section class="hero">
+  <p class="eyebrow">מחקר יומי על הבורסה בתל אביב</p>
+  <h1>מה שקרה היום בת"א, ומה זה אומר לחברות שאתה עוקב אחריהן</h1>
+  <p class="sub">שלוש סקירות ביום, ניטור דיווחי מאיה מסביב לשעון, ומנועי חיפוש
+  לדוחות כספיים ולעסקאות נדל"ן. הכל נאסף אוטומטית ממקורות ציבוריים ונכתב
+  לקורא מקצועי — בלי הסברי בסיס ובלי ריפוד.</p>
+  <a class="cta" href="#request">בקשת גישה</a>
+  <p class="cta-note">הגישה מוגבלת ומאושרת ידנית.</p>
+</section>
+
+<section class="what">
+  <h2>מה נכנס פנימה</h2>
+  <div class="grid">
+    <article>
+      <h3>שלוש מהדורות ביום</h3>
+      <p>בוקר לפני הפתיחה, נעילה אחרי סיום המסחר בת"א, ולילה אחרי סגירת
+      וול סטריט. כל מהדורה מדווחת מה <em>השתנה</em> מאז הקודמת — אייטם שלא
+      זז אינו אייטם.</p>
+    </article>
+    <article>
+      <h3>כל דיווח מהותי במאיה</h3>
+      <p>ניטור כל רבע שעה, מסביב לשעון. כל דיווח מהותי נמשך, גוף הדוח וה-PDF
+      נקראים, ומסוכם עם המספרים והמשמעות — מכל חברה נסחרת, לא רק מרשימה סגורה.</p>
+    </article>
+    <article>
+      <h3>חיפוש דוחות כספיים</h3>
+      <p>אלפי דוחות רבעוניים ותקופתיים של כל החברות בבורסה, מ-2024 ואילך,
+      עם הורדה ישירה של ה-PDF בשם קריא.</p>
+    </article>
+    <article>
+      <h3>שיחות ועידה</h3>
+      <p>לוח שיחות סיכום הרבעון: מי, מתי, וקישור הכניסה — שנשלף מדיווח החברה
+      עצמו ולא מוצג כניחוש.</p>
+    </article>
+    <article>
+      <h3>עסקאות נדל"ן</h3>
+      <p>חיפוש חי בנתוני רשות המסים לפי כתובת ורדיוס, עם סינון לפי סוג נכס,
+      חדרים, מחיר ושטח, וייצוא לאקסל.</p>
+    </article>
+    <article>
+      <h3>מאקרו ישראל</h3>
+      <p>ריבית, אינפלציה, מדד מחירי דירות, התחלות בנייה ומכרזי רמ"י —
+      מוצלבים לחברות שהם נוגעים בהן.</p>
+    </article>
+  </div>
+</section>
+
+<section class="preview">
+  <h2>איך זה נראה</h2>
+  <p class="lead">התצוגות כאן נבנות מרכיבי האתר עצמם, עם אותו עיצוב — לא
+  צילומי מסך שמתיישנים.</p>
+  {previews}
+</section>
+
+<section class="request" id="request">
+  <h2>בקשת גישה</h2>
+  <p class="lead">הגישה מאושרת ידנית. אחרי אישור תקבל מייל, והכניסה היא
+  בקוד חד-פעמי לכתובת שרשמת — בלי סיסמה.</p>
+
+  <form class="srch" id="req">
+    <div class="row">
+      <label class="grow">שם מלא
+        <input type="text" id="rname" required maxlength="80"></label>
+      <label class="grow">כתובת מייל
+        <input type="email" id="remail" required maxlength="120"
+               placeholder="name@company.com"></label>
+    </div>
+    <div class="row">
+      <label class="grow">גוף / תפקיד
+        <input type="text" id="rorg" maxlength="120"
+               placeholder="קרן, בית השקעות, עצמאי"></label>
+    </div>
+    <div class="row">
+      <label class="grow">מה מעניין אותך לעקוב
+        <textarea id="rwhy" rows="3" maxlength="500"></textarea></label>
+    </div>
+    <div class="row">
+      <button type="submit" id="rsend">שלח בקשה</button>
+    </div>
+  </form>
+  <div id="rmsg" class="msg"></div>
+</section>
+
+<p class="fineprint">
+TLV TASE View מספק מידע, נתונים וניתוח השפעה על בסיס מקורות ציבוריים —
+דיווחי מאיה, הלמ"ס, רשות מקרקעי ישראל, רשות המסים ופרסומי שוק. אין באמור
+ייעוץ השקעות, שיווק השקעות או המלצה לביצוע פעולה בניירות ערך, ואין בו
+תחליף לייעוץ אישי המתחשב בנתוניו של כל אדם.
+</p>
+
+<script>
+(function () {
+  "use strict";
+  var f = document.getElementById("req"), msg = document.getElementById("rmsg");
+  function say(t, c) { msg.className = "msg " + (c || ""); msg.textContent = t; }
+  f.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var body = {
+      name: document.getElementById("rname").value.trim(),
+      email: document.getElementById("remail").value.trim(),
+      org: document.getElementById("rorg").value.trim(),
+      why: document.getElementById("rwhy").value.trim()
+    };
+    if (!body.name || !body.email) { say("שם ומייל הם שדות חובה.", "err"); return; }
+    document.getElementById("rsend").disabled = true;
+    say("שולח…", "wait");
+    fetch("/api/request-access", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.d && res.d.error || "שגיאה");
+        f.style.display = "none";
+        say("הבקשה נשלחה. תקבל מייל כשהיא תיבחן.", "ok");
+      })
+      .catch(function (err) {
+        document.getElementById("rsend").disabled = false;
+        say("השליחה נכשלה: " + err.message + ". נסה שוב, או פנה ישירות.", "err");
+      });
+  });
+})();
+</script>

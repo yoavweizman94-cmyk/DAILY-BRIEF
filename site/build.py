@@ -60,6 +60,64 @@ PAGE = """<!DOCTYPE html>
 """
 
 
+LANDING = """<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{title}</title>
+<meta name="description" content="{desc}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <nav><a href="#request">בקשת גישה</a> · <a href="https://app.tlvtaseview.com">כניסה למנויים</a></nav>
+  <div class="brand">{site_title}</div>
+</header>
+<main>
+{body}
+</main>
+<footer>{site_title} · אין באמור ייעוץ או שיווק השקעות</footer>
+</body>
+</html>
+"""
+
+
+def preview_blocks(markets, te, reports, calls) -> str:
+    """תצוגות מקדימות מרכיבי האתר עצמם.
+
+    לא צילומי מסך: הרכיבים נבנים מאותן פונקציות ועם אותו CSS כמו באפליקציה,
+    ולכן הם נשארים מסונכרנים לנצח ומראים את המוצר האמיתי ולא ייצוג שלו.
+    """
+    out = []
+
+    def shot(label, note, inner):
+        if not inner:
+            return
+        out.append(f'<div class="shot"><div class="shot-bar"><b>{label}</b>'
+                   f'<span>{note}</span></div><div class="shot-body">{inner}</div></div>')
+
+    shot("רצועת השווקים", "מתעדכנת בכל מהדורה",
+         markets_strip(markets, te))
+    shot("דיווחי מאיה", "מסוכמים אוטומטית, כולל גוף ה-PDF",
+         f'<ul class="reports">{reports_rows(reports, limit=2)}</ul>' if reports else "")
+    if calls:
+        rows = "".join(
+            f'<tr><td class="t">{c.get("time") or "—"}</td>'
+            f'<td>{c.get("company") or "—"}</td>'
+            f'<td class="q">{c.get("period") or ""}</td>'
+            f'<td>{call_link_cell(c)}</td></tr>' for c in calls[:3])
+        shot("שיחות ועידה", "קישור הכניסה נשלף מדיווח החברה",
+             f'<div class="tw"><table class="calls"><thead><tr><th>שעה</th>'
+             f'<th>חברה</th><th>רבעון</th><th>כניסה</th></tr></thead>'
+             f'<tbody>{rows}</tbody></table></div>')
+    return "".join(out)
+
+
 def _isolate_signed_numbers(html_text: str) -> str:
     def fix(m):
         tag, attrs, inner = m.groups()
@@ -620,6 +678,18 @@ def main() -> int:
     filings_src = ROOT / "output" / "filings"
     if filings_src.is_dir():
         shutil.copytree(filings_src, OUT / "filings")
+
+    frag = PAGES / "landing.html"
+    if frag.exists():
+        upcoming = [c for c in calls if (c.get("date") or "") >= date.today().isoformat()]
+        body = frag.read_text(encoding="utf-8").replace(
+            "{previews}", preview_blocks(markets, te, all_reports or [], upcoming))
+        (OUT / "landing.html").write_text(
+            LANDING.format(title=f"{site_title} · מחקר יומי על הבורסה בתל אביב",
+                           desc="שלוש סקירות ביום על הבורסה בתל אביב, ניטור דיווחי "
+                                "מאיה, חיפוש דוחות כספיים ועסקאות נדל\"ן.",
+                           site_title=site_title, body=body),
+            encoding="utf-8")
 
     for name, title in (("deals", "חיפוש עסקאות נדל\"ן"),
                         ("filings", "חיפוש דוחות כספיים")):
