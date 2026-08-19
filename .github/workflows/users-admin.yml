@@ -1,0 +1,42 @@
+name: Users Admin
+
+# ניהול משתמשי השירות. הטופס באתר יודע רק ליצור חשבון ממתין, וקישור
+# האישור רק להפעיל אותו — כל השאר נעשה כאן.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "פעולה"
+        type: choice
+        options: [list, show, activate, disable, delete, setpw]
+        default: list
+      email:
+        description: "כתובת (לכל פעולה חוץ מ-list)"
+        required: false
+        default: ""
+      password:
+        description: "סיסמה חדשה (רק ל-setpw)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  admin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Manage
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          KV_NAMESPACE_ID: b437bf78b9bc4f358b6d0b4a64e0ad94
+          ACTION: ${{ inputs.action }}
+          EMAIL: ${{ inputs.email }}
+          PASSWORD: ${{ inputs.password }}
+        run: python3 scripts/users.py

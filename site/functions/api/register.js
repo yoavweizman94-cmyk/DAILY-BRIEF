@@ -35,7 +35,10 @@ export async function onRequestPost(context) {
   const pwErr = passwordProblem(password);
   if (pwErr) return json({ error: pwErr }, 400);
 
-  if (!env.USERS || !env.SESSION_SECRET || !env.RESEND_API_KEY || !env.OWNER_EMAIL || !env.APPROVAL_SECRET) {
+  // רק מה שנדרש כדי **ליצור** את החשבון. שליחת ההתראה היא שלב נפרד:
+  // מפתח דואר חסר או ספק שנפל אינם סיבה לאבד הרשמה של לקוח משלם —
+  // החשבון נשמר כממתין, והבעלים רואה אותו ברשימת המשתמשים גם בלי מייל.
+  if (!env.USERS || !env.APPROVAL_SECRET) {
     return json({ error: "השירות אינו מוגדר במלואו" }, 503);
   }
 
@@ -91,6 +94,11 @@ export async function onRequestPost(context) {
     "החשבון נוצר מושבת ואינו מאפשר כניסה עד הלחיצה.",
   ].join("\n");
 
+  if (!env.RESEND_API_KEY || !env.OWNER_EMAIL) {
+    console.log("register: notification skipped, mail not configured");
+    return json({ ok: true, notified: false }, 200);
+  }
+
   const res = await fetch(RESEND, {
     method: "POST",
     headers: { "Authorization": `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
@@ -103,8 +111,8 @@ export async function onRequestPost(context) {
   });
   if (!res.ok) {
     console.log("Resend failed", res.status, await res.text());
-    // החשבון כבר נשמר כממתין; רק ההתראה נכשלה.
-    return json({ error: "שליחת ההתראה נכשלה" }, 502);
+    // החשבון כבר נשמר כממתין; רק ההתראה נכשלה, ולכן זו אינה שגיאת לקוח.
+    return json({ ok: true, notified: false }, 200);
   }
-  return json({ ok: true }, 200);
+  return json({ ok: true, notified: true }, 200);
 }

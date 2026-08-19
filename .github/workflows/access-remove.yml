@@ -1,0 +1,39 @@
+name: Access Remove
+
+# הסרת Cloudflare Access אחרי שהאימות העצמי אומת. מגבה את התצורה,
+# מוחק, בודק מיד את האתר החי, ואם התוכן דולף — מקים את ההגנה הישנה
+# בחזרה ויוצא בשגיאה.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = הצגת התצורה בלבד"
+        type: choice
+        options: ["true", "false"]
+        default: "true"
+
+permissions:
+  contents: read
+
+jobs:
+  remove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Remove Access
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DRY_RUN: ${{ inputs.dry_run == 'true' && '1' || '0' }}
+        run: python3 scripts/access_remove.py
+      - name: Keep backup
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: access-backup
+          path: access-backup.json
+          if-no-files-found: ignore

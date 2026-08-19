@@ -45,10 +45,11 @@ jobs:
                  --data '{"name":"בדיקה אוטומטית — אין לאשר","email":"access-check@tlvtaseview.com","password":"check-only-not-a-real-account"}' || true)
           note "בקשה תקינה → $code   $(cat r2.json)"
           case "$code" in
-            200) note "המייל נשלח ✓" ;;
+            200) if grep -q '"notified":true' r2.json; then note "החשבון נוצר והמייל נשלח ✓";
+                 else bad "החשבון נוצר אבל ההתראה לא נשלחה — RESEND_API_KEY חסר או פסול"; fi ;;
             503) bad "השירות אינו מוגדר במלואו — חסר RESEND_API_KEY / OWNER_EMAIL / APPROVAL_SECRET / USERS" ;;
             409) note "החשבון כבר קיים — הזרימה תקינה ✓" ;;
-            502) bad "Resend דחה את השליחה — מפתח פסול, או שהדומיין אינו מאומת ב-Resend" ;;
+            502) bad "Resend דחה את השליחה" ;;
             *)   bad "בקשה תקינה החזירה $code" ;;
           esac
 
