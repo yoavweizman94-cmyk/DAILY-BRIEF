@@ -1,0 +1,76 @@
+name: Access Flow Check
+
+# אימות זרימת בקשת הגישה מקצה לקצה, מחוץ לרשת הארגונית.
+#
+# **שולח מייל אמיתי** אל OWNER_EMAIL, ולכן ידני בלבד — בלי cron. המייל
+# יגיע עם שם "בדיקה אוטומטית — אין לאשר" כדי שלא תלחץ עליו בטעות; לחיצה
+# הייתה מוסיפה כתובת דמה לרשימת המורשים ב-Access.
+#
+# הבדיקה קובעת שלושה דברים: שהוולידציה דוחה קלט פסול, שכל משתני הסביבה
+# קיימים (503 מסגיר חוסר), ושחתימת ה-HMAC על קישור האישור אינה ניתנת
+# לזיוף. האחרון הוא הבדיקה החשובה — קישור אישור שאפשר להמציא פירושו
+# שכל אחד מכניס את עצמו לאתר.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Probe access flow
+        run: |
+          fail=0
+          bad()  { echo "::error::$*"; fail=1; }
+          note() { echo "  $*"; }
+          B=https://tlvtaseview.com
+
+          echo "=== 1. ולידציה של קלט ==="
+          : > r1.json
+          code=$(curl -s -o r1.json -w '%{http_code}' --max-time 25 -X POST "$B/api/request-access" \
+                 -H 'content-type: application/json' \
+                 --data '{"name":"בדיקה","email":"not-an-email"}' || true)
+          note "מייל פסול → $code   $(cat r1.json)"
+          if [ "$code" != "400" ]; then bad "מייל פסול החזיר $code במקום 400"; fi
+
+          echo "=== 2. בקשה תקינה (שולח מייל) ==="
+          : > r2.json
+          code=$(curl -s -o r2.json -w '%{http_code}' --max-time 30 -X POST "$B/api/request-access" \
+                 -H 'content-type: application/json' \
+                 --data '{"name":"בדיקה אוטומטית — אין לאשר","email":"access-check@tlvtaseview.com"}' || true)
+          note "בקשה תקינה → $code   $(cat r2.json)"
+          case "$code" in
+            200) note "המייל נשלח ✓" ;;
+            503) bad "השירות אינו מוגדר במלואו — חסר RESEND_API_KEY / OWNER_EMAIL / APPROVAL_SECRET" ;;
+            502) bad "Resend דחה את השליחה — מפתח פסול, או שהדומיין אינו מאומת ב-Resend" ;;
+            *)   bad "בקשה תקינה החזירה $code" ;;
+          esac
+
+          echo "=== 3. קישור אישור מזויף חייב להידחות ==="
+          : > r3.json
+          code=$(curl -s -o r3.json -w '%{http_code}' --max-time 25 \
+                 "$B/api/approve?email=attacker%40evil.com&t=deadbeefdeadbeef" || true)
+          note "חתימה מזויפת → $code   $(head -c 200 r3.json)"
+          if [ "$code" = "200" ]; then
+            bad "קישור אישור מזויף התקבל — כשל אבטחה חמור"
+          else
+            note "נדחה ✓"
+          fi
+
+          echo "=== 4. אישור בלי חתימה כלל ==="
+          : > r4.json
+          code=$(curl -s -o r4.json -w '%{http_code}' --max-time 25 \
+                 "$B/api/approve?email=attacker%40evil.com" || true)
+          note "בלי חתימה → $code   $(head -c 200 r4.json)"
+          if [ "$code" = "200" ]; then bad "אישור ללא חתימה התקבל"; fi
+
+          echo
+          if [ "$fail" = "0" ]; then
+            echo "זרימת בקשת הגישה תקינה. בדוק שהמייל הגיע לתיבה."
+          else
+            echo "יש כשלים — ראו ::error:: למעלה."
+          fi
+          exit "$fail"
