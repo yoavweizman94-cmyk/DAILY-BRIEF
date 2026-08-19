@@ -28,7 +28,6 @@ from _tls import harden  # noqa: E402
 
 harden()
 
-from curl_cffi import requests as creq  # noqa: E402
 from _maya_api import MayaSession, WindowTooLarge  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -207,33 +206,46 @@ def main() -> int:
     if start > today:
         start = today
 
-    def fresh(tries: int = 4):
-        """סשן חדש. ה-WAF של מאיה חוסם סשן שרץ יותר מדי זמן — בבקפיל
-        הראשון הוא נחסם אחרי אחד-עשר ימי סריקה, וכל שאר החודשים דולגו.
+    def fresh(tries: int = 5):
+        """סשן יחיד לכל הבקשות.
 
-        גם **יצירת** הסשן עצמה נכשלת לפעמים (HTTP/2 stream reset), ולכן
-        היא חוזרת על עצמה. בלי זה חריגה מכאן מפילה את כל הריצה.
+        הגרסה הקודמת פתחה שני סשנים — אחד ל-API ואחד לקבצים — ושניהם
+        פנו לאותו מארח. מאיה ביטלה זרמי HTTP/2 (curl 92, error CANCEL)
+        כבר בבקשה השלישית, גם ממחשב מקומי וגם מראנר של GitHub. סשן אחד
+        עם ויסות אחד פותר את זה, וגם מוריד את העומס בחצי.
         """
         last = None
         for i in range(tries):
             try:
-                m = MayaSession()
-                f = creq.Session(impersonate="chrome")
-                f.get("https://maya.tase.co.il/he", timeout=30)
-                return m, f
+                return MayaSession()
             except Exception as e:
                 last = e
-                time.sleep(5 * (i + 1))
+                time.sleep(6 * (i + 1))
+        raise last
+
+    def fetch_file(sess, url: str, tries: int = 3):
+        """קובץ נספח, דרך אותו סשן ובאותו ויסות."""
+        last = None
+        for i in range(tries):
+            try:
+                sess._wait()
+                r = sess._s.get(FILES + url, timeout=30,
+                                headers={"Referer": "https://maya.tase.co.il/"})
+                if r.status_code >= 400:
+                    raise RuntimeError(f"HTTP {r.status_code}")
+                return r.content
+            except Exception as e:
+                last = e
+                time.sleep(4 * (i + 1))
         raise last
 
     try:
-        maya, files = fresh()
+        maya = fresh()
     except Exception as e:
-        # כשל בפתיחת הסשן הראשון פירושו שמאיה חוסמת מהכתובת הזו. הודעה
-        # ברורה עדיפה על traceback שנראה כמו באג בקוד.
         print(f"::error::לא ניתן לפתוח סשן מול מאיה: {type(e).__name__}: {e}",
               file=sys.stderr)
         return 1
+
     found, scanned, failed = [], 0, 0
     bad_days: list[str] = []
     ok_through = None
@@ -242,10 +254,10 @@ def main() -> int:
     day = start
     while day <= today:
         # רענון יזום לפני שהחסימה מגיעה, במקום להתאושש ממנה
-        if since_refresh >= 8:
-            time.sleep(3)
+        if since_refresh >= 10:
+            time.sleep(4)
             try:
-                maya, files = fresh()
+                maya = fresh()
             except Exception:
                 pass
             since_refresh = 0
@@ -264,7 +276,7 @@ def main() -> int:
                 print(f"  {day}: {type(e).__name__}, retry in {wait}s", file=sys.stderr)
                 time.sleep(wait)
                 try:
-                    maya, files = fresh()
+                    maya = fresh()
                 except Exception:
                     pass
                 since_refresh = 0
@@ -283,20 +295,9 @@ def main() -> int:
             if not att:
                 continue
             scanned += 1
-            rows = None
-            for attempt in range(2):
-                try:
-                    r = files.get(FILES + att["url"], timeout=30,
-                                  headers={"Referer": "https://maya.tase.co.il/"})
-                    rows = cell_text(r.content.decode("cp1255", "replace"))
-                    break
-                except Exception:
-                    time.sleep(3)
-                    try:
-                        _, files = fresh()
-                    except Exception:
-                        pass
-            if rows is None:
+            try:
+                rows = cell_text(fetch_file(maya, att["url"]).decode("cp1255", "replace"))
+            except Exception:
                 failed += 1
                 continue
             co = (it.get("companies") or [{}])[0]
@@ -304,7 +305,6 @@ def main() -> int:
                                "company": co.get("name"), "company_id": co.get("companyId")})
             if rec:
                 found.append(rec)
-            time.sleep(0.15)
 
         if not bad_days:
             ok_through = day
