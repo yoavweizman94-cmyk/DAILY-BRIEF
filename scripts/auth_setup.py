@@ -62,6 +62,17 @@ def main():
               "יש להוסיף לו 'Account · Workers KV Storage · Edit' בדשבורד.")
         return 1
 
+    print("\n=== משתני הסביבה בפרויקט ===")
+    _, pbody = call(f"/accounts/{ACC}/pages/projects/{PROJECT}")
+    pcfg = (pbody.get("result") or {}).get("deployment_configs", {}).get("production", {}) or {}
+    pev = pcfg.get("env_vars") or {}
+    pkv = pcfg.get("kv_namespaces") or {}
+    for k in sorted(pev):
+        v = pev[k] or {}
+        has = v.get("value") not in (None, "")
+        print(f"  {k:20s} type={str(v.get('type')):12s} ערך={'קיים' if has else 'מוסתר או ריק'}")
+    print(f"  קישורי KV: {', '.join(pkv) or 'אין'}")
+
     if PROBE:
         print("\nPROBE=true — ההרשאות מספיקות, לא נוצר דבר. "
               "להרצה אמיתית: probe_only=false")
