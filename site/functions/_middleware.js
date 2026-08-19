@@ -1,28 +1,44 @@
-// ניתוב לפי שם המארח.
+// ניתוב לפי שם המארח, ושער הסשן של האפליקציה.
 //
 // אותו פרויקט Pages מגיש שלושה דברים שונים, והפרדה ביניהם היא מה שמאפשר
 // לעמוד הנחיתה להיות ציבורי בעוד התוכן מוגן:
 //
-//   tlvtaseview.com       → עמוד הנחיתה. ציבורי. Access אינו חוסם אותו.
-//   app.tlvtaseview.com   → הדשבורד והחיפושים. מאחורי Cloudflare Access.
+//   tlvtaseview.com       → עמוד הנחיתה. ציבורי.
+//   app.tlvtaseview.com   → הדשבורד והחיפושים. דורש סשן מחובר.
 //   *.pages.dev           → מוסט, כדי שלא ישמש כניסה עוקפת לתוכן.
 //
-// ההפרדה חייבת להיות כאן ולא רק ב-Access: בלעדיה, ברגע שהאפקס משוחרר
-// מהגנה הוא היה מגיש את הדשבורד עצמו לכל אחד.
+// ההגנה עברה מ-Cloudflare Access לאימות עצמי עם שם משתמש וסיסמה, כי
+// Access יודע לזהות רק מול ספק זהות או בקוד חד-פעמי — ולא בסיסמה.
+//
+// **השער נכשל סגור.** בהיעדר SESSION_SECRET או מרחב המשתמשים, או בכל
+// חריגה בדרך, התשובה היא הפניה לדף הכניסה ולא מעבר הלאה. תקלת תצורה
+// שמפילה את השער פתוח היא בדיוק הכשל שאסור שיקרה כאן.
+import { readCookie, readSession, COOKIE } from "../lib/auth.js";
+
 const APEX = "tlvtaseview.com";
 const APP = "app.tlvtaseview.com";
 
 // הנתיבים שמותר להגיש באפקס: העמוד עצמו, הנכסים שהוא צריך, וה-API
-// של בקשת הגישה. כל השאר שייך לאפליקציה.
+// של ההרשמה. כל השאר שייך לאפליקציה.
 //
 // `/landing` ללא הסיומת חייב להיכלל: Pages מבצע הפניית 308 אוטומטית
 // מ-`/landing.html` ל-`/landing`, וברשימה שכללה רק את הסיומת ההפניה הזו
 // נפלה מחוץ לרשימה והוסטה לאפליקציה המוגנת — כלומר עמוד הנחיתה הציבורי
 // שלח את המבקר למסך התחברות.
-const PUBLIC = /^\/(landing(\.html)?)?$|^\/(style\.css|favicon\.ico|robots\.txt)$|^\/api\//;
+const PUBLIC_APEX = /^\/(landing(\.html)?)?$|^\/(style\.css|favicon\.ico|robots\.txt)$|^\/api\//;
+
+// מה שמותר להגיש באפליקציה בלי סשן: דף הכניסה, ה-API (שמטפל בהרשאות
+// בעצמו), והנכסים שדף הכניסה צריך כדי להיראות.
+const PUBLIC_APP = /^\/(login(\.html)?)$|^\/(style\.css|favicon\.ico|robots\.txt)$|^\/api\//;
+
+function toLogin(url) {
+  const next = url.pathname + url.search;
+  const q = next && next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
+  return Response.redirect(`https://${APP}/login${q}`, 302);
+}
 
 export async function onRequest(context) {
-  const { request, next } = context;
+  const { request, env, next } = context;
   const url = new URL(request.url);
   const host = url.hostname;
 
@@ -31,8 +47,7 @@ export async function onRequest(context) {
   }
 
   if (host === APEX || host === `www.${APEX}`) {
-    if (!PUBLIC.test(url.pathname)) {
-      // תוכן האפליקציה אינו מוגש כאן — מפנים לכתובת המוגנת
+    if (!PUBLIC_APEX.test(url.pathname)) {
       return Response.redirect(`https://${APP}${url.pathname}${url.search}`, 302);
     }
     if (url.pathname === "/") {
@@ -43,8 +58,27 @@ export async function onRequest(context) {
     return next();
   }
 
-  if (host === APP && url.pathname === "/landing.html") {
-    return Response.redirect(`https://${APEX}/`, 302);
+  if (host === APP) {
+    if (url.pathname === "/landing.html" || url.pathname === "/landing") {
+      return Response.redirect(`https://${APEX}/`, 302);
+    }
+    if (PUBLIC_APP.test(url.pathname)) {
+      if (url.pathname === "/login.html") {
+        url.pathname = "/login";
+        return next(new Request(url.toString(), request));
+      }
+      return next();
+    }
+    try {
+      if (!env.SESSION_SECRET) return toLogin(url);
+      const s = await readSession(readCookie(request, COOKIE), env.SESSION_SECRET);
+      if (!s) return toLogin(url);
+    } catch (e) {
+      console.log("session gate error", String(e));
+      return toLogin(url);
+    }
+    return next();
   }
+
   return next();
 }

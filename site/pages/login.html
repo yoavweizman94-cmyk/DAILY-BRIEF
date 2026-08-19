@@ -1,0 +1,53 @@
+<section class="auth">
+  <h1>כניסה למנויים</h1>
+  <p class="auth-sub">הגישה מיועדת למנויים מאושרים. אם עדיין אין לך חשבון,
+  אפשר <a href="https://tlvtaseview.com/#request">לבקש גישה</a>.</p>
+
+  <form id="lf" autocomplete="on">
+    <label>כתובת מייל
+      <input type="email" id="le" required autocomplete="username"
+             inputmode="email" placeholder="name@company.com"></label>
+    <label>סיסמה
+      <input type="password" id="lp" required autocomplete="current-password"></label>
+    <button type="submit" id="lb">כניסה</button>
+  </form>
+
+  <div id="lm" class="msg" role="status" aria-live="polite"></div>
+
+  <p class="auth-note">שכחת סיסמה? כתוב לי ואאפס אותה ידנית —
+  <a href="mailto:yoavweizman94@gmail.com?subject=איפוס%20סיסמה%20TLV%20TASE%20View">שליחת בקשה</a>.</p>
+</section>
+
+<script>
+(function () {
+  "use strict";
+  var f = document.getElementById("lf"), msg = document.getElementById("lm"),
+      btn = document.getElementById("lb");
+
+  function say(t, c) { msg.className = "msg " + (c || ""); msg.textContent = t; }
+
+  // היעד נלקח מפרמטר next, אבל **רק אם הוא נתיב יחסי** — קבלת כתובת
+  // מלאה כאן הופכת את דף הכניסה למפנה פתוח, שמשמש להטעיה בפישינג.
+  function target() {
+    var p = new URLSearchParams(location.search).get("next") || "/";
+    return (p.charAt(0) === "/" && p.charAt(1) !== "/") ? p : "/";
+  }
+
+  f.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var body = { email: document.getElementById("le").value.trim(),
+                 password: document.getElementById("lp").value };
+    if (!body.email || !body.password) { say("יש למלא מייל וסיסמה.", "err"); return; }
+    btn.disabled = true; say("בודק…", "wait");
+    fetch("/api/login", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error((res.d && res.d.error) || "הכניסה נכשלה");
+        say("נכנס…", "ok");
+        location.href = target();
+      })
+      .catch(function (err) { btn.disabled = false; say(err.message, "err"); });
+  });
+})();
+</script>

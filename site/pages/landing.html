@@ -56,8 +56,9 @@
 
 <section class="request" id="request">
   <h2>בקשת גישה</h2>
-  <p class="lead">הגישה אישית ומאושרת ידנית. אחרי אישור נכנסים בקוד חד-פעמי
-  שנשלח לכתובת שרשמת — בלי סיסמה לנהל ובלי משתמש משותף.</p>
+  <p class="lead">בחר סיסמה עכשיו. החשבון נוצר <strong>מושבת</strong> ואינו
+  מאפשר כניסה עד שאאשר את הבקשה ידנית — תקבל מייל ברגע שהוא יופעל.
+  הגישה אישית; אין משתמש משותף.</p>
 
   <form class="srch" id="req">
     <div class="row">
@@ -75,6 +76,14 @@
     <div class="row">
       <label class="grow">מה מעניין אותך לעקוב
         <textarea id="rwhy" rows="3" maxlength="500"></textarea></label>
+    </div>
+    <div class="row">
+      <label class="grow">סיסמה
+        <input type="password" id="rpw" required minlength="10" maxlength="200"
+               autocomplete="new-password"></label>
+      <label class="grow">אימות סיסמה
+        <input type="password" id="rpw2" required minlength="10" maxlength="200"
+               autocomplete="new-password"></label>
     </div>
     <div class="row">
       <button type="submit" id="rsend">שלח בקשה</button>
@@ -100,29 +109,36 @@ TLV TASE View מספק מידע, נתונים וניתוח השפעה על בס�
   function say(t, c) { msg.className = "msg " + (c || ""); msg.textContent = t; }
   f.addEventListener("submit", function (e) {
     e.preventDefault();
+    var pw = document.getElementById("rpw").value,
+        pw2 = document.getElementById("rpw2").value;
     var body = {
       name: document.getElementById("rname").value.trim(),
       email: document.getElementById("remail").value.trim(),
       org: document.getElementById("rorg").value.trim(),
-      why: document.getElementById("rwhy").value.trim()
+      why: document.getElementById("rwhy").value.trim(),
+      password: pw
     };
     if (!body.name || !body.email) { say("שם ומייל הם שדות חובה.", "err"); return; }
+    if (pw.length < 10) { say("הסיסמה חייבת להיות באורך 10 תווים לפחות.", "err"); return; }
+    if (pw !== pw2) { say("שתי הסיסמאות אינן זהות.", "err"); return; }
     document.getElementById("rsend").disabled = true;
     say("שולח…", "wait");
-    fetch("/api/request-access", {
+    fetch("/api/register", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (res) {
         if (!res.ok) throw new Error(res.d && res.d.error || "שגיאה");
         f.style.display = "none";
-        say("הבקשה נשלחה. תקבל מייל כשהיא תיבחן.", "ok");
+        say("הבקשה נשלחה והחשבון נוצר מושבת. תקבל מייל כשהוא יופעל.", "ok");
       })
       .catch(function (err) {
         // נפילה לאחור לתוכנת המייל של המבקר. בלי זה, תקלה בצד השרת או
         // הגדרה חסרה משאירות אותו בלי שום דרך ליצור קשר — והוא פשוט הולך.
         document.getElementById("rsend").disabled = false;
         var subject = encodeURIComponent("בקשת גישה ל-TLV TASE View");
+        // הסיסמה **אינה** נכנסת לנפילה לאחור: mailto פותח הודעה בטקסט
+        // גלוי שעוברת דרך שרתי דואר. במקרה כזה אקבע סיסמה זמנית ידנית.
         var lines = ["שם: " + body.name, "מייל: " + body.email,
                      "גוף: " + (body.org || "—"), "", body.why || ""];
         var mailto = "mailto:" + OWNER + "?subject=" + subject +

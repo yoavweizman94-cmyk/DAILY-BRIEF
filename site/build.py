@@ -94,6 +94,35 @@ LANDING = """<!DOCTYPE html>
 """
 
 
+AUTH = """<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<title>{title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700&family=Frank+Ruhl+Libre:wght@500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="authpage">
+<header>
+  <a class="brand" href="https://tlvtaseview.com/">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
+</header>
+<main>
+{body}
+</main>
+<footer>
+  <b>{site_title}</b>
+  <span>אין באמור ייעוץ השקעות, שיווק השקעות או המלצה לפעולה בניירות ערך.</span>
+</footer>
+</body>
+</html>
+"""
+
+
 def landing_facts() -> str:
     """מספרי היקף מהנתונים בפועל.
 
@@ -773,6 +802,13 @@ def main() -> int:
                            desc="שלוש סקירות ביום על הבורסה בתל אביב, ניטור דיווחי "
                                 "מאיה, חיפוש דוחות כספיים ועסקאות נדל\"ן.",
                            site_title=site_title, body=body),
+            encoding="utf-8")
+
+    frag = PAGES / "login.html"
+    if frag.exists():
+        (OUT / "login.html").write_text(
+            AUTH.format(title=f"כניסה · {site_title}", site_title=site_title,
+                        body=frag.read_text(encoding="utf-8")),
             encoding="utf-8")
 
     for name, title in (("deals", "חיפוש עסקאות נדל\"ן"),

@@ -32,24 +32,31 @@ jobs:
 
           echo "=== 1. ולידציה של קלט ==="
           : > r1.json
-          code=$(curl -s -o r1.json -w '%{http_code}' --max-time 25 -X POST "$B/api/request-access" \
+          code=$(curl -s -o r1.json -w '%{http_code}' --max-time 25 -X POST "$B/api/register" \
                  -H 'content-type: application/json' \
-                 --data '{"name":"בדיקה","email":"not-an-email"}' || true)
+                 --data '{"name":"בדיקה","email":"not-an-email","password":"a-long-password"}' || true)
           note "מייל פסול → $code   $(cat r1.json)"
           if [ "$code" != "400" ]; then bad "מייל פסול החזיר $code במקום 400"; fi
 
           echo "=== 2. בקשה תקינה (שולח מייל) ==="
           : > r2.json
-          code=$(curl -s -o r2.json -w '%{http_code}' --max-time 30 -X POST "$B/api/request-access" \
+          code=$(curl -s -o r2.json -w '%{http_code}' --max-time 30 -X POST "$B/api/register" \
                  -H 'content-type: application/json' \
-                 --data '{"name":"בדיקה אוטומטית — אין לאשר","email":"access-check@tlvtaseview.com"}' || true)
+                 --data '{"name":"בדיקה אוטומטית — אין לאשר","email":"access-check@tlvtaseview.com","password":"check-only-not-a-real-account"}' || true)
           note "בקשה תקינה → $code   $(cat r2.json)"
           case "$code" in
             200) note "המייל נשלח ✓" ;;
-            503) bad "השירות אינו מוגדר במלואו — חסר RESEND_API_KEY / OWNER_EMAIL / APPROVAL_SECRET" ;;
+            503) bad "השירות אינו מוגדר במלואו — חסר RESEND_API_KEY / OWNER_EMAIL / APPROVAL_SECRET / USERS" ;;
+            409) note "החשבון כבר קיים — הזרימה תקינה ✓" ;;
             502) bad "Resend דחה את השליחה — מפתח פסול, או שהדומיין אינו מאומת ב-Resend" ;;
             *)   bad "בקשה תקינה החזירה $code" ;;
           esac
+
+          echo "=== 2.5 סיסמה קצרה נדחית ==="
+          : > r25.json
+          code=$(curl -s -o r25.json -w '%{http_code}' --max-time 25 -X POST "$B/api/register" -H 'content-type: application/json' --data '{"name":"בדיקה","email":"short-pw@tlvtaseview.com","password":"short"}' || true)
+          note "סיסמה קצרה → $code   $(cat r25.json)"
+          if [ "$code" = "400" ]; then note "נדחתה ✓"; else bad "סיסמה בת 5 תווים התקבלה ($code)"; fi
 
           echo "=== 3. קישור אישור מזויף חייב להידחות ==="
           : > r3.json

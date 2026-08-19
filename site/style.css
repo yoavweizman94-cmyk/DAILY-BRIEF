@@ -705,6 +705,58 @@ nav.toc a {
 nav.toc a:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 main h2[id] { scroll-margin-top: 4rem; }
 
+/* ---------- דף הכניסה ---------- */
+
+/* עמוד בעל מטרה אחת. אין ניווט, אין תוכן נלווה, והכרטיס ממורכז אנכית
+   כדי שהטופס יהיה הדבר היחיד שהעין נופלת עליו. */
+body.authpage main {
+  min-height: calc(100vh - 12rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-block: 2rem 4rem;
+}
+.auth {
+  width: 100%;
+  max-width: 24rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding: 1.6rem 1.6rem 1.4rem;
+}
+.auth h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
+.auth-sub { font-size: 0.88rem; color: var(--muted); margin: 0 0 1.3rem; }
+.auth form { display: flex; flex-direction: column; gap: 0.85rem; }
+.auth label {
+  display: flex; flex-direction: column; gap: 0.28rem;
+  font-size: 0.78rem; color: var(--muted); font-weight: 600;
+}
+.auth input {
+  font: inherit; font-size: 0.98rem; padding: 0.5rem 0.65rem;
+  color: var(--fg); background: var(--bg);
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+}
+.auth input:focus {
+  outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent);
+}
+.auth button {
+  font: inherit; font-size: 0.98rem; font-weight: 700; cursor: pointer;
+  margin-top: 0.35rem; padding: 0.55rem 1.4rem;
+  border-radius: var(--radius); border: 1px solid var(--accent);
+  background: var(--accent); color: var(--on-accent);
+}
+.auth button:hover { background: var(--accent-2); border-color: var(--accent-2); }
+.auth button:disabled { opacity: 0.55; cursor: default; }
+.auth .msg { margin: 0.9rem 0 0; font-size: 0.86rem; }
+.auth-note {
+  margin: 1.2rem 0 0; padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem; color: var(--faint);
+}
+.msg.err { color: var(--down); }
+.msg.ok { color: var(--up); }
+
 /* ---- שכבת גימור ---- */
 
 /* מחרוזות ארוכות שאינן נשברות. תוכן הברייף מכיל קישורי הרשמה לשיחות
