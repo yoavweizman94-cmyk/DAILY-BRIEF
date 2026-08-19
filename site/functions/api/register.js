@@ -2,7 +2,7 @@
 // הקישור החתום שנשלח ליואב, כך שמילוי הטופס לעולם אינו מעניק גישה.
 import {
   hashPassword, putUser, getUser, rateLimit, json,
-  passwordProblem, normEmail, validEmail,
+  passwordProblem, normEmail, validEmail, b64url,
 } from "../_lib/auth.js";
 
 const RESEND = "https://api.resend.com/emails";
@@ -62,9 +62,11 @@ export async function onRequestPost(context) {
     lastLogin: null,
   });
 
+  // נתיב ולא מחרוזת שאילתה: סימן שוויון בקישור נבלע בקידוד המייל
+  // ושובר את הטוקן. הפירוט ב-api/approve/[token].js.
   const token = await sign(email, env.APPROVAL_SECRET);
   const base = new URL(request.url).origin;
-  const approve = `${base}/api/approve?email=${encodeURIComponent(email)}&t=${token}`;
+  const approve = `${base}/api/approve/${b64url(new TextEncoder().encode(email))}.${token}`;
 
   const html = `<div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.7">
     <h2 style="margin:0 0 12px">בקשת גישה חדשה</h2>

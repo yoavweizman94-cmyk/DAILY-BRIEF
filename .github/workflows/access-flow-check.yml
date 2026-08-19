@@ -80,6 +80,16 @@ jobs:
             *)   bad "בקשה תקינה החזירה $code" ;;
           esac
 
+          echo "=== 2.2 קישור האישור עמיד לקידוד מייל ==="
+          # ‎"=" בקישור נבלע בקידוד quoted-printable יחד עם שני התווים
+          # שאחריו. כיוון שהטוקן הקסדצימלי, זה קורה תמיד. הקישור חייב
+          # להיות נתיב נקי.
+          if grep -q 'api/approve?' land.html; then
+            bad "עמוד הנחיתה מפנה לקישור אישור עם מחרוזת שאילתה"
+          else
+            note "אין מחרוזת שאילתה בקישור האישור ✓"
+          fi
+
           echo "=== 2.5 סיסמה קצרה נדחית ==="
           : > r25.json
           code=$(curl -s -o r25.json -w '%{http_code}' --max-time 25 -X POST "$B/api/register" -H 'content-type: application/json' --data '{"name":"בדיקה","email":"short-pw@tlvtaseview.com","password":"short"}' || true)
@@ -89,7 +99,7 @@ jobs:
           echo "=== 3. קישור אישור מזויף חייב להידחות ==="
           : > r3.json
           code=$(curl -s -o r3.json -w '%{http_code}' --max-time 25 \
-                 "$B/api/approve?email=attacker%40evil.com&t=deadbeefdeadbeef" || true)
+                 "$B/api/approve/YXR0YWNrZXJAZXZpbC5jb20.deadbeefdeadbeef" || true)
           note "חתימה מזויפת → $code   $(head -c 200 r3.json)"
           if [ "$code" = "200" ]; then
             bad "קישור אישור מזויף התקבל — כשל אבטחה חמור"
@@ -100,7 +110,7 @@ jobs:
           echo "=== 4. אישור בלי חתימה כלל ==="
           : > r4.json
           code=$(curl -s -o r4.json -w '%{http_code}' --max-time 25 \
-                 "$B/api/approve?email=attacker%40evil.com" || true)
+                 "$B/api/approve/YXR0YWNrZXJAZXZpbC5jb20" || true)
           note "בלי חתימה → $code   $(head -c 200 r4.json)"
           if [ "$code" = "200" ]; then bad "אישור ללא חתימה התקבל"; fi
 
@@ -108,7 +118,7 @@ jobs:
           # השומר ב-approve.js יושב לפני אימות החתימה, ולכן די בטוקן כלשהו
           # כדי לאמת אותו — הסוד אינו נדרש כאן.
           : > r5.json
-          code=$(curl -s -o r5.json -w '%{http_code}' --max-time 25                  "$B/api/approve?email=access-check%40tlvtaseview.com&t=whatever" || true)
+          code=$(curl -s -o r5.json -w '%{http_code}' --max-time 25                  "$B/api/approve/YWNjZXNzLWNoZWNrQHRsdnRhc2V2aWV3LmNvbQ.whatever" || true)
           title=$(grep -o '<title>[^<]*' r5.json | head -1 | cut -c8-40)
           note "כתובת בדיקה → $code   כותרת: $title"
           if echo "$title" | grep -q "כתובת בדיקה"; then

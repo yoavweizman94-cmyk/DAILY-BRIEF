@@ -1,6 +1,6 @@
 // הפעלת חשבון. הקישור חתום ב-HMAC, ולכן אי אפשר להרכיב אותו לכתובת
 // שלא נרשמה — מילוי טופס ההרשמה לבדו לעולם אינו מעניק גישה.
-import { getUser, putUser, timingSafeEqual, normEmail } from "../_lib/auth.js";
+import { getUser, putUser, timingSafeEqual, normEmail, unb64url } from "../../_lib/auth.js";
 
 const RESEND = "https://api.resend.com/emails";
 
@@ -25,11 +25,24 @@ async function sign(email, secret) {
   return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// הקישור הוא נתיב ולא מחרוזת שאילתה, ואין בו סימן שוויון כלל.
+//
+// הסיבה נמדדה: בגרסה הקודמת הקישור היה ‎?email=…&t=<hex>, וקידוד המייל
+// (quoted-printable) פירש את ‎"=" של ‎t= יחד עם שני התווים שאחריו כרצף
+// בריחה. כיוון שהטוקן הקסדצימלי, שני התווים האלה תמיד מהווים רצף תקף —
+// כלומר הקישור נשבר בכל פעם. נמדד: טוקן שהתחיל ב-1a הגיע כ-62 תווים,
+// ו-‎"=1a" הפך לתו 0x1A. בלי סימן שוויון אין מה לפרש.
 export async function onRequestGet(context) {
-  const { request, env } = context;
-  const url = new URL(request.url);
-  const email = normEmail(url.searchParams.get("email"));
-  const token = url.searchParams.get("t") || "";
+  const { request, env, params } = context;
+  const raw = String(params.token || "");
+  const dot = raw.lastIndexOf(".");
+  let email = "", token = "";
+  if (dot > 0) {
+    try {
+      email = normEmail(new TextDecoder().decode(unb64url(raw.slice(0, dot))));
+    } catch { email = ""; }
+    token = raw.slice(dot + 1);
+  }
 
   if (!email || !token) return page("קישור חסר", "חסרים פרטים בקישור.", false);
 
