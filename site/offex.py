@@ -51,7 +51,7 @@ def mark_pairs(rows: list[dict]) -> None:
 
 
 def stats(rows: list[dict], year: str) -> dict:
-    yr = [r for r in rows if (r.get("date") or "")[:4] == year]
+    yr = [r for r in rows if eff_date(r)[:4] == year]
     counted = [r for r in yr if r.get("counted", True)]
     by_company: dict[str, dict] = {}
     for r in counted:
@@ -63,7 +63,7 @@ def stats(rows: list[dict], year: str) -> dict:
         "n": len(counted),
         "vol": sum(r.get("value_ils") or 0 for r in counted),
         "companies": by_company,
-        "days": len({r.get("date") for r in yr if r.get("date")}),
+        "days": len({eff_date(r) for r in yr if eff_date(r)}),
     }
 
 
@@ -75,8 +75,8 @@ def cumulative(rows: list[dict], year: str) -> dict[int, float]:
     """
     acc: dict[str, float] = {}
     out: dict[int, float] = {}
-    for r in sorted(rows, key=lambda x: (x.get("date") or "", x.get("report_id") or 0)):
-        if (r.get("date") or "")[:4] != year:
+    for r in sorted(rows, key=lambda x: (eff_date(x), x.get("report_id") or 0)):
+        if eff_date(r)[:4] != year:
             continue
         c = r.get("company") or "—"
         if r.get("counted", True):
@@ -85,14 +85,39 @@ def cumulative(rows: list[dict], year: str) -> dict[int, float]:
     return out
 
 
+PLACEHOLDER = {"-", "--", "---", "–", "—", ".", "_________", "אין",
+               "לא רלוונטי", "לא ידוע", "לא רלוונטית", "ללא"}
+
+
+def clean(v):
+    """ערך שהמדווח מילא רק כדי לא להשאיר שדה ריק אינו מידע."""
+    v = (v or "").strip()
+    return "" if v in PLACEHOLDER else v
+
+
 def money(v) -> str:
     if not v:
         return "—"
+    if v >= 1_000_000_000:
+        return f"{v / 1_000_000_000:,.2f} מיליארד ₪"
     if v >= 1_000_000:
-        return f"{v / 1_000_000:,.2f} מ׳ ₪"
+        return f"{v / 1_000_000:,.1f} מ׳ ₪"
     if v >= 1000:
         return f"{v / 1000:,.0f} א׳ ₪"
     return f"{v:,.0f} ₪"
+
+
+def rate(v) -> str:
+    """שער באגורות. 1005.0 הוא רעש; 1005 הוא מספר."""
+    if v in (None, ""):
+        return "—"
+    return f"{v:,.0f}" if float(v) == int(float(v)) else f"{v:,.2f}"
+
+
+def eff_date(r: dict) -> str:
+    """תאריך העסקה, ובהיעדרו מועד הפרסום — כדי שרשומה בלי תאריך לא
+    תיפול מחוץ לסטטיסטיקה השנתית בשקט."""
+    return r.get("date") or (r.get("published") or "")[:10]
 
 
 def pct(v, digits: int = 3) -> str:
@@ -150,15 +175,15 @@ def page(rows: list[dict], year: str) -> str:
     day = None
     out.append('<ul class="offex">')
     for r in rows:
-        d = r.get("date") or (r.get("published") or "")[:10]
+        d = eff_date(r)
         if d != day:
             day = d
             dd = f"{d[8:10]}/{d[5:7]}/{d[:4]}" if len(d) >= 10 else d
             out.append(f'<li class="daysep">{dd}</li>')
         buy = r["direction"] == "buy"
         who = "הקונה" if buy else "המוכר"
-        ctrl = r.get("holder_controller")
-        htype = r.get("holder_type")
+        ctrl = clean(r.get("holder_controller"))
+        htype = clean(r.get("holder_type"))
         dup = "" if r.get("counted", True) else (
             '<span class="dup" title="אותה עסקה דווחה גם מהצד השני של ההעברה; '
             'בסכומים היא נספרת פעם אחת">הצד השני</span>')
@@ -174,7 +199,7 @@ def page(rows: list[dict], year: str) -> str:
             + '</div>'
             f'<div class="tx-nums">'
             f'<span><b>כמות</b><i dir="ltr">{r["quantity"]:,}</i></span>'
-            f'<span><b>שער</b><i dir="ltr">{r.get("price") or "—"} אג׳</i></span>'
+            f'<span><b>שער</b><i dir="ltr">{rate(r.get("price"))} אג׳</i></span>'
             f'<span><b>היקף</b><i dir="ltr">{money(r.get("value_ils"))}</i></span>'
             f'<span class="hi"><b>מההון</b><i dir="ltr">{pct(r.get("pct_of_class"))}</i></span>'
             f'<span><b>מצטבר בחברה</b><i dir="ltr">'

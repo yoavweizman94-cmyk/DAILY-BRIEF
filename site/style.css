@@ -324,6 +324,7 @@ ul.sources li.bad span { color: var(--down); font-weight: 700; }
   white-space: nowrap;
 }
 .tile .val {
+  white-space: nowrap;
   font-family: var(--mono);
   font-size: 1.06rem;
   font-weight: 600;

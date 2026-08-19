@@ -86,6 +86,14 @@ jobs:
             bad "style.css אינו מכיל --on-accent — נכס ישן מוגש (קוד $ccode)"
           fi
 
+          # --- העמודים המוגנים קיימים ומוגשים דרך השער ---
+          echo "=== עמודי האפליקציה ==="
+          for pg in offex account login; do
+            c=$(curl -sL -o /dev/null --max-time 25 -w '%{http_code}' "$APP/$pg.html" || true)
+            note "$pg → $c"
+            [ "$c" = "200" ] || bad "$APP/$pg.html החזיר $c"
+          done
+
           # --- pages.dev: חייב להפנות לדומיין ולא להגיש בעצמו ---
           echo "=== forest-brief.pages.dev ==="
           rd=$(curl -s -o /dev/null --max-time 25 -w '%{redirect_url}' "https://forest-brief.pages.dev/" || true)
