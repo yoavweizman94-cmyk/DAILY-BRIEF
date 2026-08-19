@@ -23,12 +23,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Probe access flow
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          KV_NAMESPACE_ID: b437bf78b9bc4f358b6d0b4a64e0ad94
         run: |
           fail=0
           bad()  { echo "::error::$*"; fail=1; }
           note() { echo "  $*"; }
           B=https://tlvtaseview.com
+          # הבדיקה יוצרת חשבון ממתין בכל ריצה; בלי הניקוי הם נערמים
+          # ברשימת המשתמשים ומטשטשים מי באמת ביקש גישה.
+          cleanup() {
+            for e in access-check@tlvtaseview.com short-pw@tlvtaseview.com; do
+              ACTION=delete EMAIL="$e" python3 scripts/users.py >/dev/null 2>&1 || true
+            done
+          }
+          trap cleanup EXIT
 
           echo "=== 1. ולידציה של קלט ==="
           : > r1.json
