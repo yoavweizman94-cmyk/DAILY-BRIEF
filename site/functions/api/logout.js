@@ -1,5 +1,5 @@
 // יציאה. מנקה את העוגייה ומחזיר לדף הכניסה.
-import { clearCookie } from "../../lib/auth.js";
+import { clearCookie } from "../_lib/auth.js";
 
 function bye() {
   return new Response(null, {

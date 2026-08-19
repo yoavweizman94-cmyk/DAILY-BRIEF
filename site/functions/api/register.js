@@ -3,7 +3,7 @@
 import {
   hashPassword, putUser, getUser, rateLimit, json,
   passwordProblem, normEmail, validEmail,
-} from "../../lib/auth.js";
+} from "../_lib/auth.js";
 
 const RESEND = "https://api.resend.com/emails";
 

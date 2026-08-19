@@ -3,7 +3,7 @@
 import {
   verifyPassword, getUser, putUser, makeSession, sessionCookie,
   rateLimit, clearRate, json, normEmail,
-} from "../../lib/auth.js";
+} from "../_lib/auth.js";
 
 // הודעה אחת לכל כשל. הפרדה בין "אין משתמש" ל"סיסמה שגויה" מסגירה
 // אילו כתובות רשומות בשירות, וזו רשימת לקוחות.

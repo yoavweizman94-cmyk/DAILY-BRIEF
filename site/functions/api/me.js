@@ -1,5 +1,5 @@
 // מי מחובר. משמש את דף האפליקציה כדי להציג את השם ואת קישור היציאה.
-import { readCookie, readSession, getUser, COOKIE, json } from "../../lib/auth.js";
+import { readCookie, readSession, getUser, COOKIE, json } from "../_lib/auth.js";
 
 export async function onRequestGet(context) {
   const { request, env } = context;

@@ -1,6 +1,6 @@
 // הפעלת חשבון. הקישור חתום ב-HMAC, ולכן אי אפשר להרכיב אותו לכתובת
 // שלא נרשמה — מילוי טופס ההרשמה לבדו לעולם אינו מעניק גישה.
-import { getUser, putUser, timingSafeEqual, normEmail } from "../../lib/auth.js";
+import { getUser, putUser, timingSafeEqual, normEmail } from "../_lib/auth.js";
 
 const RESEND = "https://api.resend.com/emails";
 

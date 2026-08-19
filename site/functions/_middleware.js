@@ -13,7 +13,7 @@
 // **השער נכשל סגור.** בהיעדר SESSION_SECRET או מרחב המשתמשים, או בכל
 // חריגה בדרך, התשובה היא הפניה לדף הכניסה ולא מעבר הלאה. תקלת תצורה
 // שמפילה את השער פתוח היא בדיוק הכשל שאסור שיקרה כאן.
-import { readCookie, readSession, COOKIE } from "../lib/auth.js";
+import { readCookie, readSession, COOKIE } from "./_lib/auth.js";
 
 const APEX = "tlvtaseview.com";
 const APP = "app.tlvtaseview.com";
