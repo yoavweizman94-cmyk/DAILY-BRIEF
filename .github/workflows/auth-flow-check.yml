@@ -1,0 +1,110 @@
+name: Auth Flow Check
+
+# אימות זרימת ההתחברות מקצה לקצה, מול האתר החי ומחוץ לרשת הארגונית.
+#
+# הבדיקה זורעת חשבון בדיקה ב-KV, מתחברת אליו באמת, מוודאת שהסשן מתקבל
+# ושחשבון מושבת נדחה — ואז **מוחקת אותו ומאמתת שנמחק**. חשבון בדיקה
+# ששרד על מוצר בתשלום הוא בדיוק סוג התקלה שהבדיקה נועדה למנוע.
+#
+# הסיסמה נוצרת בתוך הריצה ואינה נשמרת בשום מקום.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  KV_NAMESPACE_ID: b437bf78b9bc4f358b6d0b4a64e0ad94
+  TEST_EMAIL: flow-test@tlvtaseview.com
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run flow
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -u
+          fail=0
+          bad()  { echo "::error::$*"; fail=1; }
+          note() { echo "  $*"; }
+          PW="$(python3 -c 'import secrets;print(secrets.token_urlsafe(24))')"
+          B=https://tlvtaseview.com
+          APP=https://app.tlvtaseview.com
+
+          cleanup() {
+            ACTION=delete EMAIL="$TEST_EMAIL" python3 scripts/users.py >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          echo "=== 1. זריעת חשבון פעיל ==="
+          ACTION=seed EMAIL="$TEST_EMAIL" PASSWORD="$PW" python3 scripts/users.py
+
+          echo "=== 2. כניסה עם הסיסמה הנכונה ==="
+          : > h.txt
+          code=$(curl -s -o r.json -D h.txt -w '%{http_code}' --max-time 25 -X POST "$B/api/login" \
+                 -H 'content-type: application/json' \
+                 --data "{\"email\":\"$TEST_EMAIL\",\"password\":\"$PW\"}" || true)
+          note "כניסה → $code   $(cat r.json)"
+          if [ "$code" = "200" ]; then note "התקבל 200 ✓"; else bad "כניסה תקינה החזירה $code"; fi
+          if grep -qi '^set-cookie: *tlv_session=' h.txt; then
+            note "עוגיית סשן הונפקה ✓"
+          else
+            bad "לא הונפקה עוגיית סשן"
+          fi
+          for attr in HttpOnly Secure SameSite=Lax; do
+            if grep -qi "set-cookie:.*$attr" h.txt; then note "  $attr ✓"; else bad "לעוגייה חסר $attr"; fi
+          done
+          COOKIE="$(grep -i '^set-cookie:' h.txt | head -1 | sed 's/^[Ss]et-[Cc]ookie: *//' | cut -d';' -f1)"
+
+          echo "=== 3. הסשן מזוהה ==="
+          me=$(curl -s --max-time 25 -H "Cookie: $COOKIE" "$B/api/me" || true)
+          note "me → $me"
+          echo "$me" | grep -q '"authenticated":true' || bad "api/me לא זיהה את הסשן"
+
+          echo "=== 4. סיסמה שגויה נדחית ==="
+          code=$(curl -s -o r2.json -w '%{http_code}' --max-time 25 -X POST "$B/api/login" \
+                 -H 'content-type: application/json' \
+                 --data "{\"email\":\"$TEST_EMAIL\",\"password\":\"$PW-wrong\"}" || true)
+          note "סיסמה שגויה → $code   $(cat r2.json)"
+          if [ "$code" = "401" ]; then note "נדחתה ✓"; else bad "סיסמה שגויה החזירה $code במקום 401"; fi
+
+          echo "=== 5. חשבון מושבת נדחה ==="
+          ACTION=disable EMAIL="$TEST_EMAIL" python3 scripts/users.py
+          code=$(curl -s -o r3.json -w '%{http_code}' --max-time 25 -X POST "$B/api/login" \
+                 -H 'content-type: application/json' \
+                 --data "{\"email\":\"$TEST_EMAIL\",\"password\":\"$PW\"}" || true)
+          note "מושבת → $code   $(cat r3.json)"
+          if [ "$code" = "403" ]; then note "נדחה ✓"; else bad "חשבון מושבת החזיר $code במקום 403"; fi
+
+          echo "=== 6. שער האפליקציה ==="
+          # בלי עוגייה: חייבת להיות הפניה לדף הכניסה (או חסימת Access כל עוד הוא במקומו)
+          eff=$(curl -sL -o a.html --max-time 25 -w '%{url_effective}' "$APP/" || true)
+          acode=$(curl -s -o /dev/null --max-time 25 -w '%{http_code}' "$APP/" || true)
+          note "ללא עוגייה → $acode   יעד: $eff"
+          if echo "$eff" | grep -qE '/login|cloudflareaccess\.com'; then
+            note "נחסם ✓"
+          else
+            bad "האפליקציה הוגשה ללא הזדהות! יעד $eff"
+          fi
+          if grep -q 'class="toc"' a.html 2>/dev/null; then bad "גוף הברייף דלף ללא הזדהות"; fi
+
+          echo "=== 7. ניקוי ==="
+          ACTION=delete EMAIL="$TEST_EMAIL" python3 scripts/users.py
+          if ACTION=show EMAIL="$TEST_EMAIL" python3 scripts/users.py >/dev/null 2>&1; then
+            bad "חשבון הבדיקה עדיין קיים אחרי המחיקה"
+          else
+            note "חשבון הבדיקה נמחק ואומת ✓"
+          fi
+
+          echo
+          if [ "$fail" = "0" ]; then echo "זרימת ההתחברות תקינה."; else echo "יש כשלים."; fi
+          exit "$fail"
