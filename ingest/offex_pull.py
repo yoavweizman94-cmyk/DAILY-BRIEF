@@ -231,8 +231,8 @@ def main() -> int:
     except Exception as e:
         # כשל בפתיחת הסשן הראשון פירושו שמאיה חוסמת מהכתובת הזו. הודעה
         # ברורה עדיפה על traceback שנראה כמו באג בקוד.
-        print(f"::error::לא ניתן לפתוח סשן מול מאיה ({type(e).__name__}). "
-              f"סביר שהכתובת מוגבלת — יש להריץ מ-workflow.", file=sys.stderr)
+        print(f"::error::לא ניתן לפתוח סשן מול מאיה: {type(e).__name__}: {e}",
+              file=sys.stderr)
         return 1
     found, scanned, failed = [], 0, 0
     bad_days: list[str] = []
