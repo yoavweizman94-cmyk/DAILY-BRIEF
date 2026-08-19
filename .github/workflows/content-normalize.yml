@@ -1,0 +1,50 @@
+name: Content Normalize
+
+# נורמליזציה של ארטיפקטים שדלפו מתבנית ההוראות אל הברייפים ההיסטוריים.
+#
+# run_daily.sh מריץ את אותו סקריפט על כל ברייף חדש, כך שהצנרת מייצרת
+# תוכן נקי. ה-workflow הזה נועד למקרה שבו מתגלה ארטיפקט חדש בדיעבד
+# ויש לתקן את מה שכבר פורסם — הסקריפט אידמפוטנטי, ולכן הרצה מיותרת
+# אינה מזיקה.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: content-write
+  cancel-in-progress: false
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Normalize
+        run: python scripts/normalize_briefs.py output
+
+      - name: Verify nothing left
+        run: |
+          bad=$(grep -l '^# ברייף FOREST' output/brief_*.md 2>/dev/null | wc -l)
+          note=$(grep -l '^#.*←' output/brief_*.md 2>/dev/null | wc -l)
+          echo "מיתוג ישן: $bad · הערות בכותרות: $note"
+          if [ "$bad" != "0" ] || [ "$note" != "0" ]; then
+            echo "::error::נותרו ארטיפקטים לא מתוקנים"; exit 1
+          fi
+
+      - name: Push content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: |
+          bash scripts/content_repo.sh push "נורמליזציה של כותרות הברייף"
