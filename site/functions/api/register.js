@@ -96,7 +96,7 @@ export async function onRequestPost(context) {
 
   if (!env.RESEND_API_KEY || !env.OWNER_EMAIL) {
     console.log("register: notification skipped, mail not configured");
-    return json({ ok: true, notified: false }, 200);
+    return json({ ok: true, notified: false, mail: "unconfigured" }, 200);
   }
 
   const res = await fetch(RESEND, {
@@ -110,9 +110,13 @@ export async function onRequestPost(context) {
     }),
   });
   if (!res.ok) {
-    console.log("Resend failed", res.status, await res.text());
+    const detail = await res.text();
+    console.log("Resend failed", res.status, detail);
+    // קוד התשובה מוחזר כדי שאפשר יהיה לאבחן מבחוץ: 401 הוא מפתח פסול,
+    // 403 דומיין שאינו מאומת, 422 כתובת שולח שנדחתה. גוף השגיאה עצמו
+    // אינו נחשף — הוא עלול להכיל פרטי חשבון.
     // החשבון כבר נשמר כממתין; רק ההתראה נכשלה, ולכן זו אינה שגיאת לקוח.
-    return json({ ok: true, notified: false }, 200);
+    return json({ ok: true, notified: false, mail: "rejected", mailStatus: res.status }, 200);
   }
   return json({ ok: true, notified: true }, 200);
 }

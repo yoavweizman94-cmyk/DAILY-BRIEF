@@ -46,7 +46,8 @@ jobs:
           note "בקשה תקינה → $code   $(cat r2.json)"
           case "$code" in
             200) if grep -q '"notified":true' r2.json; then note "החשבון נוצר והמייל נשלח ✓";
-                 else bad "החשבון נוצר אבל ההתראה לא נשלחה — RESEND_API_KEY חסר או פסול"; fi ;;
+                 elif grep -q '"mail":"unconfigured"' r2.json; then bad "החשבון נוצר; דואר אינו מוגדר — חסר RESEND_API_KEY או OWNER_EMAIL";
+                 else bad "החשבון נוצר; Resend דחה — $(grep -o '\"mailStatus\":[0-9]*' r2.json). 401=מפתח פסול, 403=דומיין לא מאומת, 422=כתובת שולח"; fi ;;
             503) bad "השירות אינו מוגדר במלואו — חסר RESEND_API_KEY / OWNER_EMAIL / APPROVAL_SECRET / USERS" ;;
             409) note "החשבון כבר קיים — הזרימה תקינה ✓" ;;
             502) bad "Resend דחה את השליחה" ;;
