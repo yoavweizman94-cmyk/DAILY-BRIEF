@@ -49,8 +49,8 @@ export async function onRequestPost(context) {
     <table style="border-collapse:collapse;font-size:15px">
       <tr><td style="padding:4px 12px 4px 0;color:#666">שם</td><td>${esc(name)}</td></tr>
       <tr><td style="padding:4px 12px 4px 0;color:#666">מייל</td><td>${esc(email)}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0;color:#666">גוף</td><td>${esc(org) || "—"}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0;color:#666;vertical-align:top">מעניין אותו</td>
+      <tr><td style="padding:4px 12px 4px 0;color:#666">גוף / תפקיד</td><td>${esc(org) || "—"}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#666;vertical-align:top">מה מעניין אותו</td>
           <td>${esc(why) || "—"}</td></tr>
     </table>
     <p style="margin:20px 0 8px">
@@ -62,6 +62,21 @@ export async function onRequestPost(context) {
     </p>
   </div>`;
 
+  // המרת HTML אוטומטית מדביקה תאי טבלה זה לזה ("שםיואב"), ולכן נשלחת
+  // גרסת טקסט מפורשת. multipart גם נשקל לטובה במסנני ספאם.
+  const text = [
+    "בקשת גישה חדשה",
+    "",
+    `שם: ${name}`,
+    `מייל: ${email}`,
+    `גוף / תפקיד: ${org || "—"}`,
+    `מה מעניין אותו: ${why || "—"}`,
+    "",
+    `אישור: ${approve}`,
+    "",
+    "התעלמות מהמייל הזה משאירה את הבקשה ללא מענה — אין צורך בפעולה כדי לדחות.",
+  ].join("\n");
+
   const res = await fetch(RESEND, {
     method: "POST",
     headers: { "Authorization": `Bearer ${env.RESEND_API_KEY}`,
@@ -72,6 +87,7 @@ export async function onRequestPost(context) {
       reply_to: email,
       subject: `בקשת גישה: ${name}${org ? " · " + org : ""}`,
       html,
+      text,
     }),
   });
 
