@@ -58,6 +58,25 @@ jobs:
           # הוכחה חיובית שהתוכן עצמו לא דלף
           grep -q 'class="toc"' a.html && bad "גוף הברייף הוגש ללא הזדהות — דליפה"
 
+          # --- הנכסים שהוגשו הם באמת האחרונים ---
+          # פריסה יכולה לחזור "success" ועדיין להגיש CSS ישן מהמטמון, וזה
+          # בדיוק סוג הכשל שהבדיקה הזו קיימת בשבילו: העמוד נראה תקין,
+          # הריצה ירוקה, והמבקר מקבל את העיצוב של אתמול.
+          echo "=== נכסים עדכניים ==="
+          if grep -q "Frank+Ruhl+Libre" p.html; then
+            note "גופן הכותרות מקושר ✓"
+          else
+            bad "דף הנחיתה אינו טוען את Frank Ruhl Libre — הוגש HTML ישן"
+          fi
+          : > css.txt
+          ccode=$(curl -sL -o css.txt --max-time 25 -w '%{http_code}' "https://tlvtaseview.com/style.css" || true)
+          note "style.css → $ccode  ($(wc -c < css.txt) בתים)"
+          if [ "$ccode" = "200" ] && grep -q -- "--on-accent" css.txt; then
+            note "גיליון הסגנון עדכני ✓"
+          else
+            bad "style.css אינו מכיל --on-accent — נכס ישן מוגש (קוד $ccode)"
+          fi
+
           # --- pages.dev: חייב להפנות לדומיין ולא להגיש בעצמו ---
           echo "=== forest-brief.pages.dev ==="
           rd=$(curl -s -o /dev/null --max-time 25 -w '%{redirect_url}' "https://forest-brief.pages.dev/" || true)
