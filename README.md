@@ -12,9 +12,12 @@ GitHub Actions — שלוש מהדורות ביום (בוקר 06:45 · נעיל�
        2. claude -p — קורא את הקלט, כותב output/brief_<היום>.md
        3. site/build.py — רינדור ל-site/dist (RTL)
        4. scripts/send_telegram.py — תמצית + קישור
-  └─ commit של data/state.sqlite + output/ חזרה לריפו
-  └─ פריסת site/dist ל-GitHub Pages
+  └─ commit של data/state.sqlite לכאן, ושל output/ לריפו התוכן הפרטי
+  └─ פריסת site/dist ל-Cloudflare Pages (מאחורי Cloudflare Access)
 ```
+
+**שני ריפו.** הקוד כאן; המחקר עצמו ב-`DAILY-BRIEF-content` הפרטי, שנשלף אל
+`output/` בתחילת כל ריצה (`scripts/content_repo.sh`). שניהם פרטיים.
 
 מקור שנכשל אינו עוצר את הצנרת — הסוכן מדווח עליו בסעיף "תקלות מקורות" בברייף.
 
@@ -27,10 +30,21 @@ GitHub Actions — שלוש מהדורות ביום (בוקר 06:45 · נעיל�
 | `ANTHROPIC_API_KEY` | מפתח API של Anthropic | console.anthropic.com → API Keys |
 | `GMAIL_CREDENTIALS` | JSON עם client_id/client_secret/refresh_token | להריץ מקומית `python scripts/gmail_authorize.py` (הוראות בראש הקובץ) ולהעתיק את הפלט |
 | `TRADINGECONOMICS_KEY` | מפתח Trading Economics בפורמט `key:secret` | developer.tradingeconomics.com → Dashboard. **חשבון האורח בוטל** — נדרש מנוי |
-| `TELEGRAM_BOT_TOKEN` | טוקן בוט (אופציונלי) | @BotFather בטלגרם → ‎/newbot |
-| `TELEGRAM_CHAT_ID` | יעד השליחה (אופציונלי) | להוסיף את הבוט לקבוצה/ערוץ ולקרוא את ה-id דרך `getUpdates` |
+| `CLOUDFLARE_API_TOKEN` | פריסה ל-Pages | dash.cloudflare.com → My Profile → API Tokens |
+| `CLOUDFLARE_ACCOUNT_ID` | 32 תווים, בעמוד הבית של ה-Dash מימין | להעתיק משם |
+| `CONTENT_DEPLOY_KEY` | מפתח SSH פרטי לריפו התוכן | `ssh-keygen`; החלק הציבורי → Deploy keys של `DAILY-BRIEF-content` עם הרשאת כתיבה |
+| `TELEGRAM_BOT_TOKEN` | טוקן בוט (אופציונלי, **לא מוגדר כרגע**) | @BotFather בטלגרם → ‎/newbot |
+| `TELEGRAM_CHAT_ID` | יעד השליחה (אופציונלי, **לא מוגדר כרגע**) | להוסיף את הבוט לקבוצה/ערוץ ולקרוא את ה-id דרך `getUpdates` |
 
-2. **GitHub Pages**: Settings → Pages → Source = **GitHub Actions**.
+בלי שני האחרונים `send_telegram.py` מדלג בשקט; שאר הצנרת אינה מושפעת.
+
+**משתני סביבה ב-Cloudflare Pages** (Settings → Environment variables) — אלה
+משרתים את טופס בקשת הגישה ואינם סודות של GitHub: `RESEND_API_KEY`,
+`APPROVAL_SECRET`, `OWNER_EMAIL`, `FROM_EMAIL`, `ACCESS_APP_ID`,
+`CF_ACCOUNT_ID`, `CF_API_TOKEN`.
+
+2. **פריסה**: Cloudflare Pages (פרויקט `forest-brief`), לא GitHub Pages.
+   ה-workflow `cloudflare-deploy` עושה זאת; אין מה להגדיר ב-Settings → Pages.
 3. **Gmail**: ליצור לייבל בשם `ברייף` ולתייג אליו את הניוזלטרים הרלוונטיים
    (אפשר עם פילטרים אוטומטיים).
 4. הרצה ראשונה: Actions → Daily Brief → **Run workflow** (אפשר לבחור מהדורה
