@@ -393,6 +393,46 @@ li.rep.m1 .rep-sum, li.rep.m1 .rep-hl { color: var(--muted); }
 }
 .figs .fig b { font-family: var(--sans); font-weight: 600; color: var(--muted); margin-inline-end: 0.4rem; }
 
+/* הניתוח מסומן ויזואלית מהעובדות: העובדות הן מה שהדוח אומר, והניתוח
+   הוא מה שאנחנו מוסיפים — הפרדה שהקורא צריך לראות ולא רק להסיק. */
+.rep-analysis {
+  margin-top: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+.rep-analysis b {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: 0.25rem;
+}
+.rep-balance { font-size: 0.86rem; color: var(--muted); margin-top: 0.4rem; }
+.rep-balance b { color: var(--fg); font-weight: 600; }
+
+/* דגלים: לא אזהרה ולא המלצה — סימנים שהדוח עצמו מעלה וראוי להביט בהם */
+ul.rep-flags {
+  list-style: none; padding: 0; margin: 0.5rem 0 0;
+  display: flex; flex-direction: column; gap: 0.22rem;
+}
+ul.rep-flags li {
+  font-size: 0.85rem; color: var(--fg);
+  padding-inline-start: 1.1rem; position: relative;
+}
+ul.rep-flags li::before {
+  content: "△"; position: absolute; inset-inline-start: 0;
+  color: var(--warn); font-size: 0.8em; top: 0.15em;
+}
+.rep-omit {
+  font-size: 0.85rem; color: var(--muted); margin-top: 0.4rem;
+  padding-inline-start: 0.6rem; border-inline-start: 2px solid var(--border-strong);
+}
+.rep-omit b { color: var(--fg); font-weight: 600; }
+
 /* ---------- ניווט נושאים ופיד חדשות ---------- */
 
 nav.topics { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0 0 1.3rem; }
@@ -704,6 +744,115 @@ nav.toc a {
 }
 nav.toc a:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 main h2[id] { scroll-margin-top: 4rem; }
+
+/* ---------- עסקאות מחוץ לבורסה ---------- */
+
+/* עמודות שיעור מצטבר: השם, הפס, ואז שני מספרים מיושרים. הפס הוא
+   ההשוואה — העין קולטת ממנו סדר גודל בלי לקרוא ספרה אחת. */
+ul.offex-bars { list-style: none; padding: 0; margin: 0.8rem 0 2rem; }
+ul.offex-bars li {
+  display: grid;
+  grid-template-columns: minmax(7rem, 12rem) 1fr auto auto;
+  align-items: center;
+  gap: 0 0.9rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+ul.offex-bars li:last-child { border-bottom: 0; }
+ul.offex-bars .nm { font-weight: 600; }
+ul.offex-bars .bar {
+  height: 8px; background: var(--table-head); border-radius: 2px; overflow: hidden;
+}
+ul.offex-bars .bar i { display: block; height: 100%; background: var(--accent); }
+ul.offex-bars .pv {
+  font-family: var(--mono); font-weight: 600; color: var(--accent);
+  min-width: 4.5rem; text-align: left;
+}
+ul.offex-bars .mv {
+  font-family: var(--mono); font-size: 0.82rem; color: var(--muted);
+  min-width: 6rem; text-align: left;
+}
+
+ul.offex { list-style: none; padding: 0; margin: 0.8rem 0 0; }
+ul.offex li.daysep {
+  font-family: var(--mono); font-size: 0.8rem; font-weight: 600;
+  color: var(--muted); letter-spacing: 0.02em;
+  margin: 1.6rem 0 0.5rem; padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border-strong);
+}
+ul.offex li.daysep:first-child { margin-top: 0.4rem; }
+
+li.tx {
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--border-strong);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--surface);
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.5rem;
+}
+/* כיוון העסקה הוא הדבר הראשון שצריך להיקלט, ולכן הוא גם הצבע של הקו
+   בשוליים וגם תגית בשורה הראשונה — לא רק מילה בתוך הטקסט. */
+li.tx.buy { border-inline-start-color: var(--up); }
+li.tx.sell { border-inline-start-color: var(--down); }
+
+.tx-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.5rem; }
+.tx-head .dir {
+  font-size: 0.72rem; font-weight: 700; border-radius: 3px;
+  padding: 0.08rem 0.5rem; white-space: nowrap;
+}
+li.tx.buy .dir { background: color-mix(in srgb, var(--up) 14%, transparent); color: var(--up); }
+li.tx.sell .dir { background: color-mix(in srgb, var(--down) 14%, transparent); color: var(--down); }
+.tx-head .co {
+  font-family: var(--serif); font-weight: 700; font-size: 1.05rem;
+  text-decoration: none; color: var(--fg);
+}
+.tx-head .co:hover { color: var(--accent); text-decoration: underline; }
+.tx-head .sec { font-size: 0.78rem; color: var(--faint); }
+.tx-head .dup {
+  font-size: 0.68rem; color: var(--warn); background: var(--warn-bg);
+  border-radius: 3px; padding: 0.05rem 0.45rem; margin-inline-start: auto;
+  white-space: nowrap; cursor: help;
+}
+
+/* הזהות היא הסיבה שהעמוד הזה קיים, ולכן היא שורה משלה ולא עוד שדה
+   בטבלת המספרים. */
+.tx-who {
+  margin-top: 0.4rem; font-size: 0.92rem;
+  padding-inline-start: 0.6rem; border-inline-start: 2px solid var(--accent-soft);
+}
+.tx-who b { color: var(--muted); font-weight: 600; font-size: 0.82rem; }
+.tx-who em { font-style: normal; color: var(--faint); font-size: 0.82rem; }
+.tx-who .ctrl {
+  display: block; font-size: 0.8rem; color: var(--muted); margin-top: 0.12rem;
+}
+
+.tx-nums {
+  display: flex; flex-wrap: wrap; gap: 0.35rem 1.5rem;
+  margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid var(--border);
+}
+.tx-nums span { display: flex; flex-direction: column; gap: 0.1rem; }
+.tx-nums b {
+  font-size: 0.68rem; font-weight: 600; color: var(--faint);
+  letter-spacing: 0.02em; text-transform: none;
+}
+.tx-nums i {
+  font-style: normal; font-family: var(--mono);
+  font-size: 0.92rem; font-weight: 500;
+}
+/* "כמה מההון" הוא המספר שהמשתמש בא בשבילו */
+.tx-nums .hi i { color: var(--accent); font-weight: 600; font-size: 1.02rem; }
+
+p.note {
+  font-size: 0.8rem; color: var(--faint); max-width: var(--measure);
+  margin-top: 1.4rem; padding-top: 0.8rem; border-top: 1px solid var(--border);
+}
+
+@media (max-width: 34rem) {
+  ul.offex-bars li { grid-template-columns: 1fr auto; gap: 0.15rem 0.6rem; }
+  ul.offex-bars .bar { grid-column: 1 / -1; }
+  .tx-nums { gap: 0.35rem 1rem; }
+}
 
 /* ---------- דף הכניסה ---------- */
 

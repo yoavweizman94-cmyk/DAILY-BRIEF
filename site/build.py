@@ -18,6 +18,8 @@ from pathlib import Path
 import markdown
 import yaml
 
+import offex
+
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "site" / "dist"
 STYLE = Path(__file__).parent / "style.css"
@@ -48,7 +50,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a><a href="{root}reports.html">דיווחים</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a><a href="{root}reports.html">דיווחים</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
   <a class="brand" href="{root}index.html">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
 </header>
 <main>
@@ -476,8 +478,18 @@ def reports_rows(rows: list[dict], limit: int | None = None,
             + (f'<div class="rep-hl">{head}</div>' if head else "")
             + f'<div class="rep-sum">{r.get("summary","")}</div>'
             + (f'<div class="figs">{figs}</div>' if figs else "")
-            + (f'<div class="rep-ctx">השוואה: {r.get("context")}</div>'
-               if (r.get("context") or "").strip() else "")
+            + (f'<div class="rep-ctx">מגמה: {r.get("trend") or r.get("context")}</div>'
+               if (r.get("trend") or r.get("context") or "").strip() else "")
+            # הניתוח הוא הסיבה שהכרטיס קיים, ולכן הוא מסומן ולא עוד פסקה
+            + (f'<div class="rep-analysis"><b>מתחת למספרים</b>{r.get("analysis")}</div>'
+               if (r.get("analysis") or "").strip() else "")
+            + (f'<div class="rep-balance"><b>מאזן ומינוף:</b> {r.get("balance")}</div>'
+               if (r.get("balance") or "").strip() else "")
+            + (('<ul class="rep-flags">'
+                + "".join(f"<li>{x}</li>" for x in (r.get("flags") or [])[:4] if str(x).strip())
+                + "</ul>") if (r.get("flags") or []) else "")
+            + (f'<div class="rep-omit"><b>מה שלא נאמר:</b> {r.get("omissions")}</div>'
+               if (r.get("omissions") or "").strip() else "")
             + (f'<div class="rep-why">{r.get("why","")}</div>'
                if (r.get("why") or "").strip() not in ("", "טכני") else "")
             + (f'<div class="rep-aff"><b>נוגע ל:</b> {aff}'
@@ -820,6 +832,11 @@ def main() -> int:
                 PAGE.format(title=f"{title} · {site_title}", site_title=site_title,
                             root="", body=frag.read_text(encoding="utf-8")),
                 encoding="utf-8")
+
+    (OUT / "offex.html").write_text(
+        PAGE.format(title=f"עסקאות מחוץ לבורסה · {site_title}", site_title=site_title,
+                    root="", body=offex.page(offex.load_offex(), str(date.today().year))),
+        encoding="utf-8")
 
     (OUT / "calls.html").write_text(
         PAGE.format(title=f"שיחות ועידה · {site_title}", site_title=site_title,
