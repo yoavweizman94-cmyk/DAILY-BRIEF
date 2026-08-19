@@ -8,7 +8,16 @@ name: Auth Flow Check
 #
 # הסיסמה נוצרת בתוך הריצה ואינה נשמרת בשום מקום.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      register_email:
+        description: "כתובת להרשמה אמיתית (בודק את שרשרת המייל). ריק = לדלג"
+        required: false
+        default: ""
+      approve_url:
+        description: "קישור אישור מהמייל — נבדק שהוא באמת מפעיל את החשבון"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -26,6 +35,39 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Register for chain test
+        if: inputs.register_email != ''
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RE: ${{ inputs.register_email }}
+        run: |
+          set -u
+          code=$(curl -s -o reg.json -w '%{http_code}' --max-time 25 -X POST             https://tlvtaseview.com/api/register -H 'content-type: application/json'             --data "{\"name\":\"בדיקת שרשרת\",\"email\":\"$RE\",\"password\":\"chain-test-password-9931\"}" || true)
+          echo "  הרשמה → $code  $(cat reg.json)"
+          [ "$code" = "200" ] || { echo "::error::ההרשמה נכשלה"; exit 1; }
+          grep -q '"notified":true' reg.json || { echo "::error::החשבון נוצר אבל המייל לא נשלח"; exit 1; }
+          ACTION=show EMAIL="$RE" python3 scripts/users.py | grep -q '"status": "pending"'             && echo "  החשבון קיים במצב pending ✓" || { echo "::error::החשבון אינו pending"; exit 1; }
+
+      - name: Verify approve link
+        if: inputs.approve_url != ''
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AU: ${{ inputs.approve_url }}
+          RE: ${{ inputs.register_email }}
+        run: |
+          set -u
+          : > ap.html
+          code=$(curl -sL -o ap.html -w '%{http_code}' --max-time 25 "$AU" || true)
+          title=$(grep -o '<title>[^<]*' ap.html | head -1 | cut -c8-40)
+          echo "  אישור → $code   כותרת: $title"
+          echo "$title" | grep -q "החשבון הופעל\|כבר פעיל"             || { echo "::error::הקישור לא הפעיל את החשבון"; exit 1; }
+          if [ -n "$RE" ]; then
+            ACTION=show EMAIL="$RE" python3 scripts/users.py | grep -q '"status": "active"'               && echo "  אומת מול KV: החשבון פעיל ✓" || { echo "::error::המצב ב-KV אינו active"; exit 1; }
+            ACTION=delete EMAIL="$RE" python3 scripts/users.py
+          fi
 
       - name: Run flow
         env:
