@@ -50,10 +50,19 @@ jobs:
           eff=$(curl -sL -o /dev/null --max-time 30 -w '%{url_effective}' "https://app.tlvtaseview.com/" || true)
           note "קוד: $code"
           note "יעד סופי: $eff"
-          if echo "$eff" | grep -q 'cloudflareaccess\.com' || [ "$code" = "403" ]; then
+          # ההגנה היא עכשיו שער הסשן של האפליקציה עצמה: בקשה בלי עוגייה
+          # מופנית ל-/login. הביטוי מקבל גם הפניה ל-Cloudflare Access,
+          # כדי שהבדיקה תישאר תקפה אם אי פעם תבוצע חזרה אליו.
+          if echo "$eff" | grep -qE '/login|cloudflareaccess\.com'; then
             note "מוגן ✓"
           else
             bad "app.tlvtaseview.com אינו מוגן — הגיע ל-$eff עם קוד $code"
+          fi
+          # הוכחה חיובית שדף הכניסה עצמו באמת מוגש ולא מסך שגיאה
+          if grep -q 'id="lf"' a.html; then
+            note "דף הכניסה מוגש ✓"
+          else
+            bad "היעד אינו דף הכניסה — הטופס חסר"
           fi
           # הוכחה חיובית שהתוכן עצמו לא דלף
           grep -q 'class="toc"' a.html && bad "גוף הברייף הוגש ללא הזדהות — דליפה"
