@@ -54,6 +54,16 @@ jobs:
           note "מייל פסול → $code   $(cat r1.json)"
           if [ "$code" != "400" ]; then bad "מייל פסול החזיר $code במקום 400"; fi
 
+          echo "=== 1.5 הטופס החי תואם לנקודת הקצה ==="
+          : > land.html
+          curl -sL -o land.html --max-time 25 "$B/" || true
+          for need in 'id="rpw"' 'id="rpw2"' '/api/register'; do
+            if grep -q "$need" land.html; then note "$need ✓"; else bad "בטופס החי חסר $need — הדף והשרת אינם מסונכרנים"; fi
+          done
+          if grep -q '/api/request-access' land.html; then
+            bad "הטופס עדיין שולח ל-/api/request-access, שאינו קיים"
+          fi
+
           echo "=== 2. בקשה תקינה (שולח מייל) ==="
           : > r2.json
           code=$(curl -s -o r2.json -w '%{http_code}' --max-time 30 -X POST "$B/api/register" \
