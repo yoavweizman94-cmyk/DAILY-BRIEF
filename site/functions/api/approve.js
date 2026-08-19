@@ -30,6 +30,10 @@ function page(title, msg, ok) {
     { status: ok ? 200 : 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
 }
 
+// הכתובת שבה משתמש workflow ה-access-flow-check. חסומה לאישור בכוונה —
+// ראה ההסבר למטה.
+const TEST_ADDRESS = "access-check@tlvtaseview.com";
+
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -37,6 +41,15 @@ export async function onRequestGet(context) {
   const token = url.searchParams.get("t") || "";
 
   if (!email || !token) return page("קישור חסר", "חסרים פרטים בקישור.", false);
+
+  // workflow ה-access-flow-check שולח בקשה אמיתית כדי לאמת את הזרימה, ולכן
+  // מגיע לתיבה מייל עם כפתור אישור עובד. ב-19/08/2026 הוא נלחץ בטעות
+  // וכתובת דמה נכנסה לרשימת המורשים. חתימה תקפה אינה מספיקה כאן — הכתובת
+  // הזו חסומה מפורשות, כך שהבדיקה יכולה לרוץ שוב בלי הסיכון הזה.
+  if (email === TEST_ADDRESS) {
+    return page("כתובת בדיקה", "זו הכתובת שבה משתמש אימות הזרימה. " +
+                "היא לא נוספה לרשימת המורשים, וזו התנהגות מכוונת.", false);
+  }
   if (!env.APPROVAL_SECRET || !env.CF_API_TOKEN || !env.CF_ACCOUNT_ID || !env.ACCESS_APP_ID) {
     return page("השירות אינו מוגדר", "חסרות הגדרות בצד השרת.", false);
   }
