@@ -1,44 +1,61 @@
 name: Auth Diag
 
-# אבחון חד-פעמי: מאזין ללוגים החיים של ה-Functions בזמן שהוא שולח בקשות,
-# כדי לקרוא את הודעת החריגה עצמה במקום להסיק אותה מקוד 1101.
+# אבחון: מאזין ללוגים החיים של ה-Functions בזמן שהוא מעורר את הנתיב
+# שנופל, כדי לקרוא את הודעת החריגה עצמה במקום להסיק אותה מקוד 1101.
 on:
   workflow_dispatch: {}
 
 permissions:
   contents: read
 
+env:
+  KV_NAMESPACE_ID: b437bf78b9bc4f358b6d0b4a64e0ad94
+  TEST_EMAIL: diag-probe@tlvtaseview.com
+
 jobs:
   diag:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Tail while probing
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -u
-          npx --yes wrangler@4 pages deployment tail --project-name forest-brief --format pretty > tail.log 2>&1 &
+          PW="diag-password-not-secret-$RANDOM"
+          cleanup() { ACTION=delete EMAIL="$TEST_EMAIL" python3 scripts/users.py >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+
+          echo "--- זריעת משתמש ---"
+          ACTION=seed EMAIL="$TEST_EMAIL" PASSWORD="$PW" python3 scripts/users.py
+
+          # ה-tail דורש מזהה פריסה במצב לא-אינטראקטיבי
+          DEP=$(curl -s -H "Authorization: Bearer $CF_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/pages/projects/forest-brief/deployments?per_page=1" \
+            | python3 -c "import json,sys; print(json.load(sys.stdin)['result'][0]['id'])")
+          echo "מזהה פריסה: $DEP"
+
+          npx --yes wrangler@4 pages deployment tail "$DEP" --project-name forest-brief --format pretty > tail.log 2>&1 &
           TAIL=$!
-          sleep 20
+          sleep 25
 
           B=https://tlvtaseview.com
-          echo "--- כתובת שאינה קיימת (לא מגיע לגיבוב) ---"
+          echo "--- כניסה עם משתמש קיים (מגיע לגיבוב) ---"
           curl -s -o /dev/null -w '  %{http_code}\n' --max-time 25 -X POST "$B/api/login" \
             -H 'content-type: application/json' \
-            --data '{"email":"nobody-here@tlvtaseview.com","password":"whatever-long-pw"}' || true
-          sleep 6
-          echo "--- הרשמה (מגיעה לגיבוב) ---"
-          curl -s -o /dev/null -w '  %{http_code}\n' --max-time 25 -X POST "$B/api/register" \
-            -H 'content-type: application/json' \
-            --data '{"name":"diag","email":"diag-probe@tlvtaseview.com","password":"a-long-enough-password"}' || true
-          sleep 12
+            --data "{\"email\":\"$TEST_EMAIL\",\"password\":\"$PW\"}" || true
+          sleep 15
 
           kill $TAIL 2>/dev/null || true
           echo "=== לוג ==="
-          sed 's/\x1b\[[0-9;]*m//g' tail.log | tail -60
+          sed 's/\x1b\[[0-9;]*m//g' tail.log | grep -v '^\s*$' | tail -50

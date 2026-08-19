@@ -97,23 +97,34 @@ def main():
         print(f"::error::קריאת הפרויקט נכשלה: {errs(body)}")
         return 1
     cfg = body["result"].get("deployment_configs", {}).get("production", {}) or {}
-    env = dict(cfg.get("env_vars") or {})
-    kv = dict(cfg.get("kv_namespaces") or {})
+    have = cfg.get("env_vars") or {}
+    have_kv = cfg.get("kv_namespaces") or {}
 
+    # **נשלחים רק מפתחות שמוסיפים או משנים.** ה-API אינו מחזיר ערכים של
+    # משתני secret_text — הם write-only — ולכן קריאת התצורה והחזרתה
+    # ב-PATCH שולחת אותם בלי ערך ומאפסת אותם. כך נמחקו RESEND_API_KEY
+    # ו-APPROVAL_SECRET בהרצה הראשונה, וההרשמה החזירה 503.
+    env = {}
+    kv = {}
     changed = []
-    if kv.get(BINDING, {}).get("namespace_id") != ns["id"]:
+    if have_kv.get(BINDING, {}).get("namespace_id") != ns["id"]:
         kv[BINDING] = {"namespace_id": ns["id"]}
         changed.append(f"binding {BINDING}")
-    if not env.get("SESSION_SECRET"):
-        env["SESSION_SECRET"] = {"type": "secret_text", "value": secrets.token_urlsafe(48)}
-        changed.append("SESSION_SECRET")
+    for key in ("SESSION_SECRET", "APPROVAL_SECRET"):
+        if key not in have or os.environ.get(f"FORCE_{key}") == "1":
+            env[key] = {"type": "secret_text", "value": secrets.token_urlsafe(48)}
+            changed.append(key)
 
     if not changed:
         print("  הכל כבר מוגדר.")
         return 0
 
-    code, body = call(f"/accounts/{ACC}/pages/projects/{PROJECT}", "PATCH",
-                      {"deployment_configs": {"production": {"env_vars": env, "kv_namespaces": kv}}})
+    payload = {"deployment_configs": {"production": {}}}
+    if env:
+        payload["deployment_configs"]["production"]["env_vars"] = env
+    if kv:
+        payload["deployment_configs"]["production"]["kv_namespaces"] = kv
+    code, body = call(f"/accounts/{ACC}/pages/projects/{PROJECT}", "PATCH", payload)
     if not body.get("success"):
         print(f"::error::עדכון הפרויקט נכשל: {errs(body)}")
         return 1
