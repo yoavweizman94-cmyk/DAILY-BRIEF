@@ -43,18 +43,22 @@ PAGE = """<!DOCTYPE html>
 <title>{title}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700&family=Frank+Ruhl+Libre:wght@500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="{root}style.css">
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a> · <a href="{root}reports.html">דיווחים וסיכומי דוחות</a> · <a href="{root}filings.html">חיפוש דוחות</a> · <a href="{root}calls.html">שיחות ועידה</a> · <a href="{root}deals.html">עסקאות נדל"ן</a> · <a href="{root}archive.html">ארכיון</a></nav>
-  <div class="brand">{site_title}</div>
+  <nav><a href="{root}index.html">סקירה</a><a href="{root}reports.html">דיווחים</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}archive.html">ארכיון</a></nav>
+  <a class="brand" href="{root}index.html">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
 </header>
 <main>
 {body}
 </main>
-<footer>{site_title} · הנתונים נאספים אוטומטית ממקורות ציבוריים · אין באמור ייעוץ או שיווק השקעות ואין בו תחליף לייעוץ אישי</footer>
+<footer>
+  <b>{site_title}</b>
+  <span>הנתונים נאספים ממקורות ציבוריים — מאיה, הלמ"ס, רמ"י, רשות המסים ופרסומי שוק.</span>
+  <span>אין באמור ייעוץ השקעות, שיווק השקעות או המלצה לפעולה בניירות ערך, ואין בו תחליף לייעוץ אישי המתחשב בנתוניו של כל אדם.</span>
+</footer>
 </body>
 </html>
 """
@@ -70,18 +74,21 @@ LANDING = """<!DOCTYPE html>
 <meta name="description" content="{desc}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700&family=Frank+Ruhl+Libre:wght@500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header>
-  <nav><a href="#request">בקשת גישה</a> · <a href="https://app.tlvtaseview.com">כניסה למנויים</a></nav>
-  <div class="brand">{site_title}</div>
+  <nav><a href="#what">מה כלול</a><a href="#preview">דוגמאות</a><a class="hi" href="#request">בקשת גישה</a><a href="https://app.tlvtaseview.com">כניסה למנויים</a></nav>
+  <a class="brand" href="/">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
 </header>
 <main>
 {body}
 </main>
-<footer>{site_title} · אין באמור ייעוץ או שיווק השקעות</footer>
+<footer>
+  <b>{site_title}</b>
+  <span>אין באמור ייעוץ השקעות, שיווק השקעות או המלצה לפעולה בניירות ערך.</span>
+</footer>
 </body>
 </html>
 """
@@ -97,17 +104,17 @@ def landing_facts() -> str:
     facts = []
     man = load_json(ROOT / "output" / "filings" / "manifest.json") or {}
     if man.get("total"):
-        facts.append((f"{man['total']:,}", "דוחות כספיים באינדקס"))
+        facts.append((f"{man['total']:,}", "דוחות כספיים בארכיון"))
     briefs = len(list(ROOT.glob("output/brief_*.md")))
     if briefs:
-        facts.append((str(briefs), "ברייפים שפורסמו"))
+        facts.append((str(briefs), "סקירות שפורסמו"))
     reports_dir = ROOT / "output" / "reports"
     if reports_dir.is_dir():
         n = sum(1 for f in reports_dir.glob("*.jsonl")
                 for l in f.read_text(encoding="utf-8").splitlines() if l.strip())
         if n:
-            facts.append((f"{n:,}", "דיווחי מאיה שסוכמו"))
-    facts.append(("3", "מהדורות ביום"))
+            facts.append((f"{n:,}", "דיווחי מאיה שנקראו וסוכמו"))
+    facts.append(("15", "דקות בין סריקה לסריקה"))
     return ('<div class="facts">' +
             "".join(f"<div><b>{v}</b><span>{k}</span></div>" for v, k in facts) +
             "</div>") if facts else ""
@@ -354,9 +361,11 @@ def indicators_panel(te: dict | None) -> str:
             f"<td class='imp'>{arrow}</td>"
             f"<td dir='ltr'>{prev if prev is not None else '—'}</td>"
             f"<td>{str(i.get('date') or '')[:10]}</td></tr>")
-    return ('<h2>מאקרו ישראל — אינדיקטורים</h2><table class="cal"><thead><tr>'
+    # העטיפה ב-.tw ידנית: wrap_tables רץ רק על ה-markdown של הברייף, והפאנל
+    # הזה נבנה כאן ישירות — כלומר חמק מהגולל האופקי ודחף את העמוד בנייד.
+    return ('<h2>מאקרו ישראל — אינדיקטורים</h2><div class="tw"><table class="cal"><thead><tr>'
             '<th>מדד</th><th>ערך</th><th>כיוון</th><th>קודם</th><th>לתאריך</th>'
-            f'</tr></thead><tbody>{"".join(rows)}</tbody></table>')
+            f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div>')
 
 
 def calendar_panel(te: dict | None) -> str:

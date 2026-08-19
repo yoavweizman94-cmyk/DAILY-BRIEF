@@ -1,53 +1,76 @@
 /* TLV TASE View — גיליון סגנון
  *
- * קהל היעד הוא מנהל השקעות שקורא את זה שלוש פעמים ביום, לרוב בסריקה מהירה
- * ולעיתים בטלפון. שלושת העקרונות שמנחים כאן:
- *   1. מספרים הם התוכן. ספרות טבלאיות בכל מקום שיש בו נתון, כדי שעמודות
- *      יתיישרו ושאפשר יהיה להשוות בעין.
- *   2. טבלאות פיננסיות נקראות טוב יותר עם קווים אופקיים בלבד. מסגרת מלאה
- *      סביב כל תא מייצרת רעש ויזואלי שמתחרה בנתון.
- *   3. עברית עם bidi: כל מספר חתום ובכל ערך מספרי מוגדר כיוון מפורש,
- *      אחרת "-7.11%" נקרא על המסך "7.11%-".
+ * הקהל הוא מנהל השקעות שקורא שלוש פעמים ביום, לרוב בסריקה מהירה ולעיתים
+ * בטלפון. ארבעת העקרונות שמנחים כאן:
+ *
+ *   1. מספרים הם התוכן. כל ערך מספרי בספרות טבלאיות ובפני מונחה־רוחב, כדי
+ *      שעמודות יתיישרו ושאפשר יהיה להשוות בעין בלי לקרוא.
+ *   2. טבלאות פיננסיות נקראות טוב יותר עם קווים אופקיים בלבד. מסגרת סביב
+ *      כל תא מייצרת רעש שמתחרה בנתון.
+ *   3. עברית עם bidi: בכל ערך חתום מוגדר כיוון מפורש, אחרת "-7.11%" נקרא
+ *      על המסך "7.11%-".
+ *   4. הרושם הוא של פתק מחקר מוסדי ולא של דשבורד: קווים דקים במקום צללים,
+ *      פינות חדות, וכותרות בפרנק־ריהל — פני העיתונות העברית — מול גוף
+ *      ב-Assistant. ההיררכיה נבנית מניגוד בין הפנים, לא מהמון צבע.
  */
 
 :root {
-  --bg: #fbfaf8;
+  /* ניטרלים מוטים לכחול קר, לא לקרם. הבחירה מכוונת: קרם חם קורא כמו
+     מגזין לייף־סטייל, והמוצר הזה הוא נייר עבודה. */
+  --bg: #f4f6f7;
   --surface: #ffffff;
-  --fg: #1a1a18;
-  --muted: #6e6d68;
-  --faint: #96948e;
-  --accent: #17624a;
-  --accent-soft: #e8f1ec;
-  --border: #e5e2dc;
-  --border-strong: #d2cec6;
-  --table-head: #f4f2ee;
-  --up: #157347;
-  --down: #b4362b;
-  --warn: #9a6b0f;
-  --warn-bg: #f6ecd6;
-  --shadow: 0 1px 2px rgba(26, 26, 24, 0.04), 0 4px 12px rgba(26, 26, 24, 0.04);
-  --radius: 10px;
-  --measure: 44rem;   /* מידת קריאה לפרוזה */
-  --wide: 68rem;      /* עמודי נתונים */
+  --fg: #14181d;
+  --muted: #5c6670;
+  --faint: #66717b;   /* 4.6:1 על הרקע — הערך הקודם, #8b949d, נתן 2.84 */
+
+  /* כחול פטרול עמוק. נבחר גם בשלילה: אדום ובורדו הם הצבע הטבעי לפיננסים
+     מודפסים, אבל באתר שמציג עליות וירידות אדום כבר תפוס לסמנטיקה של הפסד,
+     ומבטא אדום היה מתנגש בו בכל טבלה. */
+  --accent: #0f4c63;
+  --accent-2: #14688a;
+  --accent-soft: #e6eef2;
+  /* טקסט על גבי מילוי במבטא. בערכה הבהירה המבטא כהה ולכן לבן; בכהה הוא
+     מתבהר לתכלת, ולבן עליו נותן יחס ניגודיות של כ-2:1 — מתחת לכל סף. */
+  --on-accent: #ffffff;
+
+  --border: #dde3e7;
+  --border-strong: #c3ccd3;
+  --table-head: #eef2f4;
+
+  --up: #0b7a4b;
+  --down: #c0392b;
+  --warn: #8a6410;
+  --warn-bg: #f5ebd5;
+
+  --shadow: none;
+  --radius: 5px;
+  --measure: 42rem;   /* מידת קריאה לפרוזה */
+  --wide: 70rem;      /* עמודי נתונים */
+
+  --serif: "Frank Ruhl Libre", "David Libre", Georgia, serif;
+  --sans: "Assistant", "Heebo", "Segoe UI", "Arial Hebrew", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #16171a;
-    --surface: #1d1f22;
-    --fg: #e9e7e2;
-    --muted: #a3a19b;
-    --faint: #7d7b76;
-    --accent: #5fc496;
-    --accent-soft: #1b2f27;
-    --border: #2e3034;
-    --border-strong: #3d4045;
-    --table-head: #232529;
-    --up: #4fbe84;
-    --down: #e0705f;
-    --warn: #d3a441;
-    --warn-bg: #33291445;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.25);
+    --bg: #0e1216;
+    --surface: #161b21;
+    --fg: #e4e8ec;
+    --muted: #99a4ae;
+    --faint: #7d8891;   /* 5.2:1; הקודם נתן 4.23 */
+    --accent: #6cb6d4;
+    --accent-2: #8ecbe4;
+    --accent-soft: #14262f;
+    --on-accent: #0b0f13;
+    --border: #232a31;
+    --border-strong: #37414a;
+    --table-head: #1a2027;
+    --up: #3fbe84;
+    --down: #e2705f;
+    --warn: #d0a343;
+    --warn-bg: #2e2614;
+    --shadow: none;
   }
 }
 
@@ -59,9 +82,9 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font-family: "Assistant", "Heebo", "Segoe UI", "Arial Hebrew", system-ui, sans-serif;
-  font-size: 1.0rem;
-  line-height: 1.7;
+  font-family: var(--sans);
+  font-size: 1rem;
+  line-height: 1.72;
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
 }
@@ -74,31 +97,50 @@ header {
   z-index: 30;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
+  align-items: flex-end;
+  gap: 0.6rem 1.5rem;
   flex-wrap: wrap;
-  padding: 0.55rem max(1rem, calc((100% - var(--wide)) / 2));
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: saturate(1.4) blur(10px);
-  border-bottom: 1px solid var(--border);
+  padding: 0.6rem max(1rem, calc((100% - var(--wide)) / 2)) 0.5rem;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: saturate(1.3) blur(10px);
+  /* קו כפול — thick/thin — הוא הסימן המובהק של נייר מחקר מודפס, ומבדיל
+     את המאסטהד מכל שאר החוצצים בעמוד. */
+  border-bottom: 1px solid var(--accent);
+  box-shadow: 0 3px 0 -1px var(--border-strong);
 }
 .brand {
-  font-weight: 800;
-  font-size: 0.95rem;
-  letter-spacing: -0.01em;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  text-decoration: none;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 1.12rem;
+  letter-spacing: -0.005em;
   color: var(--accent);
   white-space: nowrap;
 }
-nav { display: flex; flex-wrap: wrap; gap: 0.15rem; }
+.brand em {
+  font-family: var(--sans);
+  font-style: normal;
+  font-weight: 500;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  margin-top: 0.15rem;
+}
+nav { display: flex; flex-wrap: wrap; gap: 0 0.15rem; }
 nav a {
   color: var(--muted);
   text-decoration: none;
-  font-size: 0.86rem;
-  padding: 0.25rem 0.55rem;
-  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0.2rem 0.6rem 0.3rem;
   white-space: nowrap;
+  border-bottom: 2px solid transparent;
 }
-nav a:hover { color: var(--accent); background: var(--accent-soft); }
+nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+nav a.hi { color: var(--accent); font-weight: 700; }
 
 main {
   max-width: var(--wide);
@@ -109,32 +151,55 @@ main {
 main > p, main > ul:not([class]), main > ol, main > blockquote { max-width: var(--measure); }
 
 footer {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-width: var(--wide);
+  margin: 0 auto;
   color: var(--faint);
-  font-size: 0.78rem;
-  padding: 1.6rem 1rem 2.4rem;
-  border-top: 1px solid var(--border);
+  font-size: 0.76rem;
+  line-height: 1.6;
+  padding: 1.5rem max(1rem, 5vw) 3rem;
+  border-top: 1px solid var(--border-strong);
 }
+footer b {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+footer span { max-width: 52rem; }
 
 /* ---------- טיפוגרפיה ---------- */
 
 h1 {
-  font-size: clamp(1.35rem, 1.1rem + 1.1vw, 1.75rem);
-  line-height: 1.25;
-  font-weight: 800;
-  letter-spacing: -0.015em;
-  margin: 0 0 0.6rem;
+  font-family: var(--serif);
+  font-size: clamp(1.5rem, 1.15rem + 1.5vw, 2.05rem);
+  line-height: 1.2;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.5rem;
+  text-wrap: balance;
 }
 h2 {
-  font-size: 1.12rem;
+  font-family: var(--serif);
+  font-size: 1.24rem;
   font-weight: 700;
-  color: var(--accent);
-  margin: 2.6rem 0 0.7rem;
-  padding-bottom: 0.35rem;
-  border-bottom: 1px solid var(--border);
-  letter-spacing: -0.01em;
+  color: var(--fg);
+  margin: 2.8rem 0 0.8rem;
+  padding-bottom: 0.3rem;
+  /* הקו נושא את הצבע במקום הטקסט: כותרת צבעונית בכל סעיף מפזרת את
+     תשומת הלב, קו דק מתחתיה מסמן את אותה היררכיה בשקט. */
+  border-bottom: 2px solid var(--accent);
+  letter-spacing: -0.005em;
 }
-h3 { font-size: 1rem; font-weight: 700; margin: 1.5rem 0 0.3rem; }
+h3 {
+  font-family: var(--sans);
+  font-size: 0.98rem;
+  font-weight: 700;
+  margin: 1.6rem 0 0.3rem;
+  letter-spacing: 0.005em;
+}
 p { margin: 0.7rem 0; }
 a { color: var(--accent); text-underline-offset: 0.18em; }
 strong { font-weight: 700; }
@@ -168,6 +233,13 @@ table {
   width: 100%;
   font-size: 0.9rem;
   line-height: 1.5;
+}
+/* כל ערך חתום כבר נעטף ב-span עם כיוון מפורש (ראה _SIGNED_NUM ב-build.py);
+   כאן הוא מקבל גם את הפנים המונחות־רוחב, כדי שעמודות ישרו זו לזו. */
+td span[dir="ltr"], th span[dir="ltr"] {
+  font-family: var(--mono);
+  font-size: 0.94em;
+  font-weight: 500;
 }
 th, td {
   padding: 0.5rem 0.7rem;
@@ -217,21 +289,26 @@ ul.sources li.bad { opacity: 0.65; }
 ul.sources li.bad span { color: var(--down); font-weight: 700; }
 
 /* רצועת השווקים — הדבר הראשון שנקרא, ולכן המספר הוא הגיבור בתא */
+/* סרט הנתונים. הכרטיסים המוצללים הוחלפו ברשת תאים עם קווי הפרדה דקים:
+   שלושה־עשר מלבנים עם צל כל אחד מייצרים רעש, ובלוח מכשירים העין מחפשת
+   השוואה בין מספרים — כלומר רשת, לא אוסף כרטיסים. */
 .strip {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
-  gap: 0.5rem;
-  margin: 0 0 1.8rem;
+  gap: 1px;
+  margin: 0 0 1.9rem;
 }
+/* הקו מצויר על התא עצמו ולא כרקע של המיכל. ההבדל אינו סגנוני: מספר
+   המכשירים אינו מתחלק ברוחב, ובשיטת "רקע המיכל = צבע הקו" התאים
+   הריקים בשורה האחרונה נצבעים ומופיעים כמלבנים אפורים ריקים. כאן תא
+   שאין בו נתון פשוט אינו קיים, והרצועה נגמרת היכן שהנתונים נגמרים. */
 .tile {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.6rem 0.7rem;
+  padding: 0.55rem 0.7rem 0.6rem;
   background: var(--surface);
-  box-shadow: var(--shadow);
-  display: flex; flex-direction: column; gap: 0.1rem;
+  box-shadow: 0 0 0 1px var(--border);
+  display: flex; flex-direction: column; gap: 0.12rem;
 }
-.tile .lbl { font-size: 0.71rem; color: var(--muted); line-height: 1.35; }
+.tile .lbl { font-size: 0.71rem; color: var(--muted); line-height: 1.35; font-weight: 500; }
 /* תווית "הנתון מתאריך אחר". isolate הוא העיקר כאן ולא הצבע: בלעדיו
    הספרות של שם המכשיר ושל התאריך מתמזגות לריצה דו-כיוונית אחת. */
 .tile .lbl b.asof {
@@ -246,8 +323,14 @@ ul.sources li.bad span { color: var(--down); font-weight: 700; }
   margin-inline-start: 0.32rem;
   white-space: nowrap;
 }
-.tile .val { font-size: 1.12rem; font-weight: 700; letter-spacing: -0.02em; }
-.tile .chg { font-size: 0.79rem; font-weight: 600; }
+.tile .val {
+  font-family: var(--mono);
+  font-size: 1.06rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-feature-settings: "tnum" 1;
+}
+.tile .chg { font-family: var(--mono); font-size: 0.76rem; font-weight: 500; }
 .tile.up .chg { color: var(--up); }
 .tile.down .chg { color: var(--down); }
 .tile.flat .chg { color: var(--faint); }
@@ -269,12 +352,15 @@ li.rep {
   border: 1px solid var(--border);
   border-inline-start: 3px solid var(--border-strong);
   border-radius: 0 var(--radius) var(--radius) 0;
-  padding: 0.65rem 0.85rem;
-  margin-bottom: 0.55rem;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.5rem;
   background: var(--surface);
 }
-li.rep.m3 { border-inline-start-color: var(--accent); box-shadow: var(--shadow); }
-li.rep.m1 { opacity: 0.72; }
+li.rep.m3 { border-inline-start-color: var(--accent); border-color: var(--border-strong); }
+/* מהותיות 1 מונמכת בניגודיות ולא באטימות: opacity הבהיר גם את גוף הטקסט
+   מתחת לסף הקריאה הנוח בטלפון. */
+li.rep.m1 { background: color-mix(in srgb, var(--surface) 70%, var(--bg)); }
+li.rep.m1 .rep-sum, li.rep.m1 .rep-hl { color: var(--muted); }
 .rep-head {
   display: flex; align-items: baseline; gap: 0.5rem;
   flex-wrap: wrap; font-size: 0.85rem;
@@ -284,7 +370,7 @@ li.rep.m1 { opacity: 0.72; }
 .rep-head a:hover { text-decoration: underline; }
 .rep-head .mat { color: var(--accent); letter-spacing: 0.08em; margin-inline-start: auto; }
 .rep-head .cov {
-  font-size: 0.67rem; background: var(--accent); color: #fff;
+  font-size: 0.67rem; background: var(--accent); color: var(--on-accent);
   border-radius: 999px; padding: 0.05rem 0.5rem; font-weight: 600;
 }
 .rep-head .chg.up { color: var(--up); }
@@ -302,9 +388,10 @@ li.rep.m1 { opacity: 0.72; }
 .figs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
 .figs .fig {
   font-size: 0.78rem; background: var(--bg);
-  border: 1px solid var(--border); border-radius: 6px; padding: 0.12rem 0.55rem;
+  border: 1px solid var(--border); border-radius: 4px; padding: 0.14rem 0.55rem;
+  font-family: var(--mono); font-weight: 500;
 }
-.figs .fig b { font-weight: 600; color: var(--muted); margin-inline-end: 0.35rem; }
+.figs .fig b { font-family: var(--sans); font-weight: 600; color: var(--muted); margin-inline-end: 0.4rem; }
 
 /* ---------- ניווט נושאים ופיד חדשות ---------- */
 
@@ -315,9 +402,9 @@ nav.topics a {
   padding: 0.2rem 0.7rem; color: var(--fg); background: var(--surface);
 }
 nav.topics a:hover { border-color: var(--accent); background: var(--accent-soft); }
-nav.topics a.cur { background: var(--accent); color: #fff; border-color: var(--accent); }
+nav.topics a.cur { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 nav.topics a em { font-style: normal; color: var(--faint); margin-inline-start: 0.3rem; font-size: 0.74rem; }
-nav.topics a.cur em { color: #fff; opacity: 0.85; }
+nav.topics a.cur em { color: var(--on-accent); opacity: 0.75; }
 
 ul.news { list-style: none; padding: 0; margin: 0.6rem 0; }
 ul.news li.daysep {
@@ -382,7 +469,7 @@ form.srch .filters input { width: 5.4rem; }
 form.srch button {
   font: inherit; font-size: 0.92rem; font-weight: 700; cursor: pointer;
   padding: 0.4rem 1.4rem; border-radius: 7px; border: 1px solid var(--accent);
-  background: var(--accent); color: #fff;
+  background: var(--accent); color: var(--on-accent);
 }
 form.srch button:hover { filter: brightness(1.08); }
 form.srch button:disabled { opacity: 0.5; cursor: default; filter: none; }
@@ -439,7 +526,7 @@ li.fil .form {
   border-radius: 999px; padding: 0.05rem 0.5rem; white-space: nowrap;
 }
 li.fil .cov {
-  font-size: 0.67rem; background: var(--accent); color: #fff;
+  font-size: 0.67rem; background: var(--accent); color: var(--on-accent);
   border-radius: 999px; padding: 0.05rem 0.5rem; font-weight: 600;
 }
 li.fil .dl {
@@ -447,7 +534,7 @@ li.fil .dl {
   border: 1px solid var(--accent); color: var(--accent);
   border-radius: 7px; padding: 0.15rem 0.7rem;
 }
-li.fil .dl:hover { background: var(--accent); color: #fff; }
+li.fil .dl:hover { background: var(--accent); color: var(--on-accent); }
 
 /* ---------- שיחות ועידה ---------- */
 
@@ -485,39 +572,55 @@ table.calls .none { color: var(--faint); font-size: 0.82rem; }
 /* ---------- הדפסה ---------- */
 
 @media print {
-  header, nav, footer, form.srch, .tbl-head button { display: none; }
+  /* הפוטר **אינו** מוסתר: הוא נושא את הסייג המשפטי, וברייף שמודפס
+     ומועבר הלאה בלעדיו הוא בדיוק המקרה שבגללו הסייג קיים. */
+  header, nav.topics, form.srch, .tbl-head button { display: none; }
   body { background: #fff; color: #000; font-size: 10.5pt; }
   main { max-width: none; padding: 0; }
   a { color: #000; text-decoration: none; }
-  li.rep, .tile, .topic-sum { break-inside: avoid; box-shadow: none; }
-  h2 { break-after: avoid; }
+  .strip { break-inside: avoid; }
+  li.rep, .tile, .topic-sum { break-inside: avoid; box-shadow: none; border-color: #999; }
+  li.rep.m1 { background: #fff; }
+  h2 { break-after: avoid; border-bottom-color: #000; }
+  footer { border-color: #999; color: #333; }
 }
 
 /* ---- עמוד נחיתה ---- */
 .hero { padding: 2.5rem 0 1.5rem; max-width: 46rem; }
-.hero .eyebrow { color: var(--accent); font-weight: 700; font-size: 0.82rem;
-  letter-spacing: 0.04em; margin: 0 0 0.5rem; }
-.hero h1 { font-size: clamp(1.6rem, 1.1rem + 2.2vw, 2.4rem); line-height: 1.2;
-  letter-spacing: -0.02em; margin: 0 0 0.9rem; }
-.hero .sub { font-size: 1.05rem; color: var(--muted); line-height: 1.75; margin: 0 0 1.6rem; }
-a.cta { display: inline-block; background: var(--accent); color: #fff;
-  text-decoration: none; font-weight: 700; font-size: 1rem;
-  padding: 0.6rem 1.8rem; border-radius: 8px; }
-a.cta:hover { filter: brightness(1.08); }
-.hero .cta-note { font-size: 0.8rem; color: var(--faint); margin: 0.6rem 0 0; }
+.hero .eyebrow { color: var(--accent); font-weight: 700; font-size: 0.78rem;
+  letter-spacing: 0.06em; margin: 0 0 0.7rem; }
+.hero h1 { font-family: var(--serif); font-weight: 900;
+  font-size: clamp(1.75rem, 1.15rem + 2.6vw, 2.85rem); line-height: 1.14;
+  letter-spacing: -0.015em; margin: 0 0 1rem; text-wrap: balance; }
+.hero .sub { font-size: 1.06rem; color: var(--muted); line-height: 1.75;
+  margin: 0 0 1.7rem; max-width: 40rem; }
+a.cta { display: inline-block; background: var(--accent); color: var(--on-accent);
+  text-decoration: none; font-weight: 700; font-size: 0.98rem;
+  padding: 0.62rem 2rem; border-radius: var(--radius);
+  border: 1px solid var(--accent); }
+a.cta:hover { background: var(--accent-2); border-color: var(--accent-2); }
+a.cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* שורת המספרים היא גוש נתונים והכפתור הוא הפעולה; בלי הרווח הזה הם
+   נוגעים זה בזה והכפתור נראה כמו עוד תא בשורה. */
+.hero a.cta { margin-top: 2rem; }
+.hero .cta-note { font-size: 0.8rem; color: var(--faint); margin: 0.7rem 0 0; }
 
 section.what, section.preview, section.request { margin-top: 3rem; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
   gap: 0.9rem; margin-top: 1rem; }
+/* הקו העליון הוא הסימון היחיד שהכרטיסים מקבלים — במקום צל, שהיה הופך
+   שישה מלבנים לשישה עצמים צפים. */
 .grid article { background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 1rem 1.1rem; box-shadow: var(--shadow); }
-.grid h3 { margin: 0 0 0.4rem; font-size: 0.98rem; color: var(--accent); }
+  border-top: 2px solid var(--accent); border-radius: 0 0 var(--radius) var(--radius);
+  padding: 1rem 1.15rem 1.15rem; }
+.grid h3 { margin: 0 0 0.45rem; font-size: 1.02rem; color: var(--fg);
+  font-family: var(--serif); font-weight: 700; }
 .grid p { margin: 0; font-size: 0.9rem; color: var(--muted); line-height: 1.65; }
 .grid em { font-style: normal; color: var(--fg); font-weight: 600; }
 
 /* התצוגות המקדימות — רכיבי האתר האמיתיים, בקנה מידה מוקטן */
-.shot { border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
-  background: var(--surface); box-shadow: var(--shadow); margin: 1rem 0 1.6rem; }
+.shot { border: 1px solid var(--border-strong); border-radius: var(--radius);
+  overflow: hidden; background: var(--surface); margin: 1rem 0 1.7rem; }
 .shot-bar { display: flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.8rem;
   background: var(--table-head); border-bottom: 1px solid var(--border);
   font-size: 0.78rem; color: var(--muted); }
@@ -546,10 +649,24 @@ body.landing main { padding-top: 0; }
 }
 
 /* שורת מספרים שמוכיחה היקף במקום להצהיר עליו */
-.facts { display: flex; flex-wrap: wrap; gap: 2rem; margin: 1.8rem 0 0; }
-.facts div { display: flex; flex-direction: column; }
-.facts b { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; }
-.facts span { font-size: 0.78rem; color: var(--muted); }
+/* שורת מספרים שמוכיחה היקף במקום להצהיר עליו. הקו המפריד בין הפריטים
+   הוא מה שהופך אותם לשורת נתונים אחת ולא לארבעה מספרים מפוזרים. */
+.facts { display: flex; flex-wrap: wrap; gap: 0 1.9rem; margin: 2rem 0 0; }
+.facts div {
+  display: flex; flex-direction: column;
+  padding-inline-start: 1.9rem;
+  border-inline-start: 1px solid var(--border);
+}
+.facts div:first-child { padding-inline-start: 0; border-inline-start: 0; }
+.facts b {
+  font-family: var(--mono); font-size: 1.45rem; font-weight: 600;
+  letter-spacing: -0.03em; line-height: 1.25; color: var(--accent);
+}
+.facts span { font-size: 0.76rem; color: var(--muted); }
+@media (max-width: 32rem) {
+  .facts { gap: 1rem 1.4rem; }
+  .facts div { padding-inline-start: 1.4rem; }
+}
 
 section.what h2, section.preview h2, section.request h2 { margin-top: 0; }
 section.what, section.preview, section.request { margin-top: 3.2rem; }
@@ -587,3 +704,36 @@ nav.toc a {
 }
 nav.toc a:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 main h2[id] { scroll-margin-top: 4rem; }
+
+/* ---- שכבת גימור ---- */
+
+/* מחרוזות ארוכות שאינן נשברות. תוכן הברייף מכיל קישורי הרשמה לשיחות
+   ועידה — כתובות זום באורך 80+ תווים בלי רווח — וכל אחת מהן הרחיבה את
+   המיכל שלה ודחפה את **כל העמוד** לגלילה אופקית בנייד. נמדד: פריט דיווח
+   ברוחב 328 עם תוכן ברוחב 408.
+   anywhere ולא break-word: רק הראשון משפיע על רוחב המינימום המהותי של
+   האלמנט, וזה מה שמונע מהמיכל להתרחב מלכתחילה. */
+li.rep > div,
+.topic-sum p,
+ul.news li a,
+main > p,
+main > ul:not([class]) li,
+main > ol li {
+  overflow-wrap: anywhere;
+}
+
+
+/* מיקוד נראה בכל אלמנט אינטראקטיבי, לא רק בשדות הטופס */
+a:focus-visible, button:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
