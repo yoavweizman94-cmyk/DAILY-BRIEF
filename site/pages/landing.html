@@ -130,7 +130,19 @@ TLV TASE View מספק מידע, נתונים וניתוח השפעה על בס�
       .then(function (res) {
         if (!res.ok) throw new Error(res.d && res.d.error || "שגיאה");
         f.style.display = "none";
-        say("הבקשה נשלחה והחשבון נוצר מושבת. תקבל מייל כשהוא יופעל.", "ok");
+        // ההתראה עלולה להיכשל בנפרד מיצירת החשבון. הבטחה למייל שלא
+        // יגיע גרועה מהודעה שאומרת את האמת: הנרשם ימתין לשווא.
+        if (res.d && res.d.notified === false) {
+          msg.className = "msg ok";
+          msg.innerHTML = "החשבון נוצר והוא ממתין לאישור, אבל ההתראה " +
+            "אליי לא נשלחה. כדי שלא תמתין לחינם — " +
+            '<a href="mailto:' + OWNER + "?subject=" +
+            encodeURIComponent("בקשת גישה ל-TLV TASE View") + "&body=" +
+            encodeURIComponent("נרשמתי בכתובת " + body.email) +
+            '">שלח לי הודעה קצרה</a> ואאשר ידנית.';
+        } else {
+          say("הבקשה נשלחה והחשבון נוצר מושבת. תקבל מייל כשהוא יופעל.", "ok");
+        }
       })
       .catch(function (err) {
         // נפילה לאחור לתוכנת המייל של המבקר. בלי זה, תקלה בצד השרת או
