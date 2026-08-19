@@ -112,6 +112,23 @@ jobs:
           note "me → $me"
           echo "$me" | grep -q '"authenticated":true' || bad "api/me לא זיהה את הסשן"
 
+          echo "=== 3.5 החלפת סיסמה ==="
+          NEW="$PW-changed"
+          code=$(curl -s -o pw.json -w '%{http_code}' --max-time 25 -X POST "$B/api/password"                  -H "Cookie: $COOKIE" -H 'content-type: application/json'                  --data "{\"current\":\"$PW\",\"next\":\"$NEW\"}" || true)
+          note "החלפה → $code   $(cat pw.json)"
+          [ "$code" = "200" ] && note "הוחלפה ✓" || bad "החלפת סיסמה החזירה $code"
+          # הישנה חייבת להפסיק לעבוד, והחדשה לעבוד
+          old=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 -X POST "$B/api/login"                 -H 'content-type: application/json' --data "{\"email\":\"$TEST_EMAIL\",\"password\":\"$PW\"}" || true)
+          new=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 -X POST "$B/api/login"                 -H 'content-type: application/json' --data "{\"email\":\"$TEST_EMAIL\",\"password\":\"$NEW\"}" || true)
+          note "ישנה → $old · חדשה → $new"
+          [ "$old" = "401" ] || bad "הסיסמה הישנה עדיין עובדת ($old)"
+          [ "$new" = "200" ] || bad "הסיסמה החדשה אינה עובדת ($new)"
+          # בלי הסיסמה הנוכחית אין החלפה, גם עם עוגייה תקפה
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 -X POST "$B/api/password"                  -H "Cookie: $COOKIE" -H 'content-type: application/json'                  --data "{\"current\":\"totally-wrong-pw\",\"next\":\"another-long-password\"}" || true)
+          note "בלי הסיסמה הנוכחית → $code"
+          [ "$code" = "401" ] || bad "החלפה ללא הסיסמה הנוכחית התקבלה ($code)"
+          PW="$NEW"
+
           echo "=== 4. סיסמה שגויה נדחית ==="
           code=$(curl -s -o r2.json -w '%{http_code}' --max-time 25 -X POST "$B/api/login" \
                  -H 'content-type: application/json' \

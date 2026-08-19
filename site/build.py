@@ -48,7 +48,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a><a href="{root}reports.html">דיווחים</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}archive.html">ארכיון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a><a href="{root}reports.html">דיווחים</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
   <a class="brand" href="{root}index.html">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
 </header>
 <main>
@@ -812,7 +812,8 @@ def main() -> int:
             encoding="utf-8")
 
     for name, title in (("deals", "חיפוש עסקאות נדל\"ן"),
-                        ("filings", "חיפוש דוחות כספיים")):
+                        ("filings", "חיפוש דוחות כספיים"),
+                        ("account", "החשבון שלי")):
         frag = PAGES / f"{name}.html"
         if frag.exists():
             (OUT / f"{name}.html").write_text(

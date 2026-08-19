@@ -15,7 +15,11 @@ on:
         required: false
         default: ""
       password:
-        description: "סיסמה חדשה (רק ל-setpw)"
+        description: "סיסמה חדשה (ל-setpw / seed)"
+        required: false
+        default: ""
+      name:
+        description: "שם לתצוגה (רק ל-seed של חשבון חדש)"
         required: false
         default: ""
 
@@ -39,4 +43,5 @@ jobs:
           ACTION: ${{ inputs.action }}
           EMAIL: ${{ inputs.email }}
           PASSWORD: ${{ inputs.password }}
+          NAME: ${{ inputs.name }}
         run: python3 scripts/users.py

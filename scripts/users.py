@@ -10,7 +10,7 @@
     ACTION=disable  EMAIL=a@b.com     python scripts/users.py
     ACTION=delete   EMAIL=a@b.com     python scripts/users.py
     ACTION=setpw  EMAIL=a@b.com PASSWORD=...   python scripts/users.py
-    ACTION=seed   EMAIL=a@b.com PASSWORD=...   python scripts/users.py   # חשבון פעיל לבדיקה
+    ACTION=seed   EMAIL=a@b.com PASSWORD=... [NAME=...]  python scripts/users.py
 
 הגיבוב חייב להיות זהה למימוש ב-site/functions/_lib/auth.js — PBKDF2-SHA256,
 210,000 סבבים, מלח של 16 בתים, פלט 32 בתים, קידוד base64url בלי ריפוד.
@@ -142,7 +142,7 @@ def main():
             print("::error::נדרשת PASSWORD באורך 10 לפחות")
             return 1
         u = get_user(email) or {
-            "name": "בדיקת זרימה", "org": "", "why": "", "email": email,
+            "name": os.environ.get("NAME") or email.split("@")[0], "org": "", "why": "", "email": email,
             "created": "seeded", "approved": None, "lastLogin": None,
         }
         h, s = hash_password(password)

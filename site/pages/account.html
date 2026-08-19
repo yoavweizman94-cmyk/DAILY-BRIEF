@@ -1,0 +1,54 @@
+<section class="auth">
+  <h1>החשבון שלי</h1>
+  <p class="auth-sub" id="who">טוען…</p>
+
+  <form id="pf" autocomplete="on">
+    <label>סיסמה נוכחית
+      <input type="password" id="pc" required autocomplete="current-password"></label>
+    <label>סיסמה חדשה
+      <input type="password" id="pn" required minlength="10" autocomplete="new-password"></label>
+    <label>אימות סיסמה חדשה
+      <input type="password" id="pn2" required minlength="10" autocomplete="new-password"></label>
+    <button type="submit" id="pb">החלף סיסמה</button>
+  </form>
+
+  <div id="pm" class="msg" role="status" aria-live="polite"></div>
+
+  <p class="auth-note"><a href="/api/logout">יציאה מהחשבון</a></p>
+</section>
+
+<script>
+(function () {
+  "use strict";
+  var f = document.getElementById("pf"), msg = document.getElementById("pm"),
+      btn = document.getElementById("pb"), who = document.getElementById("who");
+
+  function say(t, c) { msg.className = "msg " + (c || ""); msg.textContent = t; }
+
+  fetch("/api/me").then(function (r) { return r.json(); }).then(function (d) {
+    who.textContent = d && d.authenticated
+      ? "מחובר כ-" + d.email
+      : "לא מחובר.";
+  }).catch(function () { who.textContent = ""; });
+
+  f.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var cur = document.getElementById("pc").value,
+        nx = document.getElementById("pn").value,
+        nx2 = document.getElementById("pn2").value;
+    if (nx.length < 10) { say("הסיסמה החדשה חייבת להיות באורך 10 תווים לפחות.", "err"); return; }
+    if (nx !== nx2) { say("שתי הסיסמאות אינן זהות.", "err"); return; }
+    btn.disabled = true; say("מחליף…", "wait");
+    fetch("/api/password", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current: cur, next: nx }) })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error((res.d && res.d.error) || "ההחלפה נכשלה");
+        f.reset(); btn.disabled = false;
+        say("הסיסמה הוחלפה. הסשן חודש.", "ok");
+      })
+      .catch(function (err) { btn.disabled = false; say(err.message, "err"); });
+  });
+})();
+</script>
