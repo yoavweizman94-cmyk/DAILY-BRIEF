@@ -8,7 +8,14 @@
 //   · המשתמשים ב-KV ולא ב-D1: רשימת מנויים קטנה, גישה לפי מפתח בלבד,
 //     ואין שאילתות. D1 היה מוסיף תפעול בלי להוסיף יכולת.
 
-const ITERATIONS = 210000;
+// Workers חוסם PBKDF2 מעל 100,000 סבבים בקריאה אחת:
+//   NotSupportedError: iteration counts above 100000 are not supported
+// לכן הגזירה משורשרת — כל קריאה בתקרה, והפלט של אחת מזין את הבאה
+// כסיסמה. שלושה סבבים נותנים 300,000 אפקטיבי, מעל בסיס ההמלצה של OWASP,
+// בלי לחרוג ממגבלת הפלטפורמה.
+const ROUND_ITERS = 100000;
+const ROUNDS = 3;
+const ITERATIONS = ROUND_ITERS * ROUNDS;
 const KEYLEN = 32;
 const SESSION_DAYS = 30;
 export const COOKIE = "tlv_session";
@@ -37,12 +44,18 @@ export function timingSafeEqual(a, b) {
   return diff === 0;
 }
 
+async function derive(material, salt) {
+  const key = await crypto.subtle.importKey("raw", material, "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: ROUND_ITERS, hash: "SHA-256" }, key, KEYLEN * 8);
+  return new Uint8Array(bits);
+}
+
 export async function hashPassword(password, saltB64) {
   const salt = saltB64 ? unb64url(saltB64) : crypto.getRandomValues(new Uint8Array(16));
-  const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", salt, iterations: ITERATIONS, hash: "SHA-256" }, key, KEYLEN * 8);
-  return { hash: b64url(bits), salt: b64url(salt), iterations: ITERATIONS };
+  let out = enc.encode(password);
+  for (let i = 0; i < ROUNDS; i++) out = await derive(out, salt);
+  return { hash: b64url(out), salt: b64url(salt), iterations: ITERATIONS };
 }
 
 export async function verifyPassword(password, user) {

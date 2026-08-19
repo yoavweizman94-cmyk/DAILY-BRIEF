@@ -25,7 +25,11 @@ import urllib.error
 import urllib.request
 
 API = "https://api.cloudflare.com/client/v4"
-ITERATIONS = 210000
+# חייב להיות זהה ל-site/functions/_lib/auth.js: Workers חוסם PBKDF2 מעל
+# 100,000 סבבים בקריאה אחת, ולכן הגזירה משורשרת בשני המימושים.
+ROUND_ITERS = 100000
+ROUNDS = 3
+ITERATIONS = ROUND_ITERS * ROUNDS
 KEYLEN = 32
 
 TOK = os.environ["CF_TOKEN"]
@@ -44,8 +48,10 @@ def unb64url(s: str) -> bytes:
 
 def hash_password(password: str, salt: bytes | None = None):
     salt = salt or secrets.token_bytes(16)
-    raw = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, ITERATIONS, KEYLEN)
-    return b64url(raw), b64url(salt)
+    out = password.encode()
+    for _ in range(ROUNDS):
+        out = hashlib.pbkdf2_hmac("sha256", out, salt, ROUND_ITERS, KEYLEN)
+    return b64url(out), b64url(salt)
 
 
 def call(path, method="GET", data=None, ctype="application/json"):
