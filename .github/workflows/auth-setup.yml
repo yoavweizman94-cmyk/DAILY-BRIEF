@@ -12,6 +12,11 @@ on:
         type: choice
         options: ["true", "false"]
         default: "true"
+      restore_mail:
+        description: "true = לכתוב מחדש את RESEND_API_KEY ל-Pages מהסוד ב-GitHub"
+        type: choice
+        options: ["false", "true"]
+        default: "false"
       force_approval_secret:
         description: "true = ליצור APPROVAL_SECRET חדש (מבטל קישורי אישור ישנים)"
         type: choice
@@ -36,4 +41,6 @@ jobs:
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PROBE: ${{ inputs.probe_only }}
           FORCE_APPROVAL_SECRET: ${{ inputs.force_approval_secret == 'true' && '1' || '' }}
+          RESTORE_MAIL: ${{ inputs.restore_mail == 'true' && '1' || '' }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: python3 scripts/auth_setup.py

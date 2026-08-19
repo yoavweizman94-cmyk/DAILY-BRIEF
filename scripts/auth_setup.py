@@ -115,6 +115,14 @@ def main():
             env[key] = {"type": "secret_text", "value": secrets.token_urlsafe(48)}
             changed.append(key)
 
+    # שחזור מפתח הדואר מתוך הסוד המקביל ב-GitHub. הוא נמחק מ-Pages
+    # כשהגרסה הראשונה של הסקריפט החזירה משתני secret_text שנקראו בלי
+    # ערך; המקור השני שרד, ולכן אין צורך ליצור מפתח חדש ב-Resend.
+    resend = os.environ.get("RESEND_API_KEY", "").strip()
+    if resend and os.environ.get("RESTORE_MAIL") == "1":
+        env["RESEND_API_KEY"] = {"type": "secret_text", "value": resend}
+        changed.append("RESEND_API_KEY")
+
     if not changed:
         print("  הכל כבר מוגדר.")
         return 0
