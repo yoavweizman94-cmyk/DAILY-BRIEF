@@ -22,6 +22,7 @@ jobs:
       - name: Probe
         run: |
           fail=0
+          APP=https://app.tlvtaseview.com
           note() { echo "  $*"; }
           bad()  { echo "::error::$*"; fail=1; }
 
