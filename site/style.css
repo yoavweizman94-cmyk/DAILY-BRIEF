@@ -24,6 +24,7 @@
   --up: #157347;
   --down: #b4362b;
   --warn: #9a6b0f;
+  --warn-bg: #f6ecd6;
   --shadow: 0 1px 2px rgba(26, 26, 24, 0.04), 0 4px 12px rgba(26, 26, 24, 0.04);
   --radius: 10px;
   --measure: 44rem;   /* מידת קריאה לפרוזה */
@@ -45,6 +46,7 @@
     --up: #4fbe84;
     --down: #e0705f;
     --warn: #d3a441;
+    --warn-bg: #33291445;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.25);
   }
 }
@@ -230,7 +232,20 @@ ul.sources li.bad span { color: var(--down); font-weight: 700; }
   display: flex; flex-direction: column; gap: 0.1rem;
 }
 .tile .lbl { font-size: 0.71rem; color: var(--muted); line-height: 1.35; }
-.tile .lbl b { font-weight: 600; color: var(--warn); margin-inline-start: 0.25rem; }
+/* תווית "הנתון מתאריך אחר". isolate הוא העיקר כאן ולא הצבע: בלעדיו
+   הספרות של שם המכשיר ושל התאריך מתמזגות לריצה דו-כיוונית אחת. */
+.tile .lbl b.asof {
+  unicode-bidi: isolate;
+  direction: ltr;
+  font-weight: 600;
+  font-size: 0.92em;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-radius: 4px;
+  padding: 0.05em 0.32em;
+  margin-inline-start: 0.32rem;
+  white-space: nowrap;
+}
 .tile .val { font-size: 1.12rem; font-weight: 700; letter-spacing: -0.02em; }
 .tile .chg { font-size: 0.79rem; font-weight: 600; }
 .tile.up .chg { color: var(--up); }

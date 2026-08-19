@@ -142,6 +142,20 @@ if [ ! "$BRIEF" -nt "$MARKER" ]; then
 fi
 rm -f "$MARKER"
 
+# כל מהדורה קוראת את הברייפים הקודמים ומעתיקה מהם את מבנה הכותרת. לכן
+# מיתוג שגוי אינו טעות של יום אחד אלא משכפל את עצמו: "ברייף FOREST" שרד
+# את שינוי השם ב-31 ברייפים רצופים, והופיע ככותרת העמוד הראשי של האתר.
+# הנורמליזציה כאן מנתקת את השרשרת בלי להסתמך על כך שהמודל יזכור.
+HEAD1="$(head -1 "$BRIEF")"
+case "$HEAD1" in
+  "# TLV TASE View"*) ;;
+  "# ברייף FOREST"*)
+    sed -i '1s/^# ברייף FOREST/# TLV TASE View/' "$BRIEF"
+    echo "אזהרה: הכותרת נכתבה במיתוג הישן ותוקנה ל-TLV TASE View." ;;
+  *)
+    echo "אזהרה: כותרת הברייף אינה נפתחת ב-'# TLV TASE View': $HEAD1" ;;
+esac
+
 python scripts/publish_status.py
 python scripts/publish_news.py || echo "אזהרה: סיווג החדשות נכשל"
 python scripts/summarize_topics.py || echo "אזהרה: סיכומי הנושאים נכשלו"

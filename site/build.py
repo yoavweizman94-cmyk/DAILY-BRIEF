@@ -321,7 +321,15 @@ def markets_strip(markets: dict | None, te: dict | None = None) -> str:
         cls = "flat" if ch in (None, 0) else ("up" if ch > 0 else "down")
         sign = "" if ch is None else ("+" if ch > 0 else "")
         chtxt = "—" if ch is None else f"{sign}{ch}{'' if unit == 'pp' else '%'}"
-        stale = "" if not v.get("stale_days") else f'<b title="נתון לא עדכני">{v["asof"][5:]}</b>'
+        # התאריך חייב בידוד דו-כיווני: הספרות שבסוף שם המכשיר והספרות של
+        # התאריך מתמזגות אחרת לריצה אחת, ו-"ת\"א-125" עם "08-14" מוצג
+        # כ-"12508-14" — מספר שאינו קיים. שוליים לבדם אינם פותרים זאת.
+        stale = ""
+        if v.get("stale_days"):
+            a = v["asof"]
+            dd = f"{a[8:10]}/{a[5:7]}"
+            stale = (f'<b class="asof" dir="ltr" title="הנתון האחרון מ-{dd} — '
+                     f'טרם פורסמה סגירה חדשה">{dd}</b>')
         tiles.append(
             f'<div class="tile {cls}"><span class="lbl">{v["label"]}{stale}</span>'
             f'<span class="val" dir="ltr">{fmt_value(v["value"], unit == "pp")}</span>'
@@ -677,7 +685,9 @@ def main() -> int:
         # הייתה מציגה "עודכן עכשיו" מעל תוכן של אתמול.
         d_disp = f"{latest_date[8:10]}/{latest_date[5:7]}/{latest_date[:4]}"
         age = (datetime.now().date() - datetime.strptime(latest_date, "%Y-%m-%d").date()).days
-        stale_note = "" if age <= 0 else f' <b class="stale">ברייף בן {age} ימים</b>'
+        # "בן 1 ימים" אינו עברית. שתי הצורות הראשונות מיוחדות.
+        age_he = {1: "מאתמול", 2: "בן יומיים"}.get(age, f"בן {age} ימים")
+        stale_note = "" if age <= 0 else f' <b class="stale">ברייף {age_he}</b>'
         body = "\n".join(filter(None, [
             f'<div class="dash-head"><h1>{latest_title}</h1>'
             f'<span class="stamp">ברייף ל-{d_disp}{stale_note} · נבנה {datetime.now():%d/%m %H:%M}</span></div>',
