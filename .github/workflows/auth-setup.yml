@@ -1,0 +1,33 @@
+name: Auth Setup
+
+# הקמת התשתית לאימות עצמי: מרחב KV למשתמשים, קישורו לפרויקט ה-Pages,
+# והסוד שחותם את עוגיות הסשן.
+#
+# מריצים פעם אחת. אידמפוטנטי: מרחב או משתנה שכבר קיים אינו נוצר מחדש.
+on:
+  workflow_dispatch:
+    inputs:
+      probe_only:
+        description: "true = בדיקת הרשאות בלבד, בלי ליצור דבר"
+        type: choice
+        options: ["true", "false"]
+        default: "true"
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Provision
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROBE: ${{ inputs.probe_only }}
+        run: python3 scripts/auth_setup.py
