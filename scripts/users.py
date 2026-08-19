@@ -147,6 +147,10 @@ def main():
         }
         h, s = hash_password(password)
         u.update({"hash": h, "salt": s, "iterations": ITERATIONS})
+        # NAME חל גם על משתמש קיים: חשבון שנוצר ידנית מקבל את שם ברירת
+        # המחדל של הכלי, ואין דרך אחרת לתקן אותו.
+        if os.environ.get("NAME"):
+            u["name"] = os.environ["NAME"]
         if action == "seed":
             u["status"] = "active"
             u["approved"] = "seeded"
