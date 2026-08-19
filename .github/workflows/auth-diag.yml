@@ -1,0 +1,44 @@
+name: Auth Diag
+
+# אבחון חד-פעמי: מאזין ללוגים החיים של ה-Functions בזמן שהוא שולח בקשות,
+# כדי לקרוא את הודעת החריגה עצמה במקום להסיק אותה מקוד 1101.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Tail while probing
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -u
+          npx --yes wrangler@4 pages deployment tail --project-name forest-brief --format pretty > tail.log 2>&1 &
+          TAIL=$!
+          sleep 20
+
+          B=https://tlvtaseview.com
+          echo "--- כתובת שאינה קיימת (לא מגיע לגיבוב) ---"
+          curl -s -o /dev/null -w '  %{http_code}\n' --max-time 25 -X POST "$B/api/login" \
+            -H 'content-type: application/json' \
+            --data '{"email":"nobody-here@tlvtaseview.com","password":"whatever-long-pw"}' || true
+          sleep 6
+          echo "--- הרשמה (מגיעה לגיבוב) ---"
+          curl -s -o /dev/null -w '  %{http_code}\n' --max-time 25 -X POST "$B/api/register" \
+            -H 'content-type: application/json' \
+            --data '{"name":"diag","email":"diag-probe@tlvtaseview.com","password":"a-long-enough-password"}' || true
+          sleep 12
+
+          kill $TAIL 2>/dev/null || true
+          echo "=== לוג ==="
+          sed 's/\x1b\[[0-9;]*m//g' tail.log | tail -60
