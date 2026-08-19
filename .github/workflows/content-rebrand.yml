@@ -47,4 +47,5 @@ jobs:
       - name: Push content
         env:
           CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
-        run: bash scripts/content_repo.sh push "מיתוג: TLV TASE View בכותרת הברייפים"
+        run: |
+          bash scripts/content_repo.sh push "מיתוג TLV TASE View בכותרת הברייפים"
