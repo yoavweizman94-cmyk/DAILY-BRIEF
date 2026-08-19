@@ -1,9 +1,15 @@
 name: Site Check
 
-# בדיקה חיצונית של מצב האתר. המחשב המקומי מאחורי פרוקסי ארגוני שחוסם
-# את הבדיקות האלה, ו-runner נקי נותן תשובה אמינה.
+# בדיקה חיצונית של מצב האתר. המחשב המקומי יושב מאחורי FortiGuard ארגוני
+# שחוסם את הדומיין בקטגוריה "Newly Registered Domain" ומחזיר 403 על הכל —
+# כלומר בדיקה מקומית אינה מבחינה בין אתר תקין לאתר מת. runner נקי כן.
+#
+# הבדיקה **קובעת** ואינה רק מדפיסה: ריצה ירוקה שמדפיסה מספרים שאיש אינו
+# קורא היא בדיוק הכשל שהבדיקה הזו נועדה לתפוס.
 on:
   workflow_dispatch: {}
+  schedule:
+    - cron: "20 5 * * *"      # 08:20 שעון ישראל בקיץ
 
 permissions:
   contents: read
@@ -15,19 +21,56 @@ jobs:
     steps:
       - name: Probe
         run: |
-          for h in tlvtaseview.com www.tlvtaseview.com forest-brief.pages.dev; do
+          fail=0
+          note() { echo "  $*"; }
+          bad()  { echo "::error::$*"; fail=1; }
+
+          # --- האפקס והדומיין עם www: חייבים להגיש את דף הנחיתה הציבורי ---
+          for h in tlvtaseview.com www.tlvtaseview.com; do
             echo "=== $h ==="
-            curl -s -o /dev/null --max-time 25 -w '  קוד: %{http_code}   הפניה: %{redirect_url}\n' "https://$h/" || echo "  לא נגיש"
-            curl -sL -o p.html --max-time 30 -w '  אחרי הפניות: %{http_code}   סופי: %{url_effective}\n' "https://$h/" || true
-            echo "  אריחי שווקים: $(grep -c 'class="tile' p.html || true)"
-            echo "  כותרת: $(grep -o '<title>[^<]*' p.html | head -1 | cut -c8-70)"
-            for marker in 'id="req"' 'class="shot"' 'class="facts"' 'name="remail"' 'class="toc"'; do
+            : > p.html          # שלא ייווצר grep על קובץ חסר כשה-curl נופל
+            code=$(curl -sL -o p.html --max-time 30 -w '%{http_code}' "https://$h/" || true)
+            note "קוד סופי: $code"
+            note "כותרת: $(grep -o '<title>[^<]*' p.html | head -1 | cut -c8-70)"
+            [ "$code" = "200" ] || bad "$h החזיר $code במקום 200"
+            for marker in 'id="req"' 'class="shot"' 'class="facts"'; do
               n=$(grep -o "$marker" p.html | wc -l)
-              [ "$n" -gt 0 ] && echo "    $marker × $n"
+              note "$marker × $n"
+              [ "$n" -gt 0 ] || bad "$h — הסמן $marker חסר; זה אינו דף הנחיתה"
             done
+            # דף נחיתה שמגיש בטעות את האפליקציה או מסך התחברות
+            grep -qi 'cloudflareaccess\|Sign in ・' p.html && \
+              bad "$h מגיש מסך התחברות במקום דף נחיתה"
           done
 
+          # --- האפליקציה: חייבת להיות מוגנת. גישה חופשית כאן היא דליפת תוכן ---
+          echo "=== app.tlvtaseview.com ==="
+          : > a.html
+          code=$(curl -sL -o a.html --max-time 30 -w '%{http_code}' "https://app.tlvtaseview.com/" || true)
+          eff=$(curl -sL -o /dev/null --max-time 30 -w '%{url_effective}' "https://app.tlvtaseview.com/" || true)
+          note "קוד: $code"
+          note "יעד סופי: $eff"
+          if echo "$eff" | grep -q 'cloudflareaccess\.com' || [ "$code" = "403" ]; then
+            note "מוגן ✓"
+          else
+            bad "app.tlvtaseview.com אינו מוגן — הגיע ל-$eff עם קוד $code"
+          fi
+          # הוכחה חיובית שהתוכן עצמו לא דלף
+          grep -q 'class="toc"' a.html && bad "גוף הברייף הוגש ללא הזדהות — דליפה"
+
+          # --- pages.dev: חייב להפנות לדומיין ולא להגיש בעצמו ---
+          echo "=== forest-brief.pages.dev ==="
+          rd=$(curl -s -o /dev/null --max-time 25 -w '%{redirect_url}' "https://forest-brief.pages.dev/" || true)
+          note "הפניה: ${rd:-אין}"
+          echo "$rd" | grep -q 'app\.tlvtaseview\.com' || \
+            bad "pages.dev אינו מפנה ל-app.tlvtaseview.com (קיבלנו: ${rd:-אין})"
+
+          echo
+          [ "$fail" = "0" ] && echo "כל הבדיקות עברו." || echo "יש כשלים — ראו ::error:: למעלה."
+          exit "$fail"
+
       - name: Pages domain status
+        if: always()
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

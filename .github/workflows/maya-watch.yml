@@ -109,7 +109,22 @@ jobs:
         if: steps.collect.outputs.new == 'yes'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python scripts/summarize_reports.py || echo "הסיכום נכשל — ייאסף במחזור הבא"
+        run: |
+          # כישלון כאן לא מפיל את הריצה — עדכון האינדקס והפריסה עדיין שווים.
+          # אבל הוא חייב להיראות: "הסיכום נכשל" בגוף הלוג נבלע לגמרי, והריצה
+          # נשארה ירוקה מ-18/08 בזמן שאף דיווח לא סוכם. אנוטציה צפה לראש
+          # הריצה ולמסך ה-Actions, ולכן אי אפשר לפספס אותה.
+          set +e
+          python scripts/summarize_reports.py 2>&1 | tee sum.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            if grep -qi 'credit balance is too low\|insufficient.*credit\|quota' sum.log; then
+              echo "::error title=יתרת Anthropic אזלה::סיכומי הדוחות אינם רצים והברייפים אינם נכתבים. טעינה: console.anthropic.com/settings/billing"
+            else
+              echo "::warning title=הסיכום נכשל (קוד $rc)::ייאסף במחזור הבא. הפירוט בשלב Summarize."
+            fi
+          fi
+          exit 0
 
       - name: Commit summaries
         if: steps.collect.outputs.new == 'yes' || steps.filings.outputs.idx == 'yes'
