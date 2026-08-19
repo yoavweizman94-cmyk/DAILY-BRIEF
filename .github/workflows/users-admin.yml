@@ -8,7 +8,7 @@ on:
       action:
         description: "פעולה"
         type: choice
-        options: [list, show, activate, disable, delete, setpw]
+        options: [list, show, activate, disable, delete, setpw, seed]
         default: list
       email:
         description: "כתובת (לכל פעולה חוץ מ-list)"
