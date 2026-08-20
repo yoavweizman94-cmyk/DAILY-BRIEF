@@ -86,17 +86,24 @@ def cell_text(html: str) -> list[str]:
     return rows
 
 
-def field(blob: str, label: str) -> str | None:
+def field(blob: str, label: str, loose: bool = False) -> str | None:
     """ערך של שדה בטופס.
 
-    התווית חייבת להסתיים בנקודתיים או בקו מפריד. בלי העוגן הזה "שם פרטי"
-    תפס את התווית הארוכה יותר "שם פרטי באנגלית כפי שמופיע בדרכון" בשורה
-    שאחריה, כששדה השם הפרטי היה ריק — וכך תווית של שדה אחר הוצגה כשם
-    המחזיק של עסקה בשווי 757 מיליון.
+    שני מבנים שונים, ולכן שני מצבים:
+
+    · ברירת המחדל דורשת מפריד — נקודתיים או קו — אחרי התווית. בלעדיו
+      "שם פרטי" תפס את התווית הארוכה יותר "שם פרטי באנגלית כפי שמופיע
+      בדרכון" בשורה שאחריה כששדה השם היה ריק, והציג תווית כשם המחזיק
+      של עסקה בשווי 757 מיליון.
+    · loose לטפסים שבהם התוויות ממוספרות ואין אחריהן מפריד כלל, למשל
+      "א. מהות הפעולה גידול עקב רכישה מחוץ לבורסה" ב-ת078. שם המספור
+      עצמו הוא מה שמונע התנגשות, ולכן הוא חלק מהתווית.
+
+    בשני המצבים ההתאמה מוגבלת לשורה אחת: מחלקת הרווחים הכללית בולעת
+    גם את סוף השורה, ואז הביטוי תופס את התווית שאחריה כערך.
     """
-    # [ 	]* ולא \s*: האחרון בולע גם את סוף השורה, ואז הביטוי חוצה
-    # לשורה הבאה ותופס את התווית שאחריה כערך.
-    m = re.search(re.escape(label) + r"[ \t]*(?::|\|)[ \t]*\|?[ \t]*([^\n|]+)", blob)
+    m = re.search(re.escape(label) + (r"[ \t]*:?[ \t]*\|?[ \t]*([^\n|]+)" if loose
+                                      else r"[ \t]*(?::|\|)[ \t]*\|?[ \t]*([^\n|]+)"), blob)
     if not m:
         return None
     # הטופס משאיר קווים תחתונים בשדות ריקים, לעיתים לפני הערך עצמו.
@@ -120,6 +127,14 @@ def pct(blob: str, label: str) -> float | None:
     """שיעור החזקה מופיע כ-'% 12.34' אחרי התווית."""
     m = re.search(re.escape(label) + r"[^%\n]*%\s*([\d.]+)", blob)
     return float(m.group(1)) if m else None
+
+
+def _digits(s: str | None) -> str | None:
+    """מספר נייר הערך מגיע לעיתים עם מילה לפניו ("אחר 208017")."""
+    if not s:
+        return None
+    m = re.search(r"\d{4,}", s)
+    return m.group(0) if m else None
 
 
 def _currency(raw: str) -> str:
@@ -239,13 +254,15 @@ def parse_076(rows: list[str], meta: dict) -> dict | None:
 
 # ---------- ת078 / ת079: חציית סף בעל עניין ----------
 
+# התוויות כוללות את המספור מהטופס. הוא מה שהופך אותן לחד-משמעיות
+# כשאין אחריהן מפריד.
 T78 = {
-    "nature": "מהות הפעולה",
-    "sec": "שם וסוג נייר הערך נשוא הפעולה",
-    "sec_id": "מספר נייר ערך בבורסה",
-    "date": "תאריך ביצוע הפעולה",
-    "qty": "כמות ני\"ע נשוא הפעולה",
-    "price": "השער בו בוצעה הפעולה",
+    "nature": "א. מהות הפעולה",
+    "sec": "ב. שם וסוג נייר הערך נשוא הפעולה",
+    "sec_id": "ג. מספר נייר ערך בבורסה",
+    "date": "ד. תאריך ביצוע הפעולה",
+    "qty": "ה. כמות ני\"ע נשוא הפעולה",
+    "price": "ו. השער בו בוצעה הפעולה",
     "first": "שם פרטי",
     "last": "שם משפחה/שם תאגיד",
     "controller": "שם בעל השליטה בבעל העניין",
@@ -274,20 +291,20 @@ def _holding_row(rows: list[str], sec_id: str | None):
 
 def _cross_threshold(rows, meta, form):
     blob = "\n".join(rows)
-    nature = field(blob, T78["nature"])
+    nature = field(blob, T78["nature"], loose=True)
     if not nature or OFF_EXCHANGE not in nature:
         return None
-    sec_name = field(blob, T78["sec"]) or ""
+    sec_name = field(blob, T78["sec"], loose=True) or ""
     if NOT_SHARE.search(sec_name) or not SHARE.search(sec_name):
         return None
-    qty = num(field(blob, T78["qty"]))
+    qty = num(field(blob, T78["qty"], loose=True))
     if not qty:
         return None
 
-    price_raw = field(blob, T78["price"]) or ""
+    price_raw = field(blob, T78["price"], loose=True) or ""
     price = num(price_raw)
     currency = _currency(price_raw)
-    sec_id = field(blob, T78["sec_id"])
+    sec_id = field(blob, T78["sec_id"], loose=True)
     q_after, p_after = _holding_row(rows, sec_id)
     total = q_after / (p_after / 100.0) if (q_after and p_after) else None
 
@@ -295,7 +312,7 @@ def _cross_threshold(rows, meta, form):
     last = field(blob, T78["last"]) or ""
     holder = " ".join(x for x in (first, last) if x).strip() or None
 
-    d = field(blob, T78["date"])
+    d = field(blob, T78["date"], loose=True)
     try:
         tdate = datetime.strptime(d, "%d/%m/%Y").date().isoformat() if d else None
     except (ValueError, TypeError):
@@ -370,7 +387,8 @@ def parse_085(rows, meta):
     price_raw = next((ln for ln in rows if ln.startswith("שער העסקה")), "")
     price = num(price_raw)
     currency = _currency(price_raw)
-    value = num(field(blob, T85["value"]))
+    # בין התווית לנקודתיים מופיע שם המטבע ("ב שקל חדש"), ולכן loose.
+    value = num(field(blob, T85["value"], loose=True))
     qty = round(value / price) if (value and price) else None
     if not qty:
         return None
@@ -388,7 +406,7 @@ def parse_085(rows, meta):
         "date": tdate,
         "company": meta["company"],
         "company_id": meta["company_id"],
-        "security_id": field(blob, T85["sec_id"]),
+        "security_id": _digits(field(blob, T85["sec_id"])),
         "security": sec_name,
         "holder": field(blob, T85["holder"]) or meta["company"],
         "holder_type": "התאגיד המדווח",
