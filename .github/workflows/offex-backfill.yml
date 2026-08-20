@@ -18,7 +18,7 @@ on:
         default: ""
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: content-write
@@ -67,3 +67,13 @@ jobs:
           CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
         run: |
           bash scripts/content_repo.sh push "עסקאות מחוץ לבורסה"
+
+      # מצב הסריקה יושב בריפו הקוד ולא בריפו התוכן. בלעדיו כל ריצה
+      # יומית מתחילה מחדש מלפני שלושה ימים ופער ארוך יותר לא נסגר.
+      - name: Push scan state
+        run: |
+          git config user.name "forest-brief-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/offex_state.json
+          git diff --cached --quiet || git commit -m "offex: מצב סריקה"
+          bash scripts/git_sync.sh
