@@ -15,6 +15,7 @@
 הערך מאותו סוג נגזר מ-(כמות אחרי חלקי שיעור אחרי), ומתוכו מחושב חלקה של
 העסקה. כשהשיעור מעוגל לאפס אין ממה לגזור, והשדה נשאר ריק במקום לנחש.
 """
+import collections
 import json
 import os
 import re
@@ -51,6 +52,7 @@ def parser(form: str, kind: str, identity: bool):
     return deco
 
 
+DISCOVER = os.environ.get("OFFEX_DISCOVER") == "1"
 FORM = "ת076"
 # ערכים שהמדווח ממלא כשאין תוכן. נמדדו בפועל על 249 עסקאות: 14 מקפים,
 # מקף כפול, נקודה בודדת, ו"לא רלוונטי". הצגתם כזהות היא רעש.
@@ -457,6 +459,8 @@ def main() -> int:
         return 1
 
     found, scanned, failed = [], 0, 0
+    unparsed: dict[str, int] = collections.Counter()
+    unparsed_sample: dict[str, str] = {}
     bad_days: list[str] = []
     ok_through = None
     since_refresh = 0
@@ -499,8 +503,24 @@ def main() -> int:
             continue
 
         for it in items:
-            fn = PARSERS.get(it.get("formId") or "")
+            form = it.get("formId") or ""
+            fn = PARSERS.get(form)
             if fn is None:
+                # מצב גילוי: מושך גם טפסים שאין להם מנתח, כדי לגלות
+                # מקורות חדשים. רשימת המקורות צריכה להישען על סריקה
+                # ולא על הנחה — כך התגלו ת078, ת079 ו-ת085.
+                if not DISCOVER:
+                    continue
+                att = next((a for a in it.get("attachments", []) if a["fileType"] == "htm"), None)
+                if not att:
+                    continue
+                try:
+                    body = fetch_file(maya, att["url"]).decode("cp1255", "replace")
+                except Exception:
+                    continue
+                if OFF_EXCHANGE in body:
+                    unparsed[form] += 1
+                    unparsed_sample.setdefault(form, it["title"][:60])
                 continue
             att = next((a for a in it.get("attachments", []) if a["fileType"] == "htm"), None)
             if not att:
@@ -559,6 +579,10 @@ def main() -> int:
     print(f"scanned {scanned} reports ({'/'.join(PARSERS)}) {start}..{today} | "
           f"off-exchange share trades: {len(found)} ({added} new) | "
           f"failures: {failed} | state through: {last}")
+    if unparsed:
+        print("\nטפסים ללא מנתח שמזכירים 'מחוץ לבורסה':")
+        for f, c in unparsed.most_common():
+            print(f"  {f}  {c}  [{unparsed_sample.get(f, '')}]")
     if bad_days:
         print(f"::warning::{len(bad_days)} ימים לא נסרקו: {', '.join(bad_days[:8])}"
               f"{' …' if len(bad_days) > 8 else ''}")
