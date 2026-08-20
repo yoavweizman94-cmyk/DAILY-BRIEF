@@ -746,6 +746,76 @@ nav.toc a {
 nav.toc a:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 main h2[id] { scroll-margin-top: 4rem; }
 
+/* ---------- שוק הדיור ---------- */
+
+table.nadlan { font-size: 0.88rem; }
+table.nadlan td { white-space: nowrap; }
+table.nadlan td.city { font-weight: 600; white-space: normal; }
+/* עמודת המפתח היא חציון ה-₪/מ״ר; שאר המספרים משרתים אותה */
+table.nadlan td.key { font-family: var(--mono); font-weight: 600; color: var(--accent); }
+table.nadlan td[dir="ltr"] { font-family: var(--mono); }
+table.nadlan td.trend { display: flex; align-items: center; gap: 0.45rem; font-family: var(--mono); }
+table.nadlan td.trend.up { color: var(--up); }
+table.nadlan td.trend.down { color: var(--down); }
+table.nadlan td.trend.flat { color: var(--faint); }
+.spark { flex: none; opacity: 0.85; }
+
+.thin {
+  display: inline-block; margin-inline-start: 0.4rem;
+  font-size: 0.66rem; font-weight: 600; color: var(--warn);
+  background: var(--warn-bg); border-radius: 3px; padding: 0.02rem 0.4rem;
+  cursor: help;
+}
+
+ul.projects { list-style: none; padding: 0; margin: 0.8rem 0 2rem;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 0.6rem; }
+ul.projects li {
+  border: 1px solid var(--border); border-top: 2px solid var(--warn);
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--surface); padding: 0.7rem 0.85rem;
+}
+ul.projects .ph { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+ul.projects .c { font-family: var(--serif); font-weight: 700; font-size: 1.02rem; }
+ul.projects .h { font-size: 0.84rem; color: var(--muted); }
+ul.projects .cnt { margin-inline-start: auto; font-family: var(--mono);
+  font-size: 0.74rem; color: var(--faint); }
+/* היזם בצבע האזהרה ולא בצבע המבטא: זה מועמד, לא עובדה מהעסקה. */
+ul.projects .pd { margin-top: 0.35rem; font-size: 0.82rem; color: var(--warn); }
+ul.projects .pn { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem;
+  margin-top: 0.55rem; padding-top: 0.45rem; border-top: 1px solid var(--border); }
+ul.projects .pn span { display: flex; flex-direction: column; gap: 0.08rem; }
+ul.projects .pn b { font-size: 0.66rem; font-weight: 600; color: var(--faint); }
+ul.projects .pn i { font-style: normal; font-family: var(--mono); font-size: 0.86rem; }
+
+ul.newbuild { list-style: none; padding: 0; margin: 0.8rem 0 0; }
+ul.newbuild li {
+  display: grid;
+  grid-template-columns: 3.2rem minmax(5rem, 7rem) 1fr auto auto auto;
+  align-items: baseline; gap: 0.2rem 0.9rem;
+  padding: 0.5rem 0; border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+ul.newbuild li:last-child { border-bottom: 0; }
+ul.newbuild .d { font-family: var(--mono); font-size: 0.8rem; color: var(--faint); }
+ul.newbuild .c { font-weight: 600; }
+ul.newbuild .l { color: var(--muted); font-size: 0.84rem; }
+ul.newbuild .n { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+ul.newbuild .p { font-family: var(--mono); font-weight: 600; }
+ul.newbuild .s { font-family: var(--mono); font-size: 0.82rem; color: var(--accent); }
+/* היזם הוא מועמד ולא ייחוס, ולכן שורה משלו ובצבע מושתק — לא חלק
+   משורת העובדות של העסקה. */
+ul.newbuild .dev {
+  grid-column: 1 / -1; font-size: 0.78rem; color: var(--warn);
+  padding-inline-start: 4.1rem;
+}
+
+@media (max-width: 42rem) {
+  ul.newbuild li { grid-template-columns: 3.2rem 1fr auto; }
+  ul.newbuild .l { grid-column: 2 / -1; }
+  ul.newbuild .n { grid-column: 2; }
+  ul.newbuild .dev { padding-inline-start: 4.1rem; }
+}
+
 /* ---------- עסקאות מחוץ לבורסה ---------- */
 
 /* עמודות שיעור מצטבר: השם, הפס, ואז שני מספרים מיושרים. הפס הוא

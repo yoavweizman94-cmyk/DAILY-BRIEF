@@ -1,0 +1,72 @@
+name: Nadlan Scan
+
+# סריקת עסקאות נדל"ן בגוש דן, בדרום ובצפון.
+#
+# רצה ממילא בכל בוקר כחלק מ-run_daily.sh. ה-workflow הזה נועד להרצה
+# יזומה: אחרי שינוי ברשימת הערים, להרחבת חלון הזמן, או כשעיר מסוימת
+# חזרה ריקה ורוצים לבדוק אותה לבד.
+on:
+  workflow_dispatch:
+    inputs:
+      city:
+        description: "עיר אחת (ריק = כל הערים)"
+        required: false
+        default: ""
+      months:
+        description: "חלון בחודשים (ריק = לפי הקונפיג)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: content-write
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install requests pyyaml truststore certifi
+
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Scan
+        env:
+          NADLAN_CITY: ${{ inputs.city }}
+          NADLAN_MONTHS: ${{ inputs.months }}
+        run: python ingest/nadlan_pull.py
+
+      - name: Summary
+        if: always()
+        run: |
+          f="output/nadlan/$(date +%Y).jsonl"
+          for y in output/nadlan/*.jsonl; do
+            [ -s "$y" ] && echo "$(basename "$y"): $(grep -c . "$y") עסקאות"
+          done
+          echo "ערים שנכשלו: $(python3 -c "import json;print(', '.join(json.load(open('data/nadlan_state.json',encoding='utf-8')).get('failed') or []) or 'אין')" 2>/dev/null || echo '?')"
+
+      - name: Push content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh push "עסקאות נדלן"
+
+      - name: Push scan state
+        run: |
+          git config user.name "forest-brief-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/nadlan_state.json
+          git diff --cached --quiet || git commit -m "nadlan: מצב סריקה"
+          bash scripts/git_sync.sh

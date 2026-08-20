@@ -74,6 +74,12 @@ run_source rmi     python ingest/rmi_pull.py
 run_source te      python ingest/te_pull.py
 run_source calls   python ingest/maya_calls.py
 run_source offex   python ingest/offex_pull.py
+# סריקת הנדל"ן נמשכת כרבע שעה על 33 ערים, ונתוני רשות המסים מתעדכנים
+# פעם ביום לכל היותר. הרצתה בשלוש המהדורות היא אותו מידע בשלוש פעמים
+# העלות.
+if [ "$EDITION" = "morning" ]; then
+  run_source nadlan  python ingest/nadlan_pull.py
+fi
 # אינדקס הדוחות מתוחזק ע"י maya-watch (כל רבע שעה) ולא כאן: כותב שלישי
 # לאותם קבצים היה מוסיף מרוץ בלי להוסיף טריות.
 if [ ${#FAILED[@]} -gt 0 ]; then
