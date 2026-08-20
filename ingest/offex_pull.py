@@ -87,8 +87,21 @@ def cell_text(html: str) -> list[str]:
 
 
 def field(blob: str, label: str) -> str | None:
-    m = re.search(re.escape(label) + r"\s*:?\s*\|?\s*([^\n|]+)", blob)
-    return m.group(1).strip() if m else None
+    """ערך של שדה בטופס.
+
+    התווית חייבת להסתיים בנקודתיים או בקו מפריד. בלי העוגן הזה "שם פרטי"
+    תפס את התווית הארוכה יותר "שם פרטי באנגלית כפי שמופיע בדרכון" בשורה
+    שאחריה, כששדה השם הפרטי היה ריק — וכך תווית של שדה אחר הוצגה כשם
+    המחזיק של עסקה בשווי 757 מיליון.
+    """
+    # [ 	]* ולא \s*: האחרון בולע גם את סוף השורה, ואז הביטוי חוצה
+    # לשורה הבאה ותופס את התווית שאחריה כערך.
+    m = re.search(re.escape(label) + r"[ \t]*(?::|\|)[ \t]*\|?[ \t]*([^\n|]+)", blob)
+    if not m:
+        return None
+    # הטופס משאיר קווים תחתונים בשדות ריקים, לעיתים לפני הערך עצמו.
+    v = re.sub(r"_{3,}", " ", m.group(1)).strip(" \t-–—")
+    return None if not v or v in PLACEHOLDER else v
 
 
 def num(s: str | None) -> float | None:
