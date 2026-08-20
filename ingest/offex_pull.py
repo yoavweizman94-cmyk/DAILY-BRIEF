@@ -107,7 +107,7 @@ def field(blob: str, label: str, loose: bool = False) -> str | None:
     if not m:
         return None
     # הטופס משאיר קווים תחתונים בשדות ריקים, לעיתים לפני הערך עצמו.
-    v = re.sub(r"_{3,}", " ", m.group(1)).strip(" \t-–—")
+    v = re.sub(r"_+", " ", m.group(1)).strip(" \t_-–—")
     return None if not v or v in PLACEHOLDER else v
 
 

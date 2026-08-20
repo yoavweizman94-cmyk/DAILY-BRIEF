@@ -4,6 +4,7 @@
 ורינדור — כדי ש-build.py לא ימשיך לתפוח.
 """
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -125,10 +126,17 @@ PLACEHOLDER = {"-", "--", "---", "–", "—", ".", "_________", "אין",
 
 
 def clean(v):
-    """ערך שהמדווח מילא רק כדי לא להשאיר שדה ריק אינו מידע."""
-    v = (v or "").strip()
+    """ערך שהמדווח מילא רק כדי לא להשאיר שדה ריק אינו מידע.
+
+    הניקוי חוזר גם כאן ולא רק באיסוף: כך רשומות שכבר נאספו מוצגות נכון
+    בלי להריץ סריקה חוזרת של כל השנה.
+    """
+    v = re.sub(r"_+", " ", (v or "")).strip(" 	_-–—")
+    v = re.sub(r"\s{2,}", " ", v)
     return "" if v in PLACEHOLDER else v
 
+
+UNIT = {"agorot": "אג׳", "ils": "₪", "other": ""}
 
 KIND = {
     "holdings": ("שינוי החזקות", "ת076"),
@@ -234,13 +242,15 @@ def page(rows: list[dict], year: str) -> str:
         tags = []
         if kind_form:
             tags.append(f'<span class="kind" title="{kind_label}">{kind_form}</span>')
+        # התגיות מצטברות: דיווח מאגד שהוגש שוב הוא גם וגם, והצגת אחת
+        # מהן בלבד מסתירה מהקורא למה אותה עסקה מופיעה פעמיים.
         if r.get("partial"):
             tags.append('<span class="dup" title="הדיווח מאגד עסקאות בתוך ומחוץ '
                         'לבורסה בלי לפצל, ולכן אינו נספר בהיקף">מאגד</span>')
-        elif r.get("restated"):
+        if r.get("restated"):
             tags.append('<span class="dup" title="הוגש שוב עם מזהה אחר; '
                         'נספרת ההגשה המאוחרת">הוגש שוב</span>')
-        elif not r.get("counted", True):
+        elif not r.get("partial") and not r.get("counted", True):
             tags.append('<span class="dup" title="אותה עסקה דווחה גם מהצד השני; '
                         'בסכומים נספרת פעם אחת">הצד השני</span>')
         dup = "".join(tags)
@@ -250,13 +260,14 @@ def page(rows: list[dict], year: str) -> str:
             f'<a class="co" href="{r["url"]}" target="_blank" rel="noopener">'
             f'{r.get("company") or "—"}</a>'
             f'<span class="sec">{r.get("security") or ""}</span>{dup}</div>'
-            f'<div class="tx-who"><b>{who}:</b> {r.get("holder") or "—"}'
+            f'<div class="tx-who"><b>{who}:</b> {clean(r.get("holder")) or "—"}'
             + (f' <em>({htype})</em>' if htype else "")
             + (f'<span class="ctrl">בעל השליטה בו: {ctrl}</span>' if ctrl else "")
             + '</div>'
             f'<div class="tx-nums">'
             f'<span><b>כמות</b><i dir="ltr">{r["quantity"]:,}</i></span>'
-            f'<span><b>שער</b><i dir="ltr">{rate(r.get("price"))} אג׳</i></span>'
+            f'<span><b>שער</b><i dir="ltr">{rate(r.get("price"))} '
+            f'{UNIT.get(r.get("currency") or "agorot", "")}</i></span>'
             f'<span><b>היקף</b><i dir="ltr">{money(r.get("value_ils"))}</i></span>'
             f'<span class="hi"><b>מההון{"*" if r.get("pct_inherited") else ""}</b>'
             f'<i dir="ltr">{pct(r.get("pct_of_class"))}</i></span>'
