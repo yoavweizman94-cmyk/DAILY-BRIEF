@@ -52,9 +52,13 @@ def mark_pairs(rows: list[dict]) -> None:
         if not key[0] or not key[1]:
             continue
 
-        # הגשה חוזרת: אותו כיוון, יותר ממופע אחד
-        for direction in ("buy", "sell"):
-            same = [r for r in g if r["direction"] == direction]
+        # הגשה חוזרת: אותו כיוון **ואותו מדווח**. בלי תנאי המדווח, שתי
+        # רכישות של אנשים שונים באותה כמות ובאותו יום היו נבלעות זו בזו.
+        # נבדק על הנתונים: כל 11 הקבוצות שסומנו הן אכן אותו מדווח.
+        by_side: dict[tuple, list[dict]] = {}
+        for r in g:
+            by_side.setdefault((r["direction"], (r.get("holder") or "").strip()), []).append(r)
+        for same in by_side.values():
             if len(same) > 1:
                 keep = max(same, key=lambda r: r.get("report_id") or 0)
                 for r in same:
