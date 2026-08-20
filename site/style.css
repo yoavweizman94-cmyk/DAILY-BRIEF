@@ -810,11 +810,18 @@ li.tx.sell .dir { background: color-mix(in srgb, var(--down) 14%, transparent); 
 }
 .tx-head .co:hover { color: var(--accent); text-decoration: underline; }
 .tx-head .sec { font-size: 0.78rem; color: var(--faint); }
-.tx-head .dup {
-  font-size: 0.68rem; color: var(--warn); background: var(--warn-bg);
-  border-radius: 3px; padding: 0.05rem 0.45rem; margin-inline-start: auto;
+.tx-head .kind {
+  font-size: 0.66rem; font-family: var(--mono); color: var(--muted);
+  background: var(--table-head); border-radius: 3px; padding: 0.05rem 0.4rem;
   white-space: nowrap; cursor: help;
 }
+.tx-head .kind + .dup { margin-inline-start: 0.3rem; }
+.tx-head .dup {
+  font-size: 0.68rem; color: var(--warn); background: var(--warn-bg);
+  border-radius: 3px; padding: 0.05rem 0.45rem;
+  white-space: nowrap; cursor: help;
+}
+.tx-head .kind:first-of-type { margin-inline-start: auto; }
 
 /* הזהות היא הסיבה שהעמוד הזה קיים, ולכן היא שורה משלה ולא עוד שדה
    בטבלת המספרים. */

@@ -25,29 +25,60 @@ def load_offex() -> list[dict]:
 
 
 def mark_pairs(rows: list[dict]) -> None:
-    """מסמן עסקאות שדווחו משני צדדיה של אותה העברה.
+    """מסמן מה נספר בסכומים ומה לא, ומשלים שיעור בין שני צדדיה של עסקה.
 
-    כשגם הקונה וגם המוכר הם בעלי עניין, אותה עסקה מדווחת פעמיים — נמדד
-    על רם-און, 47,593 מניות באותו יום משני הכיוונים. ספירת שתיהן הייתה
-    מכפילה את ההיקף הכספי. לכן צד אחד מסומן כנספר והשני לא, אבל **שניהם
-    מוצגים**: הצד השני הוא שנושא את זהות הצד שכנגד, וזו עיקר התועלת.
+    שלוש צורות של ספירה כפולה, כולן נמדדו בנתונים:
+
+    · **שני צדדים.** כשגם הקונה וגם המוכר מדווחים — נמדד על רם-און
+      (47,593 מניות משני הכיוונים) ועל נקסטפרם (ת078 מול ת079). שניהם
+      מוצגים כי הם נושאים את הזהויות, אבל בסכומים נספר צד אחד.
+    · **הגשה חוזרת.** אותה עסקה מוגשת פעמיים באותו כיוון עם מזהה אחר —
+      נמדד על רכישה עצמית של נאוי גרופ, 137,918 מניות בשני דיווחים.
+      נספרת ההגשה המאוחרת.
+    · **דיווח מאגד.** ת085 מאגד לעיתים "עסקאות בתוך ומחוץ לבורסה" בלי
+      לפצל. אי אפשר לייחס את כל הסכום למסחר מחוץ לבורסה, ולכן הוא מוצג
+      עם הסייג ואינו נספר בהיקף.
+
+    בנוסף: כשצד אחד מדווח שיעור מההון והשני לא — למשל מי שחדל להיות
+    בעל עניין ואחזקתו התאפסה — השיעור מושלם מהצד שכן דיווח. זו אותה
+    עסקה, ולא הערכה.
     """
     groups: dict[tuple, list[dict]] = {}
     for r in rows:
+        r.setdefault("counted", True)
         groups.setdefault((r.get("company_id"), r.get("date"), r.get("quantity")), []).append(r)
+
     for key, g in groups.items():
-        for r in g:
-            r.setdefault("counted", True)
-        if len(g) < 2 or not key[0] or not key[1]:
+        if not key[0] or not key[1]:
             continue
-        buys = [r for r in g if r["direction"] == "buy"]
-        sells = [r for r in g if r["direction"] == "sell"]
-        if not (buys and sells):
-            continue
-        primary = next((r for r in buys if r.get("value_ils")), buys[0])
-        for r in g:
-            r["paired"] = True
-            r["counted"] = r is primary
+
+        # הגשה חוזרת: אותו כיוון, יותר ממופע אחד
+        for direction in ("buy", "sell"):
+            same = [r for r in g if r["direction"] == direction]
+            if len(same) > 1:
+                keep = max(same, key=lambda r: r.get("report_id") or 0)
+                for r in same:
+                    r["restated"] = r is not keep
+                    if r is not keep:
+                        r["counted"] = False
+
+        buys = [r for r in g if r["direction"] == "buy" and not r.get("restated")]
+        sells = [r for r in g if r["direction"] == "sell" and not r.get("restated")]
+        if buys and sells:
+            known = next((r.get("pct_of_class") for r in g if r.get("pct_of_class")), None)
+            for r in g:
+                r["paired"] = True
+                if known and not r.get("pct_of_class"):
+                    r["pct_of_class"] = known
+                    r["pct_inherited"] = True
+            primary = next((r for r in buys if r.get("value_ils")), buys[0])
+            for r in buys + sells:
+                r["counted"] = r is primary
+
+    # דיווח מאגד אינו ניתן לייחוס מלא, ולכן אינו נספר בהיקף
+    for r in rows:
+        if r.get("partial"):
+            r["counted"] = False
 
 
 def stats(rows: list[dict], year: str) -> dict:
@@ -95,6 +126,13 @@ def clean(v):
     return "" if v in PLACEHOLDER else v
 
 
+KIND = {
+    "holdings": ("שינוי החזקות", "ת076"),
+    "threshold": ("חציית סף בעל עניין", "ת078/9"),
+    "buyback": ("רכישה עצמית", "ת085"),
+}
+
+
 def money(v) -> str:
     if not v:
         return "—"
@@ -136,12 +174,16 @@ def page(rows: list[dict], year: str) -> str:
     out = [
         '<div class="dash-head"><h1>עסקאות מניה מחוץ לבורסה</h1>',
         f'<span class="stamp">מתחילת {year} · נבנה {datetime.now():%d/%m %H:%M}</span></div>',
-        '<p class="lead">כל עסקה במניה שדווחה כמבוצעת מחוץ לבורסה בטופס ת076 — '
-        'הדוח המיידי על שינוי בהחזקות בעלי עניין ונושאי משרה בכירה. '
-        '<strong>זה גם גבול הכיסוי:</strong> עסקה שבה אף צד אינו בעל עניין אינה '
-        'מדווחת בטופס הזה ואינה מופיעה כאן. מנגד, זו בדיוק הסיבה שיש כאן זהות — '
-        'בטופס הזה המדווח חייב להזדהות בשמו ובמספר הזיהוי שלו. לפי הבורסה, גם '
-        'עסקה תואמת מסווגת כעסקה מחוץ לבורסה.</p>',
+        '<p class="lead">כל עסקה במניה שדווחה במאיה כמבוצעת מחוץ לבורסה, '
+        'משלושה סוגי דיווח: <strong>ת076</strong> שינוי בהחזקות בעל עניין; '
+        '<strong>ת078/ת079</strong> מי שנעשה או חדל להיות בעל עניין — אלה '
+        'העסקאות שחוצות את סף 5%, ולרוב הגדולות שבהן; ו<strong>ת085</strong> '
+        'רכישה עצמית של החברה במניותיה, שבה אין צד שני מזוהה. לפי הבורסה גם '
+        'עסקה תואמת מסווגת כמחוץ לבורסה.</p>'
+        '<p class="lead">מה שאינו כאן: עסקה מחוץ לבורסה שאף צד בה אינו בעל '
+        'עניין ואינה נוגעת במניות רדומות אינה מחייבת דיווח, ולכן אינה מתועדת '
+        'במאיה כלל. בעסקאות שכן מדווחות המדווח חייב להזדהות — ומכאן הזהויות '
+        'שבעמוד.</p>',
         '<section class="strip">',
         f'<div class="tile"><span class="lbl">עסקאות מתחילת השנה</span>'
         f'<span class="val" dir="ltr">{st["n"]}</span>'
@@ -184,9 +226,20 @@ def page(rows: list[dict], year: str) -> str:
         who = "הקונה" if buy else "המוכר"
         ctrl = clean(r.get("holder_controller"))
         htype = clean(r.get("holder_type"))
-        dup = "" if r.get("counted", True) else (
-            '<span class="dup" title="אותה עסקה דווחה גם מהצד השני של ההעברה; '
-            'בסכומים היא נספרת פעם אחת">הצד השני</span>')
+        kind_label, kind_form = KIND.get(r.get("kind") or "holdings", ("", ""))
+        tags = []
+        if kind_form:
+            tags.append(f'<span class="kind" title="{kind_label}">{kind_form}</span>')
+        if r.get("partial"):
+            tags.append('<span class="dup" title="הדיווח מאגד עסקאות בתוך ומחוץ '
+                        'לבורסה בלי לפצל, ולכן אינו נספר בהיקף">מאגד</span>')
+        elif r.get("restated"):
+            tags.append('<span class="dup" title="הוגש שוב עם מזהה אחר; '
+                        'נספרת ההגשה המאוחרת">הוגש שוב</span>')
+        elif not r.get("counted", True):
+            tags.append('<span class="dup" title="אותה עסקה דווחה גם מהצד השני; '
+                        'בסכומים נספרת פעם אחת">הצד השני</span>')
+        dup = "".join(tags)
         out.append(
             f'<li class="tx {"buy" if buy else "sell"}">'
             f'<div class="tx-head"><span class="dir">{"רכישה" if buy else "מכירה"}</span>'
@@ -201,7 +254,8 @@ def page(rows: list[dict], year: str) -> str:
             f'<span><b>כמות</b><i dir="ltr">{r["quantity"]:,}</i></span>'
             f'<span><b>שער</b><i dir="ltr">{rate(r.get("price"))} אג׳</i></span>'
             f'<span><b>היקף</b><i dir="ltr">{money(r.get("value_ils"))}</i></span>'
-            f'<span class="hi"><b>מההון</b><i dir="ltr">{pct(r.get("pct_of_class"))}</i></span>'
+            f'<span class="hi"><b>מההון{"*" if r.get("pct_inherited") else ""}</b>'
+            f'<i dir="ltr">{pct(r.get("pct_of_class"))}</i></span>'
             f'<span><b>מצטבר בחברה</b><i dir="ltr">'
             f'{pct(cum.get(r["report_id"]), 2) if cum.get(r["report_id"]) else "—"}</i></span>'
             f'<span><b>החזקה אחרי</b><i dir="ltr">{pct(r.get("holding_pct_after"), 2)}</i></span>'
@@ -209,5 +263,6 @@ def page(rows: list[dict], year: str) -> str:
     out.append("</ul>")
     out.append('<p class="note">שיעור העסקה מההון נגזר מהכמות ומשיעור ההחזקה שדווחו '
                'בטופס עצמו. כשהשיעור מעוגל לאפס אין ממה לגזור, והשדה נשאר ריק במקום '
-               'לנחש. השער מוצג כפי שדווח, באגורות.</p>')
+               'לנחש. כוכבית ליד "מההון" — השיעור הושלם מהצד השני של אותה עסקה. '
+               'השער מוצג כפי שדווח: ת076 ו-ת078/9 נוקבים באגורות, ת085 בשקלים.</p>')
     return "\n".join(out)

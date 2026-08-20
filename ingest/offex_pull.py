@@ -35,6 +35,22 @@ OUT = ROOT / "output" / "offex"
 STATE = ROOT / "data" / "offex_state.json"
 FILES = "https://mayafiles.tase.co.il/"
 
+# רישום מנתחים לפי טופס. הוספת מקור היא הוספת פונקציה ל-PARSERS —
+# הלולאה הראשית אינה יודעת דבר על טופס מסוים.
+PARSERS: dict[str, object] = {}
+
+
+def parser(form: str, kind: str, identity: bool):
+    """רושם מנתח לטופס. kind מתאר את סוג האירוע, identity אומר אם הטופס
+    מחייב את המדווח להזדהות — וזה ההבדל שהקורא חייב לראות."""
+    def deco(fn):
+        fn._kind = kind
+        fn._identity = identity
+        PARSERS[form] = fn
+        return fn
+    return deco
+
+
 FORM = "ת076"
 # ערכים שהמדווח ממלא כשאין תוכן. נמדדו בפועל על 249 עסקאות: 14 מקפים,
 # מקף כפול, נקודה בודדת, ו"לא רלוונטי". הצגתם כזהות היא רעש.
@@ -91,6 +107,26 @@ def pct(blob: str, label: str) -> float | None:
     return float(m.group(1)) if m else None
 
 
+def _currency(raw: str) -> str:
+    """המטבע כפי שהטופס נוקב בו. ת076 נוקב באגורות, ת085 בשקל חדש —
+    וחלוקה ב-100 על הדיווח הלא נכון נותנת היקף כספי שגוי בשקט."""
+    if "אג'" in raw or "אגורות" in raw:
+        return "agorot"
+    if "ש\"ח" in raw or "שקל חדש" in raw or "שקלים" in raw:
+        return "ils"
+    return "other"
+
+
+def _value(qty, price, currency):
+    if not (qty and price):
+        return None
+    if currency == "agorot":
+        return round(qty * price / 100.0)
+    if currency == "ils":
+        return round(qty * price)
+    return None
+
+
 L = {
     "nature": "מהות השינוי",
     "sec": "שם וסוג נייר הערך",
@@ -119,7 +155,9 @@ L = {
 }
 
 
-def parse(rows: list[str], meta: dict) -> dict | None:
+@parser("ת076", kind="holdings", identity=True)
+def parse_076(rows: list[str], meta: dict) -> dict | None:
+    """שינוי בהחזקות בעל עניין או נושא משרה — הטופס עם הזהות המלאה."""
     blob = "\n".join(rows)
 
     nature = field(blob, L["nature"])
@@ -141,8 +179,7 @@ def parse(rows: list[str], meta: dict) -> dict | None:
     # הכספי מחושב רק כשהמטבע ידוע.
     price_raw = field(blob, L["price"]) or ""
     price = num(price_raw)
-    currency = "agorot" if "אג'" in price_raw else (
-        "ils" if "ש\"ח" in price_raw else "other")
+    currency = _currency(price_raw)
     before_q = num(field(blob, L["before_q"]))
     after_q = num(field(blob, L["after_q"]))
     before_p = pct(blob, L["before_p"])
@@ -178,10 +215,179 @@ def parse(rows: list[str], meta: dict) -> dict | None:
         "quantity": int(qty),
         "price": price,
         "currency": currency,
-        "value_ils": (round(qty * price / 100.0) if currency == "agorot" else
-                      round(qty * price) if currency == "ils" else None) if price else None,
+        "value_ils": _value(qty, price, currency),
         "pct_of_class": share_pct,
         "holding_pct_after": pct(blob, L["cap_after"]),
+        "url": f"https://maya.tase.co.il/he/reports/{meta['id']}",
+    }
+
+
+# ---------- ת078 / ת079: חציית סף בעל עניין ----------
+
+T78 = {
+    "nature": "מהות הפעולה",
+    "sec": "שם וסוג נייר הערך נשוא הפעולה",
+    "sec_id": "מספר נייר ערך בבורסה",
+    "date": "תאריך ביצוע הפעולה",
+    "qty": "כמות ני\"ע נשוא הפעולה",
+    "price": "השער בו בוצעה הפעולה",
+    "first": "שם פרטי",
+    "last": "שם משפחה/שם תאגיד",
+    "controller": "שם בעל השליטה בבעל העניין",
+}
+
+
+def _holding_row(rows: list[str], sec_id: str | None):
+    """שורת מצבת ההחזקות שאחרי הפעולה.
+
+    המבנה: שם | מס' ני"ע | כמות | רדומות | % הון | % הצבעה. מחזיר
+    (כמות, אחוז מההון) — ומהם נגזר סך המניות ומתוכו חלקה של העסקה.
+    """
+    if not sec_id:
+        return None, None
+    for ln in rows:
+        parts = [x.strip() for x in ln.split("|")]
+        if len(parts) < 5 or sec_id not in parts:
+            continue
+        nums = [num(x) for x in parts]
+        idx = parts.index(sec_id)
+        after = [n for n in nums[idx + 1:] if n is not None]
+        if len(after) >= 2:
+            return after[0], after[-2] if len(after) > 2 else after[1]
+    return None, None
+
+
+def _cross_threshold(rows, meta, form):
+    blob = "\n".join(rows)
+    nature = field(blob, T78["nature"])
+    if not nature or OFF_EXCHANGE not in nature:
+        return None
+    sec_name = field(blob, T78["sec"]) or ""
+    if NOT_SHARE.search(sec_name) or not SHARE.search(sec_name):
+        return None
+    qty = num(field(blob, T78["qty"]))
+    if not qty:
+        return None
+
+    price_raw = field(blob, T78["price"]) or ""
+    price = num(price_raw)
+    currency = _currency(price_raw)
+    sec_id = field(blob, T78["sec_id"])
+    q_after, p_after = _holding_row(rows, sec_id)
+    total = q_after / (p_after / 100.0) if (q_after and p_after) else None
+
+    first = field(blob, T78["first"]) or ""
+    last = field(blob, T78["last"]) or ""
+    holder = " ".join(x for x in (first, last) if x).strip() or None
+
+    d = field(blob, T78["date"])
+    try:
+        tdate = datetime.strptime(d, "%d/%m/%Y").date().isoformat() if d else None
+    except (ValueError, TypeError):
+        tdate = None
+
+    return {
+        "report_id": meta["id"],
+        "published": meta["publishDate"][:19],
+        "date": tdate,
+        "company": meta["company"],
+        "company_id": meta["company_id"],
+        "security_id": sec_id,
+        "security": sec_name,
+        "holder": holder,
+        "holder_type": "נעשה בעל עניין" if form == "ת078" else "חדל להיות בעל עניין",
+        "holder_controller": field(blob, T78["controller"]),
+        "direction": "buy" if "גידול" in nature else "sell",
+        "nature": nature.replace("_________", "").strip(),
+        "quantity": int(abs(qty)),
+        "price": price,
+        "currency": currency,
+        "value_ils": _value(abs(qty), price, currency),
+        "pct_of_class": round(abs(qty) / total * 100, 4) if total else None,
+        "holding_pct_after": p_after,
+        "url": f"https://maya.tase.co.il/he/reports/{meta['id']}",
+    }
+
+
+@parser("ת078", kind="threshold", identity=True)
+def parse_078(rows, meta):
+    """מי שנעשה בעל עניין. תופס עסקאות שחוצות את סף 5% — לרוב הגדולות."""
+    return _cross_threshold(rows, meta, "ת078")
+
+
+@parser("ת079", kind="threshold", identity=True)
+def parse_079(rows, meta):
+    """מי שחדל להיות בעל עניין — הצד שכנגד של ת078."""
+    return _cross_threshold(rows, meta, "ת079")
+
+
+# ---------- ת085: רכישה עצמית של החברה ----------
+
+T85 = {
+    "holder": "שם המחזיק במניות הרדומות",
+    "sec_id": "מס' ני\"ע בבורסה",
+    "sec": "שם המניה",
+    "nature": "מהות השינוי",
+    "date": "התאריך בו בוצעה העסקה",
+    "value": "הסכום הכולל של התמורה המחושבת",
+}
+
+
+@parser("ת085", kind="buyback", identity=False)
+def parse_085(rows, meta):
+    """מניות רדומות — החברה רוכשת מניות של עצמה.
+
+    כאן **אין צד שני מזוהה**, וזה בדיוק המקרה שטופס ת076 אינו מכסה.
+    שני סייגים שנשמרים ברשומה במקום להיטשטש: השער מדווח בשקלים ולא
+    באגורות, וחלק מהדיווחים מאגדים "מספר עסקאות בתוך ומחוץ לבורסה"
+    בלי לפצל — ואז אי אפשר לייחס את כל הסכום למסחר מחוץ לבורסה.
+    """
+    blob = "\n".join(rows)
+    if OFF_EXCHANGE not in blob:
+        return None
+    sec_name = field(blob, T85["sec"]) or ""
+    if NOT_SHARE.search(sec_name) or not SHARE.search(sec_name):
+        return None
+
+    mixed = "בתוך ומחוץ לבורסה" in blob
+    note = next((ln.strip() for ln in rows if OFF_EXCHANGE in ln and len(ln) < 90), None)
+
+    price_raw = next((ln for ln in rows if ln.startswith("שער העסקה")), "")
+    price = num(price_raw)
+    currency = _currency(price_raw)
+    value = num(field(blob, T85["value"]))
+    qty = round(value / price) if (value and price) else None
+    if not qty:
+        return None
+
+    nature = field(blob, T85["nature"]) or ""
+    d = field(blob, T85["date"])
+    try:
+        tdate = datetime.strptime(d, "%d/%m/%Y").date().isoformat() if d else None
+    except (ValueError, TypeError):
+        tdate = None
+
+    return {
+        "report_id": meta["id"],
+        "published": meta["publishDate"][:19],
+        "date": tdate,
+        "company": meta["company"],
+        "company_id": meta["company_id"],
+        "security_id": field(blob, T85["sec_id"]),
+        "security": sec_name,
+        "holder": field(blob, T85["holder"]) or meta["company"],
+        "holder_type": "התאגיד המדווח",
+        "holder_controller": None,
+        "direction": "buy" if "גידול" in nature else "sell",
+        "nature": (nature.replace("_________", "").strip() + (f" · {note}" if note else "")).strip(),
+        "quantity": int(qty),
+        "price": price,
+        "currency": currency,
+        "value_ils": round(value) if value else None,
+        # סך ההון אינו מדווח בטופס הזה, ולכן אין ממה לגזור שיעור.
+        "pct_of_class": None,
+        "holding_pct_after": None,
+        "partial": mixed,
         "url": f"https://maya.tase.co.il/he/reports/{meta['id']}",
     }
 
@@ -293,7 +499,8 @@ def main() -> int:
             continue
 
         for it in items:
-            if it.get("formId") != FORM:
+            fn = PARSERS.get(it.get("formId") or "")
+            if fn is None:
                 continue
             att = next((a for a in it.get("attachments", []) if a["fileType"] == "htm"), None)
             if not att:
@@ -305,9 +512,12 @@ def main() -> int:
                 failed += 1
                 continue
             co = (it.get("companies") or [{}])[0]
-            rec = parse(rows, {"id": it["id"], "publishDate": it["publishDate"],
-                               "company": co.get("name"), "company_id": co.get("companyId")})
+            rec = fn(rows, {"id": it["id"], "publishDate": it["publishDate"],
+                            "company": co.get("name"), "company_id": co.get("companyId")})
             if rec:
+                rec.setdefault("form", it.get("formId"))
+                rec.setdefault("kind", fn._kind)
+                rec.setdefault("has_identity", fn._identity)
                 found.append(rec)
 
         if not bad_days:
@@ -346,7 +556,7 @@ def main() -> int:
          "failed_days": bad_days[:60],
          "updated": datetime.now().isoformat(timespec="seconds")},
         ensure_ascii=False), encoding="utf-8")
-    print(f"scanned {scanned} {FORM} reports {start}..{today} | "
+    print(f"scanned {scanned} reports ({'/'.join(PARSERS)}) {start}..{today} | "
           f"off-exchange share trades: {len(found)} ({added} new) | "
           f"failures: {failed} | state through: {last}")
     if bad_days:
