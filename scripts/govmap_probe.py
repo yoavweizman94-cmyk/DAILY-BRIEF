@@ -75,9 +75,20 @@ def main() -> int:
     # אם החסימה היא לפי טווח כתובות, השאלה היחידה שנותרה היא מאיזו רשת
     # כן אפשר לסרוק. Cloudflare הוא התשתית היחידה שכבר בידינו.
     print("== דרך Cloudflare ==")
-    show("api/govmap-probe",
-         lambda: creq.get("https://app.tlvtaseview.com/api/govmap-probe",
+    import os
+    key = os.environ.get("SCAN_KEY") or ""
+    show("api/govmap (ממסר)",
+         lambda: creq.get("https://app.tlvtaseview.com/api/govmap",
+                          params={"path": "/real-estate/deals/3874000,3671000/1000"},
+                          headers={"x-scan-key": key}, timeout=45))
+    show("api/govmap בלי מפתח",
+         lambda: creq.get("https://app.tlvtaseview.com/api/govmap",
+                          params={"path": "/real-estate/deals/3874000,3671000/1000"},
                           timeout=45))
+    show("api/govmap נתיב אסור",
+         lambda: creq.get("https://app.tlvtaseview.com/api/govmap",
+                          params={"path": "/../../etc/passwd"},
+                          headers={"x-scan-key": key}, timeout=45))
 
     print("\nכתובת היציאה של הראנר:")
     try:
