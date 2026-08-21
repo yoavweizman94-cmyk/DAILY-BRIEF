@@ -119,7 +119,9 @@ jobs:
           # לכל עמוד סימן משלו: שוק הדיור בנוי מטבלה, מחוץ לבורסה מכרטיסים.
           check_page() {   # עמוד · סימן · מינימום
             local pg="$1" mark="$2" min="$3" code n
-            code=$(curl -s -o "$pg.html" -w '%{http_code}' --max-time 30                         -H "Cookie: $COOKIE" "$APP/$pg.html" || true)
+            # -L חובה: Pages מפנה ב-308 מ-/x.html ל-/x, וללא מעקב מתקבל
+            # גוף ריק שנראה בדיוק כמו עמוד בלי תוכן.
+            code=$(curl -sL -o "$pg.html" -w '%{http_code}' --max-time 30                         -H "Cookie: $COOKIE" "$APP/$pg.html" || true)
             n=$(grep -o "$mark" "$pg.html" 2>/dev/null | wc -l)
             note "$pg → HTTP $code, $n פריטים"
             if [ "$code" != "200" ]; then
