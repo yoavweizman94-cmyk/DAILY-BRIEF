@@ -1,0 +1,12 @@
+{
+  "name": "couple-budget",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "deploy": "bash deploy.sh",
+    "logs": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.125.0"
+  }
+}

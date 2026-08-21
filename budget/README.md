@@ -15,66 +15,42 @@
 
 בפאזה 2 (בהמשך) אותו Worker יחובר גם כ-webhook של WhatsApp Cloud API.
 
-## פריסה ראשונה — צעד אחר צעד
+## פריסה ראשונה — שתי פקודות
 
-הכול חינמי. צריך חשבון Cloudflare (חינמי) ו-Node.js מותקן במחשב.
-
-### 1. חשבון Cloudflare
-
-אם אין לך: הרשמה ב-https://dash.cloudflare.com/sign-up (אימייל + סיסמה, בלי כרטיס אשראי).
-
-### 2. התקנת wrangler והתחברות
+הכול חינמי. צריך Node.js מותקן במחשב וחשבון Cloudflare (חינמי, בלי כרטיס
+אשראי): https://dash.cloudflare.com/sign-up
 
 ```bash
 cd budget
-npm install -g wrangler
-wrangler login
+npm install          # מתקין את wrangler מקומית
+npx wrangler login   # פותח דפדפן — אשר את הגישה לחשבון שלך
+./deploy.sh          # עושה את כל השאר
 ```
 
-`wrangler login` פותח דפדפן — אשר את הגישה. זה מחבר את ה-CLI לחשבון שלך.
+הסקריפט `deploy.sh`: יוצר את בסיס הנתונים, ממלא את ה-`database_id` וה-path
+האקראי ב-`wrangler.toml`, טוען את הסכמה, פורס, ומבקש ממך להקליד PIN (4–6
+ספרות; נשמר מוצפן ב-Cloudflare, לא בקוד). בסוף הוא מדפיס את הכתובת המלאה
+של הדף. הוא בטוח להרצה חוזרת — כל שלב מדלג על עצמו אם כבר בוצע.
 
-### 3. יצירת בסיס הנתונים
+**חשוב:** אחרי ההרצה הראשונה עשה commit ל-`wrangler.toml` — ה-database_id
+וה-path נשמרים בו.
+
+<details>
+<summary>הצעדים הידניים (אם הסקריפט נכשל)</summary>
 
 ```bash
-wrangler d1 create couple-budget-db
+npx wrangler d1 create couple-budget-db
+# העתק את ה-database_id מהפלט אל wrangler.toml (במקום PASTE_DATABASE_ID_HERE)
+# שנה את APP_PATH ב-wrangler.toml למחרוזת אקראית משלך
+npx wrangler d1 execute couple-budget-db --remote --file=schema.sql
+npx wrangler deploy
+npx wrangler secret put APP_PIN
 ```
 
-הפקודה מדפיסה בלוק עם `database_id = "..."`. **העתק את ה-id** והדבק אותו
-ב-`wrangler.toml` במקום `PASTE_DATABASE_ID_HERE`.
+הדף: `https://couple-budget.<שם-חשבון>.workers.dev/<APP_PATH>`
+</details>
 
-עכשיו טען את הסכמה (הטבלאות):
-
-```bash
-wrangler d1 execute couple-budget-db --remote --file=schema.sql
-```
-
-### 4. בחירת path אקראי ו-PIN
-
-- ב-`wrangler.toml`, שנה את `APP_PATH` למחרוזת אקראית משלך (אותיות ומספרים,
-  בלי רווחים). זו "הכתובת הסודית" של הדף.
-- קבע PIN (4–6 ספרות):
-
-```bash
-wrangler secret put APP_PIN
-```
-
-הפקודה תבקש להקליד את הערך. הוא נשמר מוצפן ב-Cloudflare — לא בקוד.
-(אם היא שואלת אם ליצור את ה-Worker — אשר.)
-
-### 5. פריסה
-
-```bash
-wrangler deploy
-```
-
-בסוף הפלט תופיע כתובת בסגנון `https://couple-budget.<שם-חשבון>.workers.dev`.
-הדף שלכם נמצא ב:
-
-```
-https://couple-budget.<שם-חשבון>.workers.dev/<APP_PATH>
-```
-
-### 6. בנייד
+### בנייד
 
 פתחו את הכתובת בנייד → הזינו PIN → אשף ההגדרה הראשונית ירוץ (הכנסה, חיסכון,
 יום תחילת חודש, הוצאות קבועות). בסיום — מסך ראשי.
@@ -83,20 +59,21 @@ https://couple-budget.<שם-חשבון>.workers.dev/<APP_PATH>
 
 ## עדכון גרסה
 
-אחרי כל שינוי בקוד: `wrangler deploy` מתוך תיקיית `budget/`. זהו.
+אחרי כל שינוי בקוד: `npx wrangler deploy` מתוך תיקיית `budget/`. זהו.
+להרצה מקומית לבדיקות: `npm run dev` (עם `.dev.vars` שמכיל `APP_PIN = "1234"`).
 
 ## שחזור אם משהו נשבר
 
-- **הדף לא נטען / שגיאת 500:** `wrangler tail` מציג לוגים חיים של ה-Worker —
+- **הדף לא נטען / שגיאת 500:** `npx wrangler tail` מציג לוגים חיים של ה-Worker —
   פתחו את הדף במקביל ותראו את השגיאה.
-- **שכחתם את ה-PIN:** `wrangler secret put APP_PIN` וקבעו חדש, בלי לפרוס מחדש.
+- **שכחתם את ה-PIN:** `npx wrangler secret put APP_PIN` וקבעו חדש, בלי לפרוס מחדש.
 - **שכחתם את הכתובת:** ה-APP_PATH כתוב ב-`wrangler.toml`.
-- **נמחק/נדפק ה-Worker:** `wrangler deploy` מתוך הריפו מחזיר אותו. הנתונים
+- **נמחק/נדפק ה-Worker:** `npx wrangler deploy` מתוך הריפו מחזיר אותו. הנתונים
   ב-D1 נפרדים מה-Worker ולא נמחקים איתו.
 - **בדיקת הנתונים ישירות:**
-  `wrangler d1 execute couple-budget-db --remote --command "SELECT * FROM transactions ORDER BY id DESC LIMIT 10"`
+  `npx wrangler d1 execute couple-budget-db --remote --command "SELECT * FROM transactions ORDER BY id DESC LIMIT 10"`
 - **גיבוי ידני:**
-  `wrangler d1 export couple-budget-db --remote --output backup.sql`
+  `npx wrangler d1 export couple-budget-db --remote --output backup.sql`
 
 ## רשימת בדיקות ידניות — סוף פאזה 1 (מהנייד)
 
