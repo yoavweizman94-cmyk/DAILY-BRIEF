@@ -123,6 +123,16 @@ def main():
         env["RESEND_API_KEY"] = {"type": "secret_text", "value": resend}
         changed.append("RESEND_API_KEY")
 
+    # SCAN_KEY נוצר ב-GitHub ומועתק לכאן, ולא נוצר כאן — שני הצדדים
+    # חייבים אותו ערך: הסריקה שולחת אותו בכותרת, והממסר משווה אליו.
+    scan = os.environ.get("SCAN_KEY", "").strip()
+    if scan and have.get("SCAN_KEY") is None:
+        env["SCAN_KEY"] = {"type": "secret_text", "value": scan}
+        changed.append("SCAN_KEY")
+    elif scan and os.environ.get("FORCE_SCAN_KEY") == "1":
+        env["SCAN_KEY"] = {"type": "secret_text", "value": scan}
+        changed.append("SCAN_KEY (נכפה)")
+
     if not changed:
         print("  הכל כבר מוגדר.")
         return 0

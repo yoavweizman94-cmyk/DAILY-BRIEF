@@ -89,6 +89,10 @@ jobs:
           TRADINGECONOMICS_KEY: ${{ secrets.TRADINGECONOMICS_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Govmap חוסם את טווחי הענן של הראנרים; הסריקה עוברת דרך
+          # Cloudflare Functions של האתר.
+          GOVMAP_PROXY: https://app.tlvtaseview.com/api/govmap
+          SCAN_KEY: ${{ secrets.SCAN_KEY }}
         run: |
           bash run_daily.sh
           # site/dist נוצר רק כשהופק ברייף; ריצת "skip" יוצאת לפני כן.

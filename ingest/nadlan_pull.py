@@ -41,6 +41,13 @@ STATE = ROOT / "data" / "nadlan_state.json"
 CFG = ROOT / "config" / "nadlan.yaml"
 
 API = "https://www.govmap.gov.il/api"
+
+# Govmap חוסם את טווחי הענן של Azure, שמהם יוצאים הראנרים של GitHub —
+# 403 על כל בקשה, כולל דף הבית, וגם ב-HTTP client רגיל. זו חסימה לפי
+# כתובת ולא לפי טביעת TLS, ולכן העקיפה היא ברשת אחרת ולא בקוד. כשמוגדר
+# ממסר, כל הקריאות עוברות דרך Cloudflare Functions של האתר.
+PROXY = (os.environ.get("GOVMAP_PROXY") or "").rstrip("/")
+SCAN_KEY = os.environ.get("SCAN_KEY") or ""
 GOV = "https://data.gov.il/api/3/action/datastore_search"
 MECHIR_RES = "7c8255d0-49ef-49db-8904-4cf917586031"
 
@@ -75,6 +82,8 @@ class Govmap:
     def __init__(self, throttle: float = 0.35):
         self.s = creq.Session(impersonate="chrome")
         self.s.headers.update(HEADERS)
+        if PROXY:
+            self.s.headers["x-scan-key"] = SCAN_KEY
         self.throttle = throttle
         self._last = 0.0
 
@@ -84,8 +93,23 @@ class Govmap:
             time.sleep(dt)
         self._last = time.monotonic()
 
+    def _route(self, url: str, params: dict | None):
+        """כתובת סופית ופרמטרים, לפי אם מוגדר ממסר.
+
+        הממסר מקבל את הנתיב ב-`path` ומעביר את שאר ה-query כמות שהוא.
+        """
+        path = url[len(API):]
+        if not PROXY:
+            return url, params
+        q = dict(params or {})
+        q["path"] = path
+        return PROXY, q
+
     def _get(self, url, **kw):
         last = None
+        url, kw["params"] = self._route(url, kw.get("params"))
+        if kw["params"] is None:
+            kw.pop("params")
         for i in range(3):
             try:
                 self._wait()
@@ -108,7 +132,8 @@ class Govmap:
         כעיר אחרת, וכל עסקאותיה נזרקו כי קריית אתא אינה בכיסוי.
         """
         self._wait()
-        r = self.s.post(f"{API}/search-service/autocomplete",
+        url, params = self._route(f"{API}/search-service/autocomplete", None)
+        r = self.s.post(url, params=params,
                         json={"searchText": text, "language": "he",
                               "isAccurate": False, "maxResults": 10},
                         headers={"Content-Type": "application/json"}, timeout=45)
@@ -326,6 +351,11 @@ def main() -> int:
                 region_of[norm_city(nm)] = (r["key"], c["name"])
 
     g = Govmap()
+    print(f"מקור: {'ממסר Cloudflare' if PROXY else 'Govmap ישירות'}")
+    if PROXY and not SCAN_KEY:
+        print("::error::GOVMAP_PROXY מוגדר בלי SCAN_KEY — הממסר ידחה הכל",
+              file=sys.stderr)
+        return 1
     devs = developer_index()
     print(f"מדד יזמים: {len(devs)} מפתחות")
 

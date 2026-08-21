@@ -57,6 +57,8 @@ jobs:
 
       - name: Diagnose access
         if: inputs.diagnose
+        env:
+          SCAN_KEY: ${{ secrets.SCAN_KEY }}
         run: python scripts/govmap_probe.py
 
       - name: Scan
@@ -65,6 +67,8 @@ jobs:
           NADLAN_CITY: ${{ inputs.city }}
           NADLAN_MONTHS: ${{ inputs.months }}
           NADLAN_REPROBE: ${{ inputs.reprobe && '1' || '' }}
+          GOVMAP_PROXY: https://app.tlvtaseview.com/api/govmap
+          SCAN_KEY: ${{ secrets.SCAN_KEY }}
         run: python ingest/nadlan_pull.py
 
       - name: Summary
