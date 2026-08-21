@@ -21,6 +21,11 @@ on:
         type: boolean
         required: false
         default: false
+      diagnose:
+        description: "אבחון גישה ל-Govmap במקום סריקה"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -50,7 +55,12 @@ jobs:
           CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
         run: bash scripts/content_repo.sh pull
 
+      - name: Diagnose access
+        if: inputs.diagnose
+        run: python scripts/govmap_probe.py
+
       - name: Scan
+        if: '!inputs.diagnose'
         env:
           NADLAN_CITY: ${{ inputs.city }}
           NADLAN_MONTHS: ${{ inputs.months }}
@@ -58,7 +68,7 @@ jobs:
         run: python ingest/nadlan_pull.py
 
       - name: Summary
-        if: always()
+        if: always() && !inputs.diagnose
         run: |
           set -e
           total=0
@@ -74,11 +84,13 @@ jobs:
           [ "$total" -gt 0 ]
 
       - name: Push content
+        if: '!inputs.diagnose'
         env:
           CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
         run: bash scripts/content_repo.sh push "עסקאות נדלן"
 
       - name: Push scan state
+        if: '!inputs.diagnose'
         run: |
           git config user.name "forest-brief-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
