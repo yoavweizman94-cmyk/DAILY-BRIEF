@@ -1,0 +1,26 @@
+# Couple budget tracker — Cloudflare Worker configuration.
+# Before first deploy:
+#   1. Run: wrangler d1 create couple-budget-db
+#   2. Paste the returned database_id below (replace PASTE_DATABASE_ID_HERE).
+#   3. Run: wrangler d1 execute couple-budget-db --remote --file=schema.sql
+#   4. Run: wrangler secret put APP_PIN   (choose a 4-6 digit PIN)
+#   5. Run: wrangler deploy
+
+name = "couple-budget"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+# Lets the Worker import the HTML page as a plain string.
+rules = [
+  { type = "Text", globs = ["**/*.html"], fallthrough = true }
+]
+
+[vars]
+# The long random path that serves the app page (basic obscurity; the PIN is
+# the real gate). Change it to any random string you like before deploying.
+APP_PATH = "app-7kq9x2mfrt3vbn8w"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "couple-budget-db"
+database_id = "PASTE_DATABASE_ID_HERE"

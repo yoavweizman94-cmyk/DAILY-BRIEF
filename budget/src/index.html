@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>התקציב שלנו</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1c2530; --muted: #67727e;
+    --line: #e4e8ec; --accent: #0f766e;
+    --green: #15803d; --orange: #c2680a; --red: #b91c1c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, "Heebo", Arial, sans-serif;
+    background: var(--bg); color: var(--text);
+    max-width: 480px; margin: 0 auto; padding: 12px 14px 90px;
+  }
+  h1 { font-size: 1.1rem; }
+  h2 { font-size: 1rem; margin-bottom: 8px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .muted { color: var(--muted); font-size: .85rem; }
+  button {
+    font: inherit; border: none; border-radius: 10px; padding: 10px 14px;
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  button.small { padding: 5px 10px; font-size: .82rem; }
+  button.danger { background: transparent; color: var(--red); border: 1px solid var(--red); }
+  input, select {
+    font: inherit; width: 100%; padding: 10px; border: 1px solid var(--line);
+    border-radius: 10px; background: #fff; color: var(--text);
+  }
+  label { display: block; font-size: .85rem; color: var(--muted); margin: 10px 0 4px; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .hidden { display: none !important; }
+
+  /* header nav */
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  nav { display: flex; gap: 6px; }
+  nav button { background: transparent; color: var(--muted); padding: 6px 10px; font-size: .85rem; }
+  nav button.active { color: var(--accent); font-weight: 700; }
+
+  /* big number */
+  .big-wrap { text-align: center; padding: 22px 14px; }
+  .big-label { font-size: .95rem; color: var(--muted); }
+  .big-num { font-size: 3rem; font-weight: 800; line-height: 1.2; margin: 6px 0; }
+  .big-num.green { color: var(--green); } .big-num.orange { color: var(--orange); } .big-num.red { color: var(--red); }
+  .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin: 12px 0 8px; }
+  .bar > div { height: 100%; border-radius: 4px; }
+
+  /* quick add */
+  .who { display: flex; gap: 8px; margin-top: 10px; }
+  .who button { flex: 1; background: #fff; color: var(--text); border: 1px solid var(--line); }
+  .who button.sel { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+
+  /* transaction list */
+  .tx { display: flex; justify-content: space-between; align-items: center; padding: 10px 2px; border-bottom: 1px solid var(--line); gap: 8px; }
+  .tx:last-child { border-bottom: none; }
+  .tx .amt { font-weight: 700; white-space: nowrap; }
+  .tx .desc { flex: 1; min-width: 0; }
+  .tx .desc small { display: block; color: var(--muted); }
+
+  /* category bars */
+  .cat { margin-bottom: 10px; }
+  .cat .cat-head { display: flex; justify-content: space-between; font-size: .9rem; margin-bottom: 3px; }
+
+  /* overlays */
+  .overlay {
+    position: fixed; inset: 0; background: var(--bg); z-index: 50;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 24px; max-width: 480px; margin: 0 auto;
+  }
+  .pin-dots { text-align: center; font-size: 2rem; letter-spacing: 12px; min-height: 48px; }
+  .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
+  .pin-pad button { padding: 16px; font-size: 1.3rem; background: #fff; color: var(--text); border: 1px solid var(--line); }
+  .err { color: var(--red); text-align: center; min-height: 1.2em; margin-top: 8px; font-size: .9rem; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chips span { background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 4px 10px; font-size: .85rem; }
+  .chips span b { color: var(--red); cursor: pointer; margin-inline-start: 6px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  th, td { text-align: right; padding: 8px 4px; border-bottom: 1px solid var(--line); }
+  .neg { color: var(--red); } .pos { color: var(--green); }
+</style>
+</head>
+<body>
+
+<!-- PIN screen -->
+<div id="pinScreen" class="overlay">
+  <h1 style="text-align:center">התקציב שלנו</h1>
+  <p class="muted" style="text-align:center;margin-top:6px">הזינו קוד כניסה</p>
+  <div class="pin-dots" id="pinDots"></div>
+  <div class="err" id="pinErr"></div>
+  <div class="pin-pad" id="pinPad"></div>
+</div>
+
+<!-- Setup wizard -->
+<div id="wizard" class="overlay hidden" style="justify-content:flex-start;overflow-y:auto;padding-top:40px">
+  <h1>הגדרה ראשונית</h1>
+  <p class="muted" id="wizStep" style="margin:6px 0 14px"></p>
+
+  <div id="wiz1">
+    <label>הכנסה חודשית נטו משותפת (₪)</label>
+    <input type="number" inputmode="numeric" id="wizIncome" placeholder="למשל 25000">
+    <label>שמות לתיוג "מי רשם" (שני שמות)</label>
+    <div class="row">
+      <input id="wizUser1" placeholder="שם 1"><input id="wizUser2" placeholder="שם 2">
+    </div>
+    <button style="width:100%;margin-top:16px" onclick="wizNext(2)">המשך</button>
+  </div>
+
+  <div id="wiz2" class="hidden">
+    <label>יעד חיסכון חודשי (₪)</label>
+    <input type="number" inputmode="numeric" id="wizSavings" placeholder="למשל 3000">
+    <label>יום תחילת חודש תקציבי (1–28)</label>
+    <input type="number" inputmode="numeric" id="wizStartDay" value="1" min="1" max="28">
+    <p class="muted" style="margin-top:6px">אם המשכורת נכנסת ב-10 לחודש, אפשר לקבוע 10 — החודש התקציבי ירוץ מ-10 עד 9.</p>
+    <button style="width:100%;margin-top:16px" onclick="wizNext(3)">המשך</button>
+  </div>
+
+  <div id="wiz3" class="hidden">
+    <h2>הוצאות קבועות</h2>
+    <p class="muted">שכר דירה / משכנתא, חשבונות, ביטוחים, מנויים… הוסיפו אחת-אחת. אפשר גם לדלג ולהוסיף אחר כך במסך הניהול.</p>
+    <div class="row" style="margin-top:10px">
+      <input id="wizFixName" placeholder="שם" style="flex:2">
+      <input id="wizFixAmt" type="number" inputmode="numeric" placeholder="סכום" style="flex:1">
+    </div>
+    <button class="ghost" style="width:100%;margin-top:8px" onclick="wizAddFixed()">+ הוסף</button>
+    <div class="chips" id="wizFixList"></div>
+    <p style="margin-top:10px"><b>סה"כ קבועות: <span id="wizFixTotal">0</span> ₪</b></p>
+    <button style="width:100%;margin-top:16px" onclick="wizFinish()">סיום והתחלה 🎉</button>
+    <div class="err" id="wizErr"></div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app" class="hidden">
+  <header>
+    <h1>התקציב שלנו</h1>
+    <nav>
+      <button id="navMain" class="active" onclick="showView('main')">ראשי</button>
+      <button id="navAdmin" onclick="showView('admin')">ניהול</button>
+      <button id="navHistory" onclick="showView('history')">היסטוריה</button>
+    </nav>
+  </header>
+
+  <!-- main view -->
+  <div id="viewMain">
+    <div class="card big-wrap">
+      <div class="big-label">נשאר להוציא החודש</div>
+      <div class="big-num" id="bigNum">–</div>
+      <div class="bar"><div id="barFill"></div></div>
+      <div class="muted" id="dailyLine"></div>
+    </div>
+
+    <div class="card">
+      <h2>הוספת הוצאה</h2>
+      <div class="row">
+        <input type="number" inputmode="decimal" id="txAmount" placeholder="סכום ₪" style="flex:1">
+        <input id="txDesc" placeholder="תיאור (לא חובה)" style="flex:2">
+      </div>
+      <label>קטגוריה</label>
+      <select id="txCategory"></select>
+      <div class="who" id="whoButtons"></div>
+      <button style="width:100%;margin-top:12px" id="txSubmit" onclick="submitTx()">רישום הוצאה</button>
+      <div class="err" id="txErr"></div>
+    </div>
+
+    <div class="card">
+      <h2>לפי קטגוריות</h2>
+      <div id="catList" class="muted">אין הוצאות החודש</div>
+    </div>
+
+    <div class="card">
+      <h2>הוצאות אחרונות</h2>
+      <div id="txList" class="muted">אין הוצאות החודש</div>
+    </div>
+  </div>
+
+  <!-- admin view -->
+  <div id="viewAdmin" class="hidden">
+    <div class="card">
+      <h2>הגדרות תקציב</h2>
+      <label>הכנסה חודשית נטו (₪)</label>
+      <input type="number" inputmode="numeric" id="setIncome">
+      <label>יעד חיסכון חודשי (₪)</label>
+      <input type="number" inputmode="numeric" id="setSavings">
+      <label>יום תחילת חודש תקציבי (1–28)</label>
+      <input type="number" inputmode="numeric" id="setStartDay" min="1" max="28">
+      <label>שמות לתיוג</label>
+      <div class="row"><input id="setUser1"><input id="setUser2"></div>
+      <button style="width:100%;margin-top:12px" onclick="saveSettings()">שמירה</button>
+    </div>
+
+    <div class="card">
+      <h2>קטגוריות</h2>
+      <div class="chips" id="catChips"></div>
+      <div class="row" style="margin-top:10px">
+        <input id="newCat" placeholder="קטגוריה חדשה">
+        <button class="ghost" onclick="addCategory()" style="flex:0 0 auto">+ הוסף</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>הוצאות קבועות</h2>
+      <div id="fixedList"></div>
+      <div class="row" style="margin-top:10px">
+        <input id="newFixName" placeholder="שם" style="flex:2">
+        <input id="newFixAmt" type="number" inputmode="numeric" placeholder="סכום" style="flex:1">
+      </div>
+      <button class="ghost" style="width:100%;margin-top:8px" onclick="addFixed()">+ הוסף הוצאה קבועה</button>
+    </div>
+  </div>
+
+  <!-- history view -->
+  <div id="viewHistory" class="hidden">
+    <div class="card">
+      <h2>חודשים סגורים</h2>
+      <div id="historyList" class="muted">עדיין אין חודשים סגורים. חודש נסגר אוטומטית כשמופעל טריגר הסגירה (פאזה 3).</div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+let STATE = null;
+let PIN = localStorage.getItem("pin") || "";
+let pinBuf = "";
+let selectedUser = localStorage.getItem("lastUser") || "";
+let editTxId = null;
+const wizFixed = [];
+
+const fmt = n => Math.round(n).toLocaleString("he-IL");
+
+// ---------- API ----------
+async function api(path, method = "GET", body = null) {
+  const res = await fetch(path, {
+    method,
+    headers: { "Content-Type": "application/json", "X-Pin": PIN },
+    body: body ? JSON.stringify(body) : null,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { logoutToPin(); throw new Error("unauthorized"); }
+  if (!res.ok) throw new Error(data.error || "שגיאה");
+  return data;
+}
+
+function logoutToPin() {
+  localStorage.removeItem("pin"); PIN = ""; pinBuf = "";
+  document.getElementById("app").classList.add("hidden");
+  document.getElementById("wizard").classList.add("hidden");
+  document.getElementById("pinScreen").classList.remove("hidden");
+  renderPinDots();
+}
+
+// ---------- PIN pad ----------
+function buildPinPad() {
+  const pad = document.getElementById("pinPad");
+  const keys = ["1","2","3","4","5","6","7","8","9","⌫","0","✓"];
+  pad.innerHTML = "";
+  for (const k of keys) {
+    const b = document.createElement("button");
+    b.textContent = k;
+    b.onclick = () => pinKey(k);
+    pad.appendChild(b);
+  }
+}
+function renderPinDots() {
+  document.getElementById("pinDots").textContent = "●".repeat(pinBuf.length);
+}
+async function pinKey(k) {
+  const errEl = document.getElementById("pinErr");
+  if (k === "⌫") { pinBuf = pinBuf.slice(0, -1); }
+  else if (k === "✓") {
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pinBuf }),
+      });
+      if (!res.ok) throw 0;
+      PIN = pinBuf; localStorage.setItem("pin", PIN);
+      pinBuf = ""; errEl.textContent = "";
+      await boot();
+    } catch { errEl.textContent = "קוד שגוי"; pinBuf = ""; }
+  }
+  else if (pinBuf.length < 8) { pinBuf += k; errEl.textContent = ""; }
+  renderPinDots();
+}
+
+// ---------- boot ----------
+async function boot() {
+  STATE = await api("/api/state");
+  document.getElementById("pinScreen").classList.add("hidden");
+  if (!STATE.settings.setup_done) {
+    document.getElementById("wizard").classList.remove("hidden");
+    wizNext(1);
+  } else {
+    document.getElementById("wizard").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+    renderAll();
+  }
+}
+
+// ---------- wizard ----------
+function wizNext(step) {
+  for (const s of [1,2,3]) document.getElementById("wiz"+s).classList.toggle("hidden", s !== step);
+  document.getElementById("wizStep").textContent = "שלב " + step + " מתוך 3";
+}
+function wizAddFixed() {
+  const name = document.getElementById("wizFixName").value.trim();
+  const amt = Number(document.getElementById("wizFixAmt").value);
+  if (!name || !amt) return;
+  wizFixed.push({ name, amount: amt, category: "בית" });
+  document.getElementById("wizFixName").value = "";
+  document.getElementById("wizFixAmt").value = "";
+  const list = document.getElementById("wizFixList");
+  list.innerHTML = wizFixed.map((f, i) =>
+    `<span>${esc(f.name)} · ${fmt(f.amount)} ₪ <b onclick="wizFixed.splice(${i},1);wizAddFixed._r()">×</b></span>`).join("");
+  document.getElementById("wizFixTotal").textContent = fmt(wizFixed.reduce((s,f)=>s+f.amount,0));
+}
+wizAddFixed._r = () => { // re-render after removal
+  const list = document.getElementById("wizFixList");
+  list.innerHTML = wizFixed.map((f, i) =>
+    `<span>${esc(f.name)} · ${fmt(f.amount)} ₪ <b onclick="wizFixed.splice(${i},1);wizAddFixed._r()">×</b></span>`).join("");
+  document.getElementById("wizFixTotal").textContent = fmt(wizFixed.reduce((s,f)=>s+f.amount,0));
+};
+async function wizFinish() {
+  const income = Number(document.getElementById("wizIncome").value);
+  if (!income) { document.getElementById("wizErr").textContent = "חסרה הכנסה חודשית (שלב 1)"; return; }
+  try {
+    STATE = await api("/api/setup", "POST", {
+      monthly_income: income,
+      savings_goal: Number(document.getElementById("wizSavings").value) || 0,
+      month_start_day: Number(document.getElementById("wizStartDay").value) || 1,
+      users: [document.getElementById("wizUser1").value.trim(), document.getElementById("wizUser2").value.trim()].filter(Boolean),
+      fixed: wizFixed,
+    });
+    document.getElementById("wizard").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+    renderAll();
+  } catch (e) { document.getElementById("wizErr").textContent = e.message; }
+}
+
+// ---------- views ----------
+function showView(v) {
+  for (const name of ["Main","Admin","History"]) {
+    document.getElementById("view"+name).classList.toggle("hidden", name.toLowerCase() !== v);
+    document.getElementById("nav"+name).classList.toggle("active", name.toLowerCase() === v);
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+function renderAll() {
+  const s = STATE.summary, set = STATE.settings;
+
+  // big number
+  const big = document.getElementById("bigNum");
+  big.textContent = fmt(s.remaining) + " ₪";
+  const cls = s.usedPct < 70 ? "green" : s.usedPct <= 95 ? "orange" : "red";
+  big.className = "big-num " + cls;
+  const fill = document.getElementById("barFill");
+  fill.style.width = Math.min(100, s.usedPct) + "%";
+  fill.style.background = "var(--" + cls + ")";
+  document.getElementById("dailyLine").textContent =
+    s.remaining > 0
+      ? `נשארו ${s.daysLeft} ימים · קצב יומי מותר: ${fmt(s.dailyAllowed)} ₪ · נוצלו ${Math.round(s.usedPct)}% מתקציב של ${fmt(s.budget)} ₪`
+      : `חריגה מהתקציב! הוצאתם ${fmt(s.spent)} ₪ מתוך ${fmt(s.budget)} ₪`;
+
+  // categories select + who buttons
+  const sel = document.getElementById("txCategory");
+  sel.innerHTML = set.categories.map(c => `<option>${esc(c)}</option>`).join("");
+  const who = document.getElementById("whoButtons");
+  if (!set.users.includes(selectedUser)) selectedUser = set.users[0] || "";
+  who.innerHTML = "";
+  for (const u of set.users) {
+    const b = document.createElement("button");
+    b.textContent = u;
+    b.className = u === selectedUser ? "sel" : "";
+    b.onclick = () => { selectedUser = u; localStorage.setItem("lastUser", u); renderAll(); };
+    who.appendChild(b);
+  }
+
+  // category breakdown
+  const byCat = Object.entries(s.byCategory || computeByCat()).sort((a,b) => b[1]-a[1]);
+  const catList = document.getElementById("catList");
+  if (!byCat.length) catList.innerHTML = '<span class="muted">אין הוצאות החודש</span>';
+  else {
+    const max = byCat[0][1];
+    catList.innerHTML = byCat.map(([c, v]) => `
+      <div class="cat">
+        <div class="cat-head"><span>${esc(c)}</span><b>${fmt(v)} ₪</b></div>
+        <div class="bar" style="margin:0"><div style="width:${Math.round(v/max*100)}%;background:var(--accent)"></div></div>
+      </div>`).join("");
+  }
+
+  // transactions
+  const txList = document.getElementById("txList");
+  if (!STATE.transactions.length) txList.innerHTML = '<span class="muted">אין הוצאות החודש</span>';
+  else txList.innerHTML = STATE.transactions.slice(0, 40).map(t => `
+    <div class="tx">
+      <div class="desc">
+        ${esc(t.description || t.category)}
+        <small>${esc(t.category)} · ${esc(t.created_by)} · ${t.ts.slice(8,10)}/${t.ts.slice(5,7)}${t.source === "whatsapp" ? " · 💬" : ""}</small>
+      </div>
+      <span class="amt">${fmt(t.amount)} ₪</span>
+      <button class="small ghost" onclick="startEditTx(${t.id})">✎</button>
+      <button class="small danger" onclick="deleteTx(${t.id})">🗑</button>
+    </div>`).join("");
+
+  // admin
+  document.getElementById("setIncome").value = set.monthly_income;
+  document.getElementById("setSavings").value = set.savings_goal;
+  document.getElementById("setStartDay").value = set.month_start_day;
+  document.getElementById("setUser1").value = set.users[0] || "";
+  document.getElementById("setUser2").value = set.users[1] || "";
+  document.getElementById("catChips").innerHTML = set.categories.map((c, i) =>
+    `<span>${esc(c)} <b onclick="removeCategory(${i})">×</b></span>`).join("");
+  const fl = document.getElementById("fixedList");
+  fl.innerHTML = STATE.fixed.length ? STATE.fixed.map(f => `
+    <div class="tx" style="${f.active ? "" : "opacity:.45"}">
+      <div class="desc">${esc(f.name)}<small>${esc(f.category)}${f.active ? "" : " · מושהית"}</small></div>
+      <span class="amt">${fmt(f.amount)} ₪</span>
+      <button class="small ghost" onclick="toggleFixed(${f.id}, ${f.active ? "false" : "true"})">${f.active ? "השהה" : "הפעל"}</button>
+      <button class="small danger" onclick="deleteFixed(${f.id})">🗑</button>
+    </div>`).join("") : '<span class="muted">אין הוצאות קבועות</span>';
+  const fixedTotal = STATE.fixed.filter(f=>f.active).reduce((a,f)=>a+f.amount,0);
+  fl.insertAdjacentHTML("beforeend",
+    `<p style="margin-top:8px"><b>סה"כ קבועות פעילות: ${fmt(fixedTotal)} ₪</b> · תקציב משתנה: <b>${fmt(s.budget)} ₪</b></p>`);
+
+  // history
+  const hist = document.getElementById("historyList");
+  if (STATE.archive.length) {
+    hist.innerHTML = `<table><tr><th>חודש</th><th>תקציב</th><th>הוצאות</th><th>יתרה</th></tr>` +
+      STATE.archive.map(a => `<tr><td>${a.month.slice(5,7)}/${a.month.slice(0,4)}</td><td>${fmt(a.budget)}</td><td>${fmt(a.total_spent)}</td>
+        <td class="${a.balance >= 0 ? "pos" : "neg"}">${fmt(a.balance)}</td></tr>`).join("") + "</table>";
+  }
+}
+
+function computeByCat() {
+  const o = {};
+  for (const t of STATE.transactions) o[t.category] = (o[t.category] || 0) + t.amount;
+  return o;
+}
+
+// ---------- actions ----------
+async function submitTx() {
+  const errEl = document.getElementById("txErr");
+  const amount = Number(document.getElementById("txAmount").value);
+  if (!amount || amount <= 0) { errEl.textContent = "הזינו סכום"; return; }
+  const payload = {
+    amount,
+    description: document.getElementById("txDesc").value.trim(),
+    category: document.getElementById("txCategory").value,
+    created_by: selectedUser,
+  };
+  try {
+    errEl.textContent = "";
+    STATE = editTxId
+      ? await api("/api/tx/" + editTxId, "PUT", payload)
+      : await api("/api/tx", "POST", payload);
+    cancelEditTx();
+    renderAll();
+  } catch (e) { errEl.textContent = e.message; }
+}
+
+function startEditTx(id) {
+  const t = STATE.transactions.find(x => x.id === id);
+  if (!t) return;
+  editTxId = id;
+  document.getElementById("txAmount").value = t.amount;
+  document.getElementById("txDesc").value = t.description;
+  document.getElementById("txCategory").value = t.category;
+  document.getElementById("txSubmit").textContent = "שמירת שינויים";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function cancelEditTx() {
+  editTxId = null;
+  document.getElementById("txAmount").value = "";
+  document.getElementById("txDesc").value = "";
+  document.getElementById("txSubmit").textContent = "רישום הוצאה";
+}
+async function deleteTx(id) {
+  if (!confirm("למחוק את ההוצאה?")) return;
+  STATE = await api("/api/tx/" + id, "DELETE");
+  if (editTxId === id) cancelEditTx();
+  renderAll();
+}
+
+async function saveSettings() {
+  STATE = await api("/api/settings", "PUT", {
+    monthly_income: Number(document.getElementById("setIncome").value) || 0,
+    savings_goal: Number(document.getElementById("setSavings").value) || 0,
+    month_start_day: Number(document.getElementById("setStartDay").value) || 1,
+    users: [document.getElementById("setUser1").value.trim(), document.getElementById("setUser2").value.trim()].filter(Boolean),
+  });
+  renderAll();
+  showView("main");
+}
+
+async function addCategory() {
+  const c = document.getElementById("newCat").value.trim();
+  if (!c || STATE.settings.categories.includes(c)) return;
+  STATE = await api("/api/settings", "PUT", { categories: [...STATE.settings.categories, c] });
+  document.getElementById("newCat").value = "";
+  renderAll();
+}
+async function removeCategory(i) {
+  const c = STATE.settings.categories[i];
+  if (!confirm(`להסיר את הקטגוריה "${c}"? הוצאות קיימות בה לא יימחקו.`)) return;
+  STATE = await api("/api/settings", "PUT", { categories: STATE.settings.categories.filter((_, j) => j !== i) });
+  renderAll();
+}
+
+async function addFixed() {
+  const name = document.getElementById("newFixName").value.trim();
+  const amount = Number(document.getElementById("newFixAmt").value);
+  if (!name || !amount) return;
+  STATE = await api("/api/fixed", "POST", { name, amount, category: "בית" });
+  document.getElementById("newFixName").value = "";
+  document.getElementById("newFixAmt").value = "";
+  renderAll();
+}
+async function toggleFixed(id, active) {
+  STATE = await api("/api/fixed/" + id, "PUT", { active });
+  renderAll();
+}
+async function deleteFixed(id) {
+  if (!confirm("למחוק את ההוצאה הקבועה?")) return;
+  STATE = await api("/api/fixed/" + id, "DELETE");
+  renderAll();
+}
+
+// ---------- init ----------
+buildPinPad();
+renderPinDots();
+if (PIN) boot().catch(() => {});
+</script>
+</body>
+</html>
