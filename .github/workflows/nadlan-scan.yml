@@ -16,6 +16,11 @@ on:
         description: "חלון בחודשים (ריק = לפי הקונפיג)"
         required: false
         default: ""
+      reprobe:
+        description: "לאתר מחדש את החלקות במקום להשתמש במטמון"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -49,6 +54,7 @@ jobs:
         env:
           NADLAN_CITY: ${{ inputs.city }}
           NADLAN_MONTHS: ${{ inputs.months }}
+          NADLAN_REPROBE: ${{ inputs.reprobe && '1' || '' }}
         run: python ingest/nadlan_pull.py
 
       - name: Summary

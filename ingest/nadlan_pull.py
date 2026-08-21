@@ -312,6 +312,7 @@ def main() -> int:
     per_city = int(os.environ.get("NADLAN_POLYGONS") or cfg.get("polygons_per_city", 6))
     max_probe = int(cfg.get("max_probes_per_city", 40))
     only = (os.environ.get("NADLAN_CITY") or "").strip()
+    reprobe = bool(os.environ.get("NADLAN_REPROBE"))
     cutoff = (date.today() - timedelta(days=31 * months)).isoformat()
 
     # מפת עיר → אזור, לפי הקונפיג. הסריקה סביב עיר אחת מחזירה גם עסקאות
@@ -330,6 +331,9 @@ def main() -> int:
 
     state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {}
     coords = state.get("coords", {})
+    # החלקות הפוריות נשמרות, כי איתורן דורש עשרות בדיקות ותוצאתן יציבה.
+    # בלי המטמון מהדורת הבוקר מבזבזת עליהן רבע שעה בכל יום.
+    plots = {} if reprobe else state.get("plots", {})
 
     found: dict[int, dict] = {}
     failed, empty = [], []
@@ -352,28 +356,33 @@ def main() -> int:
 
                 # פוליגון ששייך ליישוב מחוץ לכיסוי אינו תורם דבר — עסקאותיו
                 # ייזרקו ב-clean() בכל מקרה — אך הוא כן דוחק פוליגון שכן.
-                cand = [p for p in g.polygons_multi(pt[0], pt[1])
-                        if norm_city(p.get("settlementNameHeb")) in region_of]
-                # חלקות העיר עצמה נבדקות ראשונות. בלי זה הרצליה בזבזה 38
-                # בדיקות על שכנותיה וסיימה עם עסקה אחת משלה.
-                own = norm_city(name)
-                polys = ([p for p in cand if norm_city(p.get("settlementNameHeb")) == own]
-                         + [p for p in cand if norm_city(p.get("settlementNameHeb")) != own])
-                if not polys:
-                    print(f"  {name}: אין חלקות בערי הכיסוי סביב העוגן — מדולג",
-                          file=sys.stderr)
-                    failed.append(name)
-                    continue
-                # פוליגון שנבחר מחזיר את **כל** השכונה שסביבו, ולכן די
-                # במעט פוליגונים פוריים; החיפוש הוא אחריהם, לא אחרי
-                # הראשונים ברשימה.
-                picked, probed = [], 0
-                for p in polys:
-                    if len(picked) >= per_city or probed >= max_probe:
-                        break
-                    probed += 1
-                    if g.has_deals(p["polygon_id"]):
-                        picked.append(p["polygon_id"])
+                picked, probed = plots.get(name) or [], 0
+                if not picked:
+                    cand = [p for p in g.polygons_multi(pt[0], pt[1])
+                            if norm_city(p.get("settlementNameHeb")) in region_of]
+                    # חלקות העיר עצמה נבדקות ראשונות. בלי זה הרצליה בזבזה
+                    # 38 בדיקות על שכנותיה וסיימה עם עסקה אחת משלה.
+                    own = norm_city(name)
+                    polys = ([p for p in cand
+                              if norm_city(p.get("settlementNameHeb")) == own]
+                             + [p for p in cand
+                                if norm_city(p.get("settlementNameHeb")) != own])
+                    if not polys:
+                        print(f"  {name}: אין חלקות בערי הכיסוי סביב העוגן — מדולג",
+                              file=sys.stderr)
+                        failed.append(name)
+                        continue
+                    # פוליגון שנבחר מחזיר את **כל** השכונה שסביבו, ולכן די
+                    # במעט פוליגונים פוריים; החיפוש הוא אחריהם, לא אחרי
+                    # הראשונים ברשימה.
+                    for p in polys:
+                        if len(picked) >= per_city or probed >= max_probe:
+                            break
+                        probed += 1
+                        if g.has_deals(p["polygon_id"]):
+                            picked.append(p["polygon_id"])
+                    if picked:
+                        plots[name] = picked
                 n = 0
                 for pid in picked:
                     for dt in (1, 2):
@@ -382,12 +391,19 @@ def main() -> int:
                             if c and c["deal_id"] and c["date"] >= cutoff:
                                 found[c["deal_id"]] = c
                                 n += 1
+                if not n and plots.get(name):
+                    # המטמון הצביע על חלקות שהתרוקנו. מוחקים אותו כדי
+                    # שהריצה הבאה תחפש מחדש במקום לקפוא על עיר ריקה.
+                    plots.pop(name, None)
+                    print(f"  {name}: החלקות השמורות התרוקנו — המטמון נוקה",
+                          file=sys.stderr)
                 if not picked:
                     print(f"  {name}: {probed} חלקות נבדקו, בכולן אפס עסקאות",
                           file=sys.stderr)
                     empty.append(name)
+                how = f"מתוך {probed} שנבדקו" if probed else "מהמטמון"
                 print(f"  {region['label']:8s} {name:14s} "
-                      f"{len(picked)}/{probed} חלקות → {n} עסקאות")
+                      f"{len(picked)} חלקות {how} → {n} עסקאות")
             except Exception as e:
                 print(f"  {name}: {why(e)} — מדולג", file=sys.stderr)
                 failed.append(name)
@@ -412,7 +428,8 @@ def main() -> int:
                         encoding="utf-8")
 
     STATE.parent.mkdir(parents=True, exist_ok=True)
-    STATE.write_text(json.dumps({"coords": coords, "failed": failed, "empty": empty,
+    STATE.write_text(json.dumps({"coords": coords, "plots": plots,
+                                 "failed": failed, "empty": empty,
                                  "updated": datetime.now().isoformat(timespec="seconds")},
                                 ensure_ascii=False), encoding="utf-8")
     print(f"\nסה\"כ {len(found)} עסקאות ייחודיות ({added} חדשות) | ערים שנכשלו: {len(failed)}")

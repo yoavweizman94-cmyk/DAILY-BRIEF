@@ -18,6 +18,7 @@
 | **מיילים יוצאים** | <https://resend.com/emails> |
 | **ניהול משתמשים** | Actions → Users Admin |
 | **עסקאות מחוץ לבורסה** | <https://app.tlvtaseview.com/offex.html> |
+| **שוק הדיור** | <https://app.tlvtaseview.com/nadlan.html> |
 | **ארכיון התוכן** (פרטי) | <https://github.com/yoavweizman94-cmyk/DAILY-BRIEF-content> |
 
 **שני ריפו ולא אחד:** הקוד בריפו אחד, המחקר בשני. **שניהם פרטיים** — נבדק
@@ -153,6 +154,8 @@ Actions → **Site Check** → Run workflow — היא רצה משרת של GitH
 
 לסריקה יזומה — אחרי הוספת עיר, להרחבת חלון הזמן, או לבדיקת עיר בודדת:
 Actions → **Nadlan Scan**, עם שדות `city` ו-`months` ריקים כברירת מחדל.
+הסריקה שומרת אילו חלקות בכל עיר מחזירות עסקאות, כי איתורן דורש עשרות
+בדיקות. אם עיר מתחילה להיראות דלילה בלי סיבה — להריץ עם `reprobe`.
 
 ---
 
