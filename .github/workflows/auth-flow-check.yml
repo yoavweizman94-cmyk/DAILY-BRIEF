@@ -116,17 +116,24 @@ jobs:
           # שלושה ימים בזמן שהיה ריק, כי הסריקה נכשלה והדחיפה לא כתבה דבר.
           # רק סשן אמיתי יכול לראות את הגוף, ולכן הבדיקה יושבת כאן.
           echo "=== 3.2 העמודים מציגים תוכן, לא רק 200 ==="
-          for pg in nadlan offex; do
-            curl -s --max-time 30 -H "Cookie: $COOKIE" "$APP/$pg.html" -o "$pg.html" || true
-            rows=$(grep -o '<tr>' "$pg.html" 2>/dev/null | wc -l)
-            if grep -q 'טרם נאספו' "$pg.html" 2>/dev/null; then
-              bad "$pg.html מציג מצב ריק — הנתונים לא הגיעו לריפו התוכן"
-            elif [ "$rows" -lt 5 ]; then
-              bad "$pg.html מכיל $rows שורות טבלה בלבד"
-            else
-              note "$pg → $rows שורות ✓"
+          # לכל עמוד סימן משלו: שוק הדיור בנוי מטבלה, מחוץ לבורסה מכרטיסים.
+          check_page() {   # עמוד · סימן · מינימום
+            local pg="$1" mark="$2" min="$3" code n
+            code=$(curl -s -o "$pg.html" -w '%{http_code}' --max-time 30                         -H "Cookie: $COOKIE" "$APP/$pg.html" || true)
+            n=$(grep -o "$mark" "$pg.html" 2>/dev/null | wc -l)
+            note "$pg → HTTP $code, $n פריטים"
+            if [ "$code" != "200" ]; then
+              bad "$pg.html החזיר $code"
+            elif grep -q 'טרם נאספו\|name="password"' "$pg.html" 2>/dev/null; then
+              bad "$pg.html מציג מצב ריק או מסך כניסה"
+              head -c 400 "$pg.html"; echo
+            elif [ "$n" -lt "$min" ]; then
+              bad "$pg.html מכיל $n פריטים בלבד"
+              head -c 400 "$pg.html"; echo
             fi
-          done
+          }
+          check_page nadlan '<td class="city">' 10
+          check_page offex '<li class="tx' 3
 
           echo "=== 3.5 החלפת סיסמה ==="
           NEW="$PW-changed"
