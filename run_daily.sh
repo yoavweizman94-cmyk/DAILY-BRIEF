@@ -74,6 +74,9 @@ run_source rmi     python ingest/rmi_pull.py
 run_source te      python ingest/te_pull.py
 run_source calls   python ingest/maya_calls.py
 run_source offex   python ingest/offex_pull.py
+# שני מקורות לאותו נושא: offex_pull מביא זהויות ממאיה, otc_pull מביא
+# את כל העסקאות מסקירת הבורסה — כולל אלה שאף צד בהן אינו בעל עניין.
+run_source otc     python ingest/otc_pull.py
 # סריקת הנדל"ן נמשכת כרבע שעה על 33 ערים, ונתוני רשות המסים מתעדכנים
 # פעם ביום לכל היותר. הרצתה בשלוש המהדורות היא אותו מידע בשלוש פעמים
 # העלות.

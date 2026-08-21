@@ -174,28 +174,39 @@ def pct(v, digits: int = 3) -> str:
     return "—" if v in (None, "") else f"{v:.{digits}f}%"
 
 
-def page(rows: list[dict], year: str) -> str:
+def page(rows: list[dict], year: str, head: bool = True) -> str:
+    """הגוף של שכבת מאיה.
+
+    `head=False` כשהשכבה מוטמעת בעמוד שכבר פתח כותרת ראשית — אז גם
+    ההסבר על מה שאינו במאיה מיותר, כי הוא נאמר שם על שני המקורות יחד.
+    """
     if not rows:
-        return ('<div class="dash-head"><h1>עסקאות מניה מחוץ לבורסה</h1></div>'
-                '<p class="lead">טרם נאספו עסקאות. הסריקה רצה בכל מהדורה.</p>')
+        empty = '<p class="lead">טרם נאספו דיווחי מאיה על עסקאות מחוץ לבורסה.</p>'
+        return empty if not head else (
+            '<div class="dash-head"><h1>עסקאות מניה מחוץ לבורסה</h1></div>' + empty)
 
     mark_pairs(rows)
     st = stats(rows, year)
     cum = cumulative(rows, year)
 
-    out = [
-        '<div class="dash-head"><h1>עסקאות מניה מחוץ לבורסה</h1>',
-        f'<span class="stamp">מתחילת {year} · נבנה {datetime.now():%d/%m %H:%M}</span></div>',
-        '<p class="lead">כל עסקה במניה שדווחה במאיה כמבוצעת מחוץ לבורסה, '
-        'משלושה סוגי דיווח: <strong>ת076</strong> שינוי בהחזקות בעל עניין; '
-        '<strong>ת078/ת079</strong> מי שנעשה או חדל להיות בעל עניין — אלה '
-        'העסקאות שחוצות את סף 5%, ולרוב הגדולות שבהן; ו<strong>ת085</strong> '
-        'רכישה עצמית של החברה במניותיה, שבה אין צד שני מזוהה. לפי הבורסה גם '
-        'עסקה תואמת מסווגת כמחוץ לבורסה.</p>'
-        '<p class="lead">מה שאינו כאן: עסקה מחוץ לבורסה שאף צד בה אינו בעל '
-        'עניין ואינה נוגעת במניות רדומות אינה מחייבת דיווח, ולכן אינה מתועדת '
-        'במאיה כלל. בעסקאות שכן מדווחות המדווח חייב להזדהות — ומכאן הזהויות '
-        'שבעמוד.</p>',
+    out = []
+    if head:
+        out += [
+            '<div class="dash-head"><h1>עסקאות מניה מחוץ לבורסה</h1>',
+            f'<span class="stamp">מתחילת {year} · נבנה {datetime.now():%d/%m %H:%M}</span></div>',
+        ]
+    out.append(
+        '<p class="lead">דיווחי מאיה, משלושה סוגי טופס: <strong>ת076</strong> '
+        'שינוי בהחזקות בעל עניין; <strong>ת078/ת079</strong> מי שנעשה או חדל '
+        'להיות בעל עניין — אלה העסקאות שחוצות את סף 5%, ולרוב הגדולות שבהן; '
+        'ו<strong>ת085</strong> רכישה עצמית של החברה במניותיה, שבה אין צד שני '
+        'מזוהה. לפי הבורסה גם עסקה תואמת מסווגת כמחוץ לבורסה.</p>')
+    if head:
+        out.append(
+            '<p class="lead">מה שאינו כאן: עסקה מחוץ לבורסה שאף צד בה אינו בעל '
+            'עניין ואינה נוגעת במניות רדומות אינה מחייבת דיווח, ולכן אינה '
+            'מתועדת במאיה כלל.</p>')
+    out += [
         '<section class="strip">',
         f'<div class="tile"><span class="lbl">עסקאות מתחילת השנה</span>'
         f'<span class="val" dir="ltr">{st["n"]}</span>'

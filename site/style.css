@@ -1016,3 +1016,79 @@ a:focus-visible, button:focus-visible, summary:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── עסקאות מחוץ לבורסה ─────────────────────────────────────────────
+   העמוד בנוי סביב שני צירים לכל עסקה — מול שער הבסיס ומול הנעילה —
+   ולכן הצבע כאן מסמן כיוון סטייה, לא רווח או הפסד של מישהו. */
+ul.otc-buckets { list-style: none; padding: 0; margin: 0.8rem 0 2rem; }
+ul.otc-buckets li {
+  display: grid;
+  grid-template-columns: minmax(7rem, 10rem) minmax(4rem, 1fr) auto;
+  align-items: center;
+  gap: 0.25rem 0.9rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+ul.otc-buckets li:last-child { border-bottom: 0; }
+ul.otc-buckets .nm { font-weight: 600; }
+ul.otc-buckets .bar {
+  height: 8px; background: var(--table-head); border-radius: 2px; overflow: hidden;
+}
+ul.otc-buckets .bar i { display: block; height: 100%; background: var(--accent); }
+ul.otc-buckets .b-premium .bar i { background: var(--up); }
+ul.otc-buckets .b-discount .bar i { background: var(--down); }
+ul.otc-buckets .b-unknown .bar i { background: var(--faint); }
+ul.otc-buckets .pv {
+  font-family: var(--mono); font-weight: 600; min-width: 3.2rem; text-align: left;
+}
+/* ההסבר יורד לשורה שלמה מתחת למדד — הוא הטקסט, לא הערת שוליים */
+ul.otc-buckets .ex {
+  grid-column: 1 / -1; font-size: 0.82rem; color: var(--muted); line-height: 1.5;
+}
+
+.otc-flow {
+  display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap;
+  margin: 0.8rem 0 2rem; padding: 0.9rem 1rem;
+  border: 1px solid var(--border); border-radius: 6px;
+}
+.otc-flow .ln { flex: none; color: var(--accent); }
+.otc-flow .ln.up { color: var(--up); }
+.otc-flow .ln.down { color: var(--down); }
+.otc-flow .rd { flex: 1 1 18rem; font-size: 0.88rem; line-height: 1.6; }
+
+ul.otc-cards {
+  list-style: none; padding: 0; margin: 0.8rem 0 2rem;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.7rem;
+}
+ul.otc-cards li {
+  display: grid; grid-template-columns: 1fr auto; gap: 0.2rem 0.6rem;
+  padding: 0.7rem 0.85rem; border: 1px solid var(--border); border-radius: 6px;
+  border-inline-start: 3px solid var(--faint); font-size: 0.86rem;
+}
+ul.otc-cards li.premium { border-inline-start-color: var(--up); }
+ul.otc-cards li.discount { border-inline-start-color: var(--down); }
+ul.otc-cards li.at_close, ul.otc-cards li.at_base {
+  border-inline-start-color: var(--accent);
+}
+ul.otc-cards .nm { font-weight: 700; }
+ul.otc-cards .dt, ul.otc-cards .v { font-family: var(--mono); color: var(--muted); }
+ul.otc-cards .dt { text-align: left; }
+ul.otc-cards .p, ul.otc-cards .c { font-family: var(--mono); font-weight: 600; }
+ul.otc-cards .p.up, ul.otc-cards .c.up { color: var(--up); }
+ul.otc-cards .p.down, ul.otc-cards .c.down { color: var(--down); }
+ul.otc-cards .p.flat, ul.otc-cards .c.flat { color: var(--faint); }
+ul.otc-cards .c { text-align: left; }
+ul.otc-cards .s {
+  grid-column: 1 / -1; font-size: 0.79rem; color: var(--muted); line-height: 1.5;
+  margin-top: 0.15rem;
+}
+
+/* תגית כיסוי בתוך טבלה — אותה שפה כמו בכרטיסי הדיווחים */
+table.nadlan td .cov, ul.otc-cards .cov {
+  display: inline-block; margin-inline-start: 0.4rem;
+  font-size: 0.65rem; font-weight: 600;
+  background: var(--accent); color: var(--on-accent);
+  border-radius: 3px; padding: 0.03rem 0.34rem; vertical-align: 0.08em;
+}

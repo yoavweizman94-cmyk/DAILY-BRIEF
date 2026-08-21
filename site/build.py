@@ -19,6 +19,7 @@ import markdown
 import yaml
 
 import nadlan
+import otc
 import offex
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -839,9 +840,14 @@ def main() -> int:
                     root="", body=nadlan.page(nadlan.load())),
         encoding="utf-8")
 
+    # שתי שכבות בעמוד אחד: הסקירה של הבורסה נותנת שלמות, מאיה נותנת
+    # זהויות. הפרדתן לשני עמודים הייתה מחייבת את הקורא להצליב בעצמו.
+    yr = str(date.today().year)
     (OUT / "offex.html").write_text(
         PAGE.format(title=f"עסקאות מחוץ לבורסה · {site_title}", site_title=site_title,
-                    root="", body=offex.page(offex.load_offex(), str(date.today().year))),
+                    root="", body=otc.page(otc.load(),
+                                           offex.page(offex.load_offex(), yr, head=False),
+                                           yr)),
         encoding="utf-8")
 
     (OUT / "calls.html").write_text(

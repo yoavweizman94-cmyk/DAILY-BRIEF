@@ -16,6 +16,11 @@ on:
         description: "עד איזה תאריך YYYY-MM-DD (ריק = היום)"
         required: false
         default: ""
+      tase_history:
+        description: "למשוך גם היסטוריית עסקאות מסקירת הבורסה לחברות הכיסוי"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -36,7 +41,7 @@ jobs:
           cache: pip
 
       - name: Install
-        run: pip install curl_cffi truststore certifi
+        run: pip install curl_cffi pyyaml truststore certifi
 
       - name: Fetch private content
         env:
@@ -48,6 +53,14 @@ jobs:
           OFFEX_FROM: ${{ inputs.from_date }}
           OFFEX_UNTIL: ${{ inputs.until }}
         run: python ingest/offex_pull.py
+
+      # מקור שני, משלים ולא חלופי: מאיה נותנת זהויות, סקירת הבורסה
+      # נותנת את העסקאות שאיש לא היה חייב לדווח עליהן.
+      - name: TASE history
+        if: inputs.tase_history
+        env:
+          OTC_BACKFILL: "1"
+        run: python ingest/otc_pull.py
 
       - name: Summary
         if: always()

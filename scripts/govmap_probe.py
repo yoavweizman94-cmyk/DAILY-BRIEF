@@ -90,6 +90,22 @@ def main() -> int:
                           params={"path": "/../../etc/passwd"},
                           headers={"x-scan-key": key}, timeout=45))
 
+    # api.tase.co.il הוא מקור העסקאות מחוץ לבורסה. mayaapi כבר עובד
+    # מהראנר, אך זה מארח אחר — וההנחה שמארח באותו דומיין מתנהג אותו
+    # דבר היא בדיוק ההנחה שנכשלה מול govmap.
+    print("== api.tase.co.il ==")
+    import json as _json
+    tase = creq.Session(impersonate="chrome")
+    tase.headers.update({"Accept": "application/json",
+                         "Referer": "https://market.tase.co.il/",
+                         "Origin": "https://market.tase.co.il"})
+    tase.get("https://market.tase.co.il/he/market_data/daily-review/otc", timeout=45)
+    show("סקירת OTC (POST)",
+         lambda: tase.post("https://api.tase.co.il/api/marketdata/otctransactions",
+                           headers={"Content-Type": "application/json"},
+                           data=_json.dumps({"lang": 0, "dType": 2, "pageNum": 1}),
+                           timeout=45))
+
     print("\nכתובת היציאה של הראנר:")
     try:
         print("  ", creq.get("https://api.ipify.org", timeout=20).text)
