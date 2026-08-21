@@ -72,6 +72,13 @@ def main() -> int:
                                       "maxResults": 5},
                             headers={"Content-Type": "application/json"}, timeout=30))
 
+    # אם החסימה היא לפי טווח כתובות, השאלה היחידה שנותרה היא מאיזו רשת
+    # כן אפשר לסרוק. Cloudflare הוא התשתית היחידה שכבר בידינו.
+    print("== דרך Cloudflare ==")
+    show("api/govmap-probe",
+         lambda: creq.get("https://app.tlvtaseview.com/api/govmap-probe",
+                          timeout=45))
+
     print("\nכתובת היציאה של הראנר:")
     try:
         print("  ", creq.get("https://api.ipify.org", timeout=20).text)
