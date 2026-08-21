@@ -21,7 +21,8 @@
 אשראי): https://dash.cloudflare.com/sign-up
 
 ```bash
-cd budget
+git clone https://github.com/yoavweizman94-cmyk/couple-budget.git
+cd couple-budget
 npm install          # מתקין את wrangler מקומית
 npx wrangler login   # פותח דפדפן — אשר את הגישה לחשבון שלך
 ./deploy.sh          # עושה את כל השאר
@@ -59,7 +60,7 @@ npx wrangler secret put APP_PIN
 
 ## עדכון גרסה
 
-אחרי כל שינוי בקוד: `npx wrangler deploy` מתוך תיקיית `budget/`. זהו.
+אחרי כל שינוי בקוד: `npx wrangler deploy` מתוך תיקיית הריפו. זהו.
 להרצה מקומית לבדיקות: `npm run dev` (עם `.dev.vars` שמכיל `APP_PIN = "1234"`).
 
 ## שחזור אם משהו נשבר
