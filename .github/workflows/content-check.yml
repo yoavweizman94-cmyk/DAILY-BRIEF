@@ -27,6 +27,35 @@ jobs:
           date -u +'%FT%TZ' > output/.pipeline-heartbeat
           bash scripts/content_repo.sh push heartbeat
 
+      - name: Freshness
+        # נתיב כתיבה תקין אינו מעיד שמישהו כותב. שוק הדיור לא הגיע לריפו
+        # שלושה ימים בזמן ש-Nadlan Scan דיווח הצלחה בכל יום, כי הסריקה
+        # החזירה אפס והדחיפה כתבה "אין שינוי בתוכן" ויצאה 0.
+        run: |
+          set -u
+          fail=0
+          yr=$(date +%Y)
+          check() {  # נתיב · ימים מותרים · תיאור
+            local path="$1" days="$2" what="$3"
+            if [ ! -s "output/$path" ]; then
+              echo "::error::$what — $path חסר או ריק"; fail=1; return
+            fi
+            local iso age
+            iso=$(git -C output log -1 --format=%cI -- "$path")
+            if [ -z "$iso" ]; then
+              echo "::error::$what — אין קומיט שנגע ב-$path"; fail=1; return
+            fi
+            age=$(( ( $(date -u +%s) - $(date -u -d "$iso" +%s) ) / 86400 ))
+            if [ "$age" -gt "$days" ]; then
+              echo "::error::$what — עודכן לפני $age ימים (מותר עד $days)"; fail=1
+            else
+              echo "$what ✓ ($age ימים, $(grep -c . "output/$path") שורות)"
+            fi
+          }
+          check "nadlan/$yr.jsonl" 3 "שוק הדיור"
+          check "offex/$yr.jsonl"  3 "עסקאות מחוץ לבורסה"
+          exit "$fail"
+
       - name: Confirm it landed
         env:
           CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
