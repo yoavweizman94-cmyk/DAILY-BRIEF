@@ -17,6 +17,7 @@
 הסריקה יעילה כי `neighborhood-deals` עם מזהה חלקה מחזיר את כל השכונה
 שסביבה — שש חלקות מכסות עיר, ולא צריך למנות אלפי חלקות.
 """
+import collections
 import json
 import os
 import re
@@ -98,13 +99,13 @@ class Govmap:
                 time.sleep(2 * (i + 1))
         raise last
 
-    def point(self, text: str, city: str | None = None):
+    def point(self, text: str, forms: list[str] | None = None):
         """קואורדינטות לכתובת. autocomplete הוא POST, לא GET.
 
-        כשנמסר `city`, מתקבלת רק תוצאה שהיישוב שלה תואם. Govmap מדרג לפי
-        התאמת מספר הבית ולא לפי היישוב: "העצמאות 40 קרית גת" החזיר את
-        "העצמאות 40 קרית אתא" במקום הראשון — קרית גת נסרקה חודש כעיר
-        אחרת, וכל עסקאותיה נזרקו כי קריית אתא אינה בכיסוי.
+        כשנמסר `forms`, מתקבלת רק תוצאה שאחת מצורות שם היישוב מופיעה בה.
+        Govmap מדרג לפי התאמת מספר הבית ולא לפי היישוב: "העצמאות 40 קרית
+        גת" החזיר את "העצמאות 40 קרית אתא" במקום הראשון — קרית גת נסרקה
+        כעיר אחרת, וכל עסקאותיה נזרקו כי קריית אתא אינה בכיסוי.
         """
         self._wait()
         r = self.s.post(f"{API}/search-service/autocomplete",
@@ -112,9 +113,9 @@ class Govmap:
                               "isAccurate": False, "maxResults": 10},
                         headers={"Content-Type": "application/json"}, timeout=45)
         r.raise_for_status()
-        want = norm_city(city) if city else None
         for res in r.json().get("results", []):
-            if want and want not in norm_city(res.get("text") or ""):
+            txt = norm_city(res.get("text") or "")
+            if forms and not any(f in txt for f in forms):
                 continue
             m = re.search(r"POINT\(([\d.]+)\s+([\d.]+)\)", res.get("shape") or "")
             if m:
@@ -124,6 +125,23 @@ class Govmap:
     def polygons(self, x: float, y: float, radius: int = 3000):
         data = self._get(f"{API}/real-estate/deals/{x},{y}/{radius}")
         return data if isinstance(data, list) else []
+
+    def polygons_multi(self, x: float, y: float, radii=(1000, 2000, 3000)):
+        """איחוד חלקות מכמה רדיוסים.
+
+        ה-API מחזיר תקרה של 100 חלקות, והרכבן משתנה עם הרדיוס בלי שמירת
+        סדר מרחק: סביב הרצליה הוחזרו 3 חלקות בעיר ברדיוס 3000 מול 7
+        ברדיוס 2000. שאילתה אחת נותנת מדגם שרירותי, ולעיר צפופה־שכנים
+        היא נותנת כמעט אפס.
+        """
+        seen, out = set(), []
+        for rad in radii:
+            for p in self.polygons(x, y, rad):
+                pid = p.get("polygon_id")
+                if pid and pid not in seen:
+                    seen.add(pid)
+                    out.append(p)
+        return out
 
     def has_deals(self, polygon_id: str) -> bool:
         """בדיקה זולה (limit=1) אם לפוליגון יש עסקאות בכלל.
@@ -163,15 +181,32 @@ def norm_hood(s: str) -> str:
 def norm_city(s: str) -> str:
     """נרמול שם יישוב להשוואה בין הקונפיג לנתונים.
 
-    Govmap כותב "קריית ביאליק" ו"קריית מוצקין" ביו"ד כפולה; הקונפיג נכתב
-    ביו"ד אחת. בלי נרמול ההתאמה נכשלת ו-clean() זורק את העסקה בשקט —
-    נמדד: 700 עסקאות שנשלפו בהצלחה ונעלמו, והעיר הוצגה כריקה.
+    Govmap כותב בכתיב מלא — "קריית ביאליק", "הרצלייה" — והקונפיג בכתיב
+    חסר. בלי נרמול ההתאמה נכשלת ו-clean() זורק את העסקה בשקט: כל עסקאות
+    הרצליה נעלמו כך, והעיר הוצגה עם שתי עסקאות. הכלל הוא כיווץ יו"ד
+    כפולה לאחת, ולא רשימת חריגים — הרשימה תמיד חסרה עיר.
     """
     s = (s or "").strip()
     s = re.sub(r"[\"׳״'`]", "", s)
     s = re.sub(r"[-–—]", " ", s)
-    s = re.sub(r"קריית", "קרית", s)
+    s = s.replace("יי", "י")
     return re.sub(r"\s+", " ", s).strip()
+
+
+def city_forms(city: dict) -> list[str]:
+    """צורות שם היישוב שמתקבלות באימות העוגן.
+
+    "תל אביב-יפו" בקונפיג מול "אבן גבירול 68 תל אביב" בתוצאה — התאמה
+    מלאה נכשלת, ולכן גם הקידומת בת שתי המילים מתקבלת.
+    """
+    forms = []
+    for nm in [city["name"], *(city.get("aliases") or [])]:
+        n = norm_city(nm)
+        forms.append(n)
+        parts = n.split()
+        if len(parts) > 2:
+            forms.append(" ".join(parts[:2]))
+    return forms
 
 
 def load_cfg() -> dict:
@@ -208,6 +243,9 @@ def developer_index() -> dict:
     return {k: sorted(v) for k, v in idx.items()}
 
 
+UNMATCHED: collections.Counter = collections.Counter()
+
+
 def clean(rec: dict, region_of: dict, deal_type: int, devs: dict) -> dict | None:
     """רשומה מנוקה, או None אם היא מחוץ לערים שהוגדרו.
 
@@ -216,8 +254,10 @@ def clean(rec: dict, region_of: dict, deal_type: int, devs: dict) -> dict | None
     תויגו כרמת גן. תמונת מחירים לפי עיר שמערבבת ערים אינה שווה דבר.
     """
     d = {k: v for k, v in rec.items() if k not in DROP}
-    hit = region_of.get(norm_city(d.get("settlementNameHeb")))
+    raw_city = (d.get("settlementNameHeb") or "").strip()
+    hit = region_of.get(norm_city(raw_city))
     if not hit:
+        UNMATCHED[raw_city] += 1
         return None
     # השם הקנוני מהקונפיג, כדי ששתי איותיה של אותה עיר לא ייספרו כשתי ערים.
     region, city = hit
@@ -301,7 +341,8 @@ def main() -> int:
             try:
                 pt = coords.get(name)
                 if not pt:
-                    pt = g.point(city["anchor"], name) or g.point(name, name)
+                    forms = city_forms(city)
+                    pt = g.point(city["anchor"], forms) or g.point(name, forms)
                     if not pt:
                         print(f"  {name}: העוגן לא נפתר ליישוב הנכון — מדולג",
                               file=sys.stderr)
@@ -311,8 +352,13 @@ def main() -> int:
 
                 # פוליגון ששייך ליישוב מחוץ לכיסוי אינו תורם דבר — עסקאותיו
                 # ייזרקו ב-clean() בכל מקרה — אך הוא כן דוחק פוליגון שכן.
-                polys = [p for p in g.polygons(pt[0], pt[1])
-                         if norm_city(p.get("settlementNameHeb")) in region_of]
+                cand = [p for p in g.polygons_multi(pt[0], pt[1])
+                        if norm_city(p.get("settlementNameHeb")) in region_of]
+                # חלקות העיר עצמה נבדקות ראשונות. בלי זה הרצליה בזבזה 38
+                # בדיקות על שכנותיה וסיימה עם עסקה אחת משלה.
+                own = norm_city(name)
+                polys = ([p for p in cand if norm_city(p.get("settlementNameHeb")) == own]
+                         + [p for p in cand if norm_city(p.get("settlementNameHeb")) != own])
                 if not polys:
                     print(f"  {name}: אין חלקות בערי הכיסוי סביב העוגן — מדולג",
                           file=sys.stderr)
@@ -374,6 +420,13 @@ def main() -> int:
         print(f"::warning::ערים ללא נתונים: {', '.join(failed[:10])}")
     if empty:
         print(f"::warning::ערים שנסרקו והמקור החזיר בהן אפס עסקאות: {', '.join(empty)}")
+
+    # שם יישוב שנזרק בהיקף גדול הוא כמעט תמיד איות שאינו מכוסה, לא יישוב
+    # זר. הרצליה נעלמה כך לגמרי, ואיש לא ידע כי clean() שתק.
+    big = [(nm, n) for nm, n in UNMATCHED.most_common(8) if n >= 200 and nm]
+    if big:
+        print("::warning::שמות יישוב שנזרקו בהיקף גדול (איות לא מכוסה?): "
+              + ", ".join(f"{nm} ({n})" for nm, n in big))
     return 0
 
 
