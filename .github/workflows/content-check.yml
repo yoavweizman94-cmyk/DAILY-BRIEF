@@ -54,6 +54,7 @@ jobs:
           }
           check "nadlan/$yr.jsonl" 3 "שוק הדיור"
           check "offex/$yr.jsonl"  3 "עסקאות מחוץ לבורסה"
+          check "otc/$yr.jsonl"    3 "סקירת העסקאות של הבורסה"
           exit "$fail"
 
       - name: Confirm it landed
