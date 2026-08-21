@@ -49,6 +49,15 @@ for i in $(seq 1 $ATTEMPTS); do
     continue
   fi
 
+  # לא כל כישלון של pull הוא קונפליקט. קובץ מצב שנכתב ולא קובע משאיר
+  # שינוי לא מקובע, ו-rebase מסרב עוד לפני שהוא מתחיל — ואז ההודעה
+  # "קונפליקט בקובץ שאינו תוצר מחולל" שולחת לחפש התנגשות שאינה קיימת.
+  if ! git rev-parse -q --verify REBASE_HEAD >/dev/null 2>&1      && ! git diff --name-only --diff-filter=U | grep -q .; then
+    echo "הדחיפה נכשלה ואין קונפליקט. שינויים שלא קובעו:" >&2
+    git status --porcelain >&2
+    exit 1
+  fi
+
   # ה-rebase נעצר. אם כל הקונפליקטים הם בתוצרים מחוללים — נפתרים וממשיכים;
   # אחרת זו התנגשות אמיתית שאין לפתור אותה בניחוש.
   if resolve_generated && ! git diff --name-only --diff-filter=U | grep -q .; then
