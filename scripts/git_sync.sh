@@ -18,6 +18,8 @@ GENERATED_PATHS=(
   "data/state.sqlite"              # היסטוריית מחירים + IDs שדווחו
   "data/calls_links.json"          # קאש קישורי שיחות ועידה
   "data/maya_index_state.json"     # מצב מילוי היסטוריית הדוחות
+  "data/offex_state.json"          # עד היכן נסרקו דיווחי מחוץ לבורסה
+  "data/nadlan_state.json"         # קואורדינטות ערים + תוצאת הסריקה האחרונה
   "output/calls/upcoming.json"     # לוח שיחות — נבנה מה-API בכל ריצה
   "output/filings/manifest.json"   # נגזר לחלוטין מקובצי השנה
 )
