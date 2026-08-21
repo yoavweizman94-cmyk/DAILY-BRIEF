@@ -1092,3 +1092,42 @@ table.nadlan td .cov, ul.otc-cards .cov {
   background: var(--accent); color: var(--on-accent);
   border-radius: 3px; padding: 0.03rem 0.34rem; vertical-align: 0.08em;
 }
+
+/* ── שוק הדיור: הקריאה, המצב, והפיזור ─────────────────────────────── */
+p.reading {
+  font-size: 0.97rem; line-height: 1.75; margin: 0.7rem 0;
+  padding-inline-start: 0.9rem; border-inline-start: 3px solid var(--accent);
+}
+table.nadlan td.state { font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
+table.nadlan .q, .hood-city .q {
+  font-family: var(--mono); font-size: 0.76rem; color: var(--faint);
+  margin-inline-start: 0.35rem;
+}
+.mix {
+  display: inline-block; margin-inline-start: 0.4rem;
+  font-size: 0.66rem; font-weight: 600; color: var(--on-accent);
+  background: var(--faint); border-radius: 3px; padding: 0.02rem 0.4rem;
+  cursor: help;
+}
+/* פרמיית קבלן יכולה להיות שלילית, ואז הצבע הוא הכיוון ולא איכות */
+ul.offex-bars .bar.up i { background: var(--up); }
+ul.offex-bars .bar.down i { background: var(--down); }
+
+.hoods {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem; margin: 0.9rem 0 2rem;
+}
+.hood-city { border: 1px solid var(--border); border-radius: 6px; padding: 0.8rem 0.95rem; }
+.hood-city h3 { margin: 0 0 0.5rem; font-size: 0.95rem; border: 0; padding: 0; }
+.hood-city ul { list-style: none; padding: 0; margin: 0; }
+.hood-city li {
+  display: grid; grid-template-columns: 1fr auto; gap: 0 0.6rem;
+  padding: 0.32rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem;
+}
+.hood-city li:last-child { border-bottom: 0; }
+.hood-city .nm { font-weight: 600; }
+.hood-city .pv { font-family: var(--mono); font-weight: 600; color: var(--accent); }
+.hood-city .mv {
+  grid-column: 1 / -1; font-family: var(--mono); font-size: 0.75rem;
+  color: var(--muted);
+}
