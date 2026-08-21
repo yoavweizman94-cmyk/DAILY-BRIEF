@@ -29,6 +29,22 @@ LAG_MONTHS = 2
 MIN_SAMPLE = 8
 
 
+def missing_cities(present: set) -> list[str]:
+    """ערים שהוגדרו לסריקה ולא הוחזרה בהן ולו עסקה אחת.
+
+    עיר שנעדרת מהטבלה נקראת כאילו לא נסרקה, או גרוע מכך כאילו אין בה
+    מסחר. שתי הקריאות שגויות: קרית שמונה, למשל, נסרקת בהצלחה ו-Govmap
+    מחזיר עליה אפס עסקאות. פער במקור נאמר, לא מוסתר.
+    """
+    try:
+        import yaml
+        cfg = yaml.safe_load((ROOT / "config" / "nadlan.yaml").read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    return [c["name"] for r in cfg.get("regions", []) for c in r.get("cities", [])
+            if c["name"] not in present]
+
+
 def load() -> list[dict]:
     src = ROOT / "output" / "nadlan"
     if not src.is_dir():
@@ -254,4 +270,10 @@ def page(rows: list[dict]) -> str:
                'המלאים האחרונים לשלושת הראשונים שבחלון, ומחושבת רק כשיש לפחות '
                'שישה חודשים עם שלוש עסקאות ומעלה בכל אחד. עיר עם פחות '
                f'מ-{MIN_SAMPLE} עסקאות מסומנת כמדגם דק.</p>')
+
+    gap = missing_cities(set(st))
+    if gap:
+        out.append('<p class="note">ערים שנסרקו ולא הוחזרו בהן עסקאות: '
+                   f'{", ".join(gap)}. היעדרן מהטבלה הוא פער בנתוני המקור '
+                   'ולא עדות לכך שלא נסחרו בהן דירות.</p>')
     return "\n".join(out)

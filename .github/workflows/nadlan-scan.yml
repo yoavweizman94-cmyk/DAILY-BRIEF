@@ -36,7 +36,9 @@ jobs:
           cache: pip
 
       - name: Install
-        run: pip install requests pyyaml truststore certifi
+        # curl_cffi אינו אופציונלי: govmap.gov.il חוסם requests רגיל לפי
+        # טביעת TLS, וההתקנה הצרה שהייתה כאן הפילה את כל 33 הערים.
+        run: pip install requests curl_cffi pyyaml truststore certifi
 
       - name: Fetch private content
         env:
@@ -52,11 +54,18 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          f="output/nadlan/$(date +%Y).jsonl"
+          set -e
+          total=0
           for y in output/nadlan/*.jsonl; do
-            [ -s "$y" ] && echo "$(basename "$y"): $(grep -c . "$y") עסקאות"
+            [ -s "$y" ] || continue
+            n=$(grep -c . "$y")
+            total=$((total + n))
+            echo "$(basename "$y"): $n עסקאות"
           done
-          echo "ערים שנכשלו: $(python3 -c "import json;print(', '.join(json.load(open('data/nadlan_state.json',encoding='utf-8')).get('failed') or []) or 'אין')" 2>/dev/null || echo '?')"
+          echo "סה\"כ בקבצים: $total"
+          python3 -c "import json;d=json.load(open('data/nadlan_state.json',encoding='utf-8'));f=d.get('failed') or [];print('ערים שנכשלו:', ', '.join(f) or 'אין')"
+          # ריצה שלא הותירה ולו עסקאה אחת אינה "הצלחה עם אזהרה".
+          [ "$total" -gt 0 ]
 
       - name: Push content
         env:

@@ -835,7 +835,7 @@ def main() -> int:
                 encoding="utf-8")
 
     (OUT / "nadlan.html").write_text(
-        PAGE.format(title=f"עסקאות נדל\"ן · {site_title}", site_title=site_title,
+        PAGE.format(title=f"שוק הדיור · {site_title}", site_title=site_title,
                     root="", body=nadlan.page(nadlan.load())),
         encoding="utf-8")
 

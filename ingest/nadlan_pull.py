@@ -32,6 +32,7 @@ harden()
 
 import requests  # noqa: E402
 import yaml  # noqa: E402
+from curl_cffi import requests as creq  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "output" / "nadlan"
@@ -54,9 +55,24 @@ HEADERS = {
 DROP = {"shape", "objectid", "settlementNameEng", "streetNameEng", "streetCode"}
 
 
+def why(e: Exception) -> str:
+    """שם השגיאה עם קוד ה-HTTP. "HTTPError" בלבד אינו ניתן לאבחון:
+    403 הוא חסימת WAF, 404 הוא מזהה שגוי, 429 הוא קצב. בלי הקוד אי אפשר
+    לדעת מי משלושתם, וזה בדיוק מה שקרה בריצה שהחזירה 0 עסקאות."""
+    code = getattr(getattr(e, "response", None), "status_code", None)
+    return f"{type(e).__name__} {code}" if code else type(e).__name__
+
+
 class Govmap:
+    """הגישה היא ב-curl_cffi עם חיקוי דפדפן, לא ב-requests.
+
+    govmap.gov.il חוסם לפי טביעת TLS, כמו מאיה ורמ"י. מתחנת עבודה שיוצאת
+    דרך פרוקסי ארגוני החוסם אינו מורגש — הפרוקסי חותם מחדש ומחליף את
+    הטביעה — ולכן `requests` עבד מקומית ונכשל ב-33 הערים על ראנר Linux.
+    """
+
     def __init__(self, throttle: float = 0.35):
-        self.s = requests.Session()
+        self.s = creq.Session(impersonate="chrome")
         self.s.headers.update(HEADERS)
         self.throttle = throttle
         self._last = 0.0
@@ -82,15 +98,24 @@ class Govmap:
                 time.sleep(2 * (i + 1))
         raise last
 
-    def point(self, text: str):
-        """קואורדינטות לכתובת. autocomplete הוא POST, לא GET."""
+    def point(self, text: str, city: str | None = None):
+        """קואורדינטות לכתובת. autocomplete הוא POST, לא GET.
+
+        כשנמסר `city`, מתקבלת רק תוצאה שהיישוב שלה תואם. Govmap מדרג לפי
+        התאמת מספר הבית ולא לפי היישוב: "העצמאות 40 קרית גת" החזיר את
+        "העצמאות 40 קרית אתא" במקום הראשון — קרית גת נסרקה חודש כעיר
+        אחרת, וכל עסקאותיה נזרקו כי קריית אתא אינה בכיסוי.
+        """
         self._wait()
         r = self.s.post(f"{API}/search-service/autocomplete",
                         json={"searchText": text, "language": "he",
-                              "isAccurate": False, "maxResults": 5},
+                              "isAccurate": False, "maxResults": 10},
                         headers={"Content-Type": "application/json"}, timeout=45)
         r.raise_for_status()
+        want = norm_city(city) if city else None
         for res in r.json().get("results", []):
+            if want and want not in norm_city(res.get("text") or ""):
+                continue
             m = re.search(r"POINT\(([\d.]+)\s+([\d.]+)\)", res.get("shape") or "")
             if m:
                 return float(m.group(1)), float(m.group(2))
@@ -99,6 +124,21 @@ class Govmap:
     def polygons(self, x: float, y: float, radius: int = 3000):
         data = self._get(f"{API}/real-estate/deals/{x},{y}/{radius}")
         return data if isinstance(data, list) else []
+
+    def has_deals(self, polygon_id: str) -> bool:
+        """בדיקה זולה (limit=1) אם לפוליגון יש עסקאות בכלל.
+
+        `dealscount` שמגיע עם הפוליגון אינו מנבא זאת: נמדד dealscount=256
+        שהחזיר אפס עסקאות, לצד dealscount=9 שהחזיר 401. מיון לפי השדה
+        הזה בחר שש חלקות ריקות ברצף, ורמת השרון, שדרות וקרית שמונה
+        הוצגו כאילו לא נסחרה בהן דירה.
+        """
+        for dt in (2, 1):
+            d = self._get(f"{API}/real-estate/neighborhood-deals/{polygon_id}",
+                          params={"limit": 1, "dealType": dt})
+            if isinstance(d, dict) and int(d.get("totalCount") or 0) > 0:
+                return True
+        return False
 
     def neighborhood_deals(self, polygon_id: str, deal_type: int, limit: int = 400):
         data = self._get(f"{API}/real-estate/neighborhood-deals/{polygon_id}",
@@ -117,6 +157,20 @@ def norm_hood(s: str) -> str:
     s = (s or "").strip()
     s = re.sub(r"^(שכונת|שכ\.|שכ׳|רובע)\s+", "", s)
     s = re.sub(r"[\"׳״'`,.\-–—]", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def norm_city(s: str) -> str:
+    """נרמול שם יישוב להשוואה בין הקונפיג לנתונים.
+
+    Govmap כותב "קריית ביאליק" ו"קריית מוצקין" ביו"ד כפולה; הקונפיג נכתב
+    ביו"ד אחת. בלי נרמול ההתאמה נכשלת ו-clean() זורק את העסקה בשקט —
+    נמדד: 700 עסקאות שנשלפו בהצלחה ונעלמו, והעיר הוצגה כריקה.
+    """
+    s = (s or "").strip()
+    s = re.sub(r"[\"׳״'`]", "", s)
+    s = re.sub(r"[-–—]", " ", s)
+    s = re.sub(r"קריית", "קרית", s)
     return re.sub(r"\s+", " ", s).strip()
 
 
@@ -162,19 +216,25 @@ def clean(rec: dict, region_of: dict, deal_type: int, devs: dict) -> dict | None
     תויגו כרמת גן. תמונת מחירים לפי עיר שמערבבת ערים אינה שווה דבר.
     """
     d = {k: v for k, v in rec.items() if k not in DROP}
-    city = (d.get("settlementNameHeb") or "").strip()
-    region = region_of.get(city)
-    if not region:
+    hit = region_of.get(norm_city(d.get("settlementNameHeb")))
+    if not hit:
         return None
+    # השם הקנוני מהקונפיג, כדי ששתי איותיה של אותה עיר לא ייספרו כשתי ערים.
+    region, city = hit
     amount = d.get("dealAmount")
     area = d.get("assetArea")
     raw_date = d.get("dealDate") or ""
     if not amount or not raw_date:
         return None
     try:
-        dt = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).date().isoformat()
+        parsed = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).date()
     except ValueError:
         return None
+    # תאריך עתידי הוא שגיאת מקור (נמצאה עסקה ב-2027), והוא פותח קובץ שנה
+    # שלמה על רשומה אחת ומעוות את חלון "החודשים האחרונים".
+    if parsed > date.today():
+        return None
+    dt = parsed.isoformat()
 
     hood = (d.get("neighborhood") or "").strip()
     out = {
@@ -210,13 +270,19 @@ def main() -> int:
     cfg = load_cfg()
     months = int(os.environ.get("NADLAN_MONTHS") or cfg.get("months_back", 18))
     per_city = int(os.environ.get("NADLAN_POLYGONS") or cfg.get("polygons_per_city", 6))
+    max_probe = int(cfg.get("max_probes_per_city", 40))
     only = (os.environ.get("NADLAN_CITY") or "").strip()
     cutoff = (date.today() - timedelta(days=31 * months)).isoformat()
 
     # מפת עיר → אזור, לפי הקונפיג. הסריקה סביב עיר אחת מחזירה גם עסקאות
     # בערים שכנות, ואלה משויכות לאזור הנכון שלהן במקום להיזרק.
-    region_of = {c["name"]: r["key"]
-                 for r in cfg["regions"] for c in r["cities"]}
+    # aliases: Govmap שומר שמות היסטוריים ("נצרת עילית" ל"נוף הגליל"),
+    # וכל אחד מהם ממופה לאותה עיר קנונית.
+    region_of = {}
+    for r in cfg["regions"]:
+        for c in r["cities"]:
+            for nm in [c["name"], *(c.get("aliases") or [])]:
+                region_of[norm_city(nm)] = (r["key"], c["name"])
 
     g = Govmap()
     devs = developer_index()
@@ -226,7 +292,7 @@ def main() -> int:
     coords = state.get("coords", {})
 
     found: dict[int, dict] = {}
-    failed = []
+    failed, empty = [], []
     for region in cfg["regions"]:
         for city in region["cities"]:
             name = city["name"]
@@ -235,19 +301,33 @@ def main() -> int:
             try:
                 pt = coords.get(name)
                 if not pt:
-                    pt = g.point(city["anchor"]) or g.point(name)
+                    pt = g.point(city["anchor"], name) or g.point(name, name)
                     if not pt:
+                        print(f"  {name}: העוגן לא נפתר ליישוב הנכון — מדולג",
+                              file=sys.stderr)
                         failed.append(name)
                         continue
                     coords[name] = list(pt)
-                polys = g.polygons(pt[0], pt[1])
-                polys.sort(key=lambda p: -int(p.get("dealscount") or 0))
-                seen_hoods = set()
-                picked = []
+
+                # פוליגון ששייך ליישוב מחוץ לכיסוי אינו תורם דבר — עסקאותיו
+                # ייזרקו ב-clean() בכל מקרה — אך הוא כן דוחק פוליגון שכן.
+                polys = [p for p in g.polygons(pt[0], pt[1])
+                         if norm_city(p.get("settlementNameHeb")) in region_of]
+                if not polys:
+                    print(f"  {name}: אין חלקות בערי הכיסוי סביב העוגן — מדולג",
+                          file=sys.stderr)
+                    failed.append(name)
+                    continue
+                # פוליגון שנבחר מחזיר את **כל** השכונה שסביבו, ולכן די
+                # במעט פוליגונים פוריים; החיפוש הוא אחריהם, לא אחרי
+                # הראשונים ברשימה.
+                picked, probed = [], 0
                 for p in polys:
-                    if len(picked) >= per_city:
+                    if len(picked) >= per_city or probed >= max_probe:
                         break
-                    picked.append(p["polygon_id"])
+                    probed += 1
+                    if g.has_deals(p["polygon_id"]):
+                        picked.append(p["polygon_id"])
                 n = 0
                 for pid in picked:
                     for dt in (1, 2):
@@ -256,9 +336,14 @@ def main() -> int:
                             if c and c["deal_id"] and c["date"] >= cutoff:
                                 found[c["deal_id"]] = c
                                 n += 1
-                print(f"  {region['label']:8s} {name:14s} {len(picked)} חלקות → {n} עסקאות")
+                if not picked:
+                    print(f"  {name}: {probed} חלקות נבדקו, בכולן אפס עסקאות",
+                          file=sys.stderr)
+                    empty.append(name)
+                print(f"  {region['label']:8s} {name:14s} "
+                      f"{len(picked)}/{probed} חלקות → {n} עסקאות")
             except Exception as e:
-                print(f"  {name}: {type(e).__name__} — מדולג", file=sys.stderr)
+                print(f"  {name}: {why(e)} — מדולג", file=sys.stderr)
                 failed.append(name)
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -281,12 +366,14 @@ def main() -> int:
                         encoding="utf-8")
 
     STATE.parent.mkdir(parents=True, exist_ok=True)
-    STATE.write_text(json.dumps({"coords": coords, "failed": failed,
+    STATE.write_text(json.dumps({"coords": coords, "failed": failed, "empty": empty,
                                  "updated": datetime.now().isoformat(timespec="seconds")},
                                 ensure_ascii=False), encoding="utf-8")
     print(f"\nסה\"כ {len(found)} עסקאות ייחודיות ({added} חדשות) | ערים שנכשלו: {len(failed)}")
     if failed:
         print(f"::warning::ערים ללא נתונים: {', '.join(failed[:10])}")
+    if empty:
+        print(f"::warning::ערים שנסרקו והמקור החזיר בהן אפס עסקאות: {', '.join(empty)}")
     return 0
 
 
