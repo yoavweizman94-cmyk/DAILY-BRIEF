@@ -154,6 +154,21 @@ jobs:
             [ "$secs" -ge 7 ] || bad "הסקירה מכילה $secs סעיפים בלבד"
           fi
 
+          # סקירה לפי דרישה: שלושת המעקות נבדקים לפני שנוגעים בכסף.
+          echo "=== 3.4 סקירת דוח לפי דרישה ==="
+          anon=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25                       "$APP/api/review/1764665" || true)
+          note "בלי סשן → $anon"
+          [ "$anon" = "401" ] || bad "נתיב הסקירה נגיש בלי סשן ($anon)"
+
+          bogus=$(curl -s -o bg.json -w '%{http_code}' --max-time 25                        -H "Cookie: $COOKIE" "$APP/api/review/999999999" || true)
+          note "מזהה שאינו ברשימה → $bogus"
+          [ "$bogus" = "404" ] || bad "מזהה שאינו דוח כיסוי לא נדחה ($bogus)"
+
+          mcode=$(curl -sL -o pm.json -w '%{http_code}' --max-time 30                        -H "Cookie: $COOKIE" "$APP/filings/pdfmap.json" || true)
+          mn=$(python3 -c "import json;print(len(json.load(open('pm.json'))))" 2>/dev/null || echo 0)
+          note "מפת הדוחות → HTTP $mcode, $mn דוחות"
+          [ "$mcode" = "200" ] && [ "$mn" -gt 100 ] || bad "מפת הדוחות חסרה או ריקה"
+
           echo "=== 3.5 החלפת סיסמה ==="
           NEW="$PW-changed"
           code=$(curl -s -o pw.json -w '%{http_code}' --max-time 25 -X POST "$B/api/password"                  -H "Cookie: $COOKIE" -H 'content-type: application/json'                  --data "{\"current\":\"$PW\",\"next\":\"$NEW\"}" || true)
