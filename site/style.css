@@ -1131,3 +1131,48 @@ ul.offex-bars .bar.down i { background: var(--down); }
   grid-column: 1 / -1; font-family: var(--mono); font-size: 0.75rem;
   color: var(--muted);
 }
+
+/* ── סקירת דוח כספי ─────────────────────────────────────────────────
+   נפתחת בתוך רשימת הדוחות ולא בעמוד נפרד, כדי שהחיפוש לא יאבד. */
+ul.filings button.rev {
+  font: inherit; font-size: 0.78rem; font-weight: 600;
+  color: var(--accent); background: none;
+  border: 1px solid var(--accent); border-radius: 4px;
+  padding: 0.1rem 0.55rem; cursor: pointer; white-space: nowrap;
+}
+ul.filings button.rev:hover { background: var(--accent-soft); }
+ul.filings button.rev.on { background: var(--accent); color: var(--on-accent); }
+
+li.revbox {
+  list-style: none; margin: 0.2rem 0 0.9rem;
+  border: 1px solid var(--border-strong); border-radius: 6px;
+  border-inline-start: 3px solid var(--accent);
+  background: var(--card, transparent);
+}
+.rv-head {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--border);
+  font-size: 0.85rem; color: var(--muted);
+}
+.rv-x {
+  margin-inline-start: auto; font: inherit; font-size: 1.15rem; line-height: 1;
+  background: none; border: 0; color: var(--faint); cursor: pointer;
+  padding: 0 0.2rem;
+}
+.rv-x:hover { color: var(--down); }
+.rv-body { padding: 0.3rem 0.9rem 0.2rem; font-size: 0.9rem; }
+.rv-body h2 {
+  font-size: 0.88rem; margin: 1.1rem 0 0.35rem; padding: 0;
+  border: 0; border-bottom: 1px solid var(--border);
+  color: var(--accent); letter-spacing: 0.01em;
+}
+.rv-body h2:first-child { margin-top: 0.5rem; }
+.rv-body p { margin: 0.4rem 0; line-height: 1.75; }
+.rv-body table { font-size: 0.83rem; }
+.rv-load { padding: 0.9rem; color: var(--muted); font-size: 0.86rem; }
+.rv-load.err { color: var(--down); }
+.rv-note {
+  margin: 0; padding: 0.55rem 0.9rem 0.7rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.76rem; color: var(--faint); line-height: 1.5;
+}

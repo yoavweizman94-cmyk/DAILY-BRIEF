@@ -41,6 +41,9 @@
   var $ = function (id) { return document.getElementById(id); };
   var msg = $("fmsg"), out = $("fout");
   var all = [], shown = PAGE, byId = {};
+  // מזהי הדוחות שיש להם סקירה מוכנה. נטען פעם אחת; כשהקובץ חסר
+  // הכפתור פשוט לא מוצג, והעמוד ממשיך לעבוד בדיוק כמו קודם.
+  var reviewed = {}, openReview = null;
 
   function say(t, cls) { msg.className = "msg " + (cls || ""); msg.textContent = t || ""; }
   function heDate(s) { return s ? s.split("-").reverse().join("/") : "—"; }
@@ -56,9 +59,22 @@
                     .replace(/\s+/g, " ").trim().toLowerCase();
   }
 
+  function loadReviews() {
+    return fetch("filings/reviews/index.json", { cache: "no-cache" })
+      .then(function (r) { return r.ok ? r.json() : { ids: [] }; })
+      .then(function (d) {
+        (d.ids || []).forEach(function (id) { reviewed[id] = true; });
+      })
+      .catch(function () { /* אין סקירות — לא שגיאה */ });
+  }
+
   function load() {
     say("טוען אינדקס…", "wait");
-    return fetch("filings/manifest.json", { cache: "no-cache" })
+    // **חייב להיות בהמתנה ולא במקביל.** בלי זה הרינדור הראשון רץ לפני
+    // שאינדקס הסקירות הגיע, ואף כפתור לא מוצג עד שהמשתמש מקליד משהו.
+    // הקובץ קטן ומקומי; ההמתנה אינה מורגשת.
+    return loadReviews()
+      .then(function () { return fetch("filings/manifest.json", { cache: "no-cache" }); })
       .then(function (r) {
         if (!r.ok) throw new Error("manifest " + r.status);
         return r.json();
@@ -155,6 +171,56 @@
     }).map(function (x) { return x.e; });
   }
 
+  // ── סקירת דוח ────────────────────────────────────────────────────
+  // הסקירה מוכנה מראש ונשמרת כקטע HTML לצד האינדקס, ולכן הלחיצה היא
+  // בקשה אחת קצרה ולא המתנה לניתוח. נפתחת בתוך השורה כדי לא לאבד את
+  // מקום החיפוש.
+  function toggleReview(btn) {
+    var id = btn.getAttribute("data-id");
+    var li = btn.closest("li.fil");
+    var open = li.nextElementSibling;
+    if (open && open.classList.contains("revbox")) {
+      open.parentNode.removeChild(open);
+      btn.classList.remove("on");
+      openReview = null;
+      return;
+    }
+    if (openReview) {
+      var prev = out.querySelector("li.revbox");
+      if (prev) prev.parentNode.removeChild(prev);
+      var onb = out.querySelector("button.rev.on");
+      if (onb) onb.classList.remove("on");
+    }
+    var box = document.createElement("li");
+    box.className = "revbox";
+    box.innerHTML = '<div class="rv-load">טוען סקירה…</div>';
+    li.parentNode.insertBefore(box, li.nextSibling);
+    btn.classList.add("on");
+    openReview = id;
+
+    fetch("filings/reviews/" + id + ".html", { cache: "no-cache" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.text();
+      })
+      .then(function (html) {
+        var e = byId[id] || {};
+        box.innerHTML =
+          '<div class="rv-head"><strong>' + ((e.c || []).join(", ") || "") +
+          "</strong> · " + heDate(e.d) + '<button type="button" class="rv-x" ' +
+          'aria-label="סגור">×</button></div>' +
+          '<div class="rv-body">' + html + "</div>" +
+          '<p class="rv-note">סקירה שנכתבה מגוף הדוח בלבד. אינה ייעוץ ואינה ' +
+          'המלצה. במקרה של פער מול הדוח — הדוח קובע.</p>';
+        var x = box.querySelector(".rv-x");
+        if (x) x.onclick = function () { toggleReview(btn); };
+      })
+      .catch(function (err) {
+        box.innerHTML = '<div class="rv-load err">הסקירה לא נטענה (' +
+          err.message + "). נסה שוב מאוחר יותר.</div>";
+      });
+  }
+
   function render() {
     var rows = filtered();
     if (!rows.length) {
@@ -173,7 +239,10 @@
         ? '<a class="dl" href="' + FILES + e.p + '" target="_blank" rel="noopener" ' +
           'data-id="' + e.id + '">הורד PDF' + (e.s ? " · " + size(e.s) : "") + "</a>"
         : '<span class="d">אין PDF</span>';
-      h += '<li class="fil">' +
+      var rev = reviewed[e.id]
+        ? '<button type="button" class="rev" data-id="' + e.id + '">סקירה</button>'
+        : "";
+      h += '<li class="fil" data-row="' + e.id + '">' +
            '<span class="d">' + heDate(e.d) + "</span>" +
            '<span class="co">' + (e.c || []).join(", ") + "</span>" +
            (e.cov ? '<span class="cov">כיסוי</span>' : "") +
@@ -181,7 +250,7 @@
            e.t + "</a></span>" +
            (e.k === "מצגת" ? '<span class="form">מצגת</span>' : "") +
            '<span class="form">' + (e.f || "—") + "</span>" +
-           dl + "</li>";
+           rev + dl + "</li>";
     });
     h += "</ul>";
     if (rows.length > slice.length) {
@@ -195,6 +264,9 @@
     slice.forEach(function (e) { byId[e.id] = e; });
     [].forEach.call(out.querySelectorAll("a.dl"), function (a) {
       a.addEventListener("click", download);
+    });
+    [].forEach.call(out.querySelectorAll("button.rev"), function (b) {
+      b.addEventListener("click", function () { toggleReview(b); });
     });
   }
 

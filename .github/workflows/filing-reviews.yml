@@ -1,0 +1,68 @@
+name: Filing Reviews
+
+# סקירות מעמיקות לדוחות הכספיים של חברות הכיסוי.
+#
+# רצות ממילא מנה-מנה בכל מהדורה (run_daily.sh). ה-workflow הזה נועד
+# למילוי מהיר של עונת דוחות, או לסקירה מחדש אחרי שינוי בהנחיה.
+#
+# **עלות.** כל סקירה היא קריאה אחת ל-Claude עם ה-PDF המלא. דוח רבעוני
+# טיפוסי הוא כמה מאות אלפי טוקנים לקלט, ולכן `limit` הוא מעקה ולא
+# פורמליות — 200 סקירות בבת אחת הן הוצאה משמעותית.
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "כמה סקירות בריצה (ברירת מחדל 8)"
+        required: false
+        default: "8"
+      since:
+        description: "מאיזה תאריך YYYY-MM-DD (ריק = מתחילת השנה שעברה)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: content-write
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install anthropic curl_cffi pypdf truststore certifi
+
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REVIEW_LIMIT: ${{ inputs.limit }}
+          REVIEW_SINCE: ${{ inputs.since }}
+        run: python ingest/filing_review.py
+
+      - name: Summary
+        if: always()
+        run: |
+          set -e
+          d=output/filings/reviews
+          n=$(ls "$d"/*.md 2>/dev/null | wc -l)
+          echo "סקירות בארכיון: $n"
+          [ "$n" -gt 0 ]
+
+      - name: Push content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh push "סקירות דוחות"

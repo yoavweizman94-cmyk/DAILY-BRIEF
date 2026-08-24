@@ -13,3 +13,4 @@ pypdf>=5.0            # חילוץ טקסט מ-PDF של דיווחי מאיה
 fastmcp>=2.13,<3      # תלות של vendor/nadlan-mcp (עסקאות נדל"ן מ-Govmap)
 python-dotenv>=1.0    # אותה תלות
 pydantic>=2.0         # אותה תלות
+anthropic>=1.0            # סקירות הדוחות הכספיים (ingest/filing_review.py)

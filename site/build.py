@@ -804,6 +804,21 @@ def main() -> int:
     filings_src = ROOT / "output" / "filings"
     if filings_src.is_dir():
         shutil.copytree(filings_src, OUT / "filings")
+        # הסקירות נשמרות כ-markdown ומרונדרות כאן ל-HTML. רינדור בדפדפן
+        # היה מחייב ספריית markdown בצד הלקוח בשביל טבלת המספרים, ו-
+        # wrap_tables — שנותן לה גלילה במובייל — רץ ממילא רק כאן.
+        rev = OUT / "filings" / "reviews"
+        if rev.is_dir():
+            n = 0
+            for md in rev.glob("*.md"):
+                body = md.read_text(encoding="utf-8")
+                # שורת המטא הראשונה היא הערת HTML ואינה חלק מהסקירה
+                if body.startswith("<!--"):
+                    body = body.split("-->", 1)[-1].lstrip()
+                md.with_suffix(".html").write_text(render(body), encoding="utf-8")
+                md.unlink()
+                n += 1
+            print(f"  סקירות דוחות: {n}")
 
     frag = PAGES / "landing.html"
     if frag.exists():
