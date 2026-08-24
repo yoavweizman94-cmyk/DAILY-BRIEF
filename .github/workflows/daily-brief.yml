@@ -109,6 +109,16 @@ jobs:
           # site/dist נוצר רק כשהופק ברייף; ריצת "skip" יוצאת לפני כן.
           if [ -d site/dist ]; then echo "produced=yes" >> "$GITHUB_OUTPUT"; fi
 
+      # **עבודה ששולם עליה אינה נזרקת.** הסקירות נכתבות לפני הפקת הברייף,
+      # ואם הברייף נופל — נגמר קרדיט, שגיאת מודל, timeout — הן היו הולכות
+      # לאיבוד ונכתבות שוב בריצה הבאה, בתשלום נוסף. נמדד ב-24/08: שבע
+      # סקירות אבדו כך בדיוק. הדחיפה כאן היא של התוכן בלבד; האתר אינו
+      # נפרס, כי אין ברייף חדש להציג.
+      - name: Salvage paid work when the pipeline failed
+        if: failure()
+        run: |
+          CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}'             bash scripts/content_repo.sh push "תוצרים מריצה שנפלה" ||             echo "::warning::שמירת התוצרים נכשלה גם היא"
+
       - name: Commit state and output back to repo
         if: steps.pipeline.outputs.produced == 'yes'
         run: |
