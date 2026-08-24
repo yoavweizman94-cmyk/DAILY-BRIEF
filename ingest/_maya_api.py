@@ -13,9 +13,12 @@
 from __future__ import annotations
 
 import time
-from datetime import date
+from datetime import date, timedelta
+
+import sys
 
 from curl_cffi import requests as creq
+from curl_cffi.requests.exceptions import HTTPError
 
 BASE = "https://maya.tase.co.il"
 PAGE_SIZE = 30
@@ -64,11 +67,24 @@ class MayaSession:
         r.raise_for_status()
         return r
 
-    def _post(self, path: str, body: dict):
-        self._wait()
-        r = self._s.post(f"{BASE}{path}", json=body, headers=HEADERS, timeout=30)
-        r.raise_for_status()
-        return r
+    def _post(self, path: str, body: dict, tries: int = 3):
+        """POST עם נסיגה על 403 ועל שגיאות שרת.
+
+        ה-WAF של מאיה מחזיר 403 כשקצב הבקשות עולה — נמדד בזמן פיצול
+        חלון רחב. זו חסימה זמנית ולא שגיאת בקשה, ולכן נסיגה פותרת אותה.
+        400 אינו חוזר: הוא תמיד תקרת עימוד, ושם ניסיון נוסף רק מבזבז זמן.
+        """
+        last = None
+        for i in range(tries):
+            self._wait()
+            r = self._s.post(f"{BASE}{path}", json=body, headers=HEADERS, timeout=30)
+            if r.status_code == 400 or r.ok:
+                r.raise_for_status()
+                return r
+            last = r
+            time.sleep(3 * (i + 1))
+        last.raise_for_status()
+        return last
 
     # -- חברות ---------------------------------------------------------------
 
@@ -83,7 +99,38 @@ class MayaSession:
 
     def reports_days(self, from_day: date, to_day: date,
                      company_id: int | None = None) -> list[dict]:
-        """כל דיווחי החברות בטווח הימים [from_day, to_day] (כולל), בעימוד offset."""
+        """כל דיווחי החברות בטווח [from_day, to_day], עם פיצול אוטומטי.
+
+        **חלון שחורג מתקרת העימוד מפוצל לשניים ונמשך שוב**, ולא מפיל את
+        המקור. הגרסה הקודמת העדיפה להיכשל מפורשות מלהחזיר חלון קטוע —
+        כוונה נכונה, תוצאה הפוכה: הקורא היחיד בפועל הוא `maya_pull`,
+        שאינו מפצל אלא מת, ואז הברייף נכתב בלי דיווחי כיסוי בכלל.
+        שלוש מהדורות רצופות יצאו כך עם "מקור מאיה נכשל".
+
+        פיצול עדיף על כישלון כי הוא **מחזיר את אותו מידע בדיוק** — רק
+        בכמה בקשות. כישלון מחזיר אפס. רק יום בודד שחורג בעצמו מהתקרה
+        אינו ניתן לפיצול, ואז נזרקת WindowTooLarge כמו קודם.
+        """
+        if from_day < to_day:
+            try:
+                return self._reports_window(from_day, to_day, company_id)
+            except (WindowTooLarge, HTTPError):
+                mid = from_day + timedelta(days=(to_day - from_day).days // 2)
+                print(f"מאיה: החלון {from_day}..{to_day} חורג מתקרת העימוד — "
+                      f"מפוצל ב-{mid}", file=sys.stderr)
+                left = self.reports_days(from_day, mid, company_id)
+                right = self.reports_days(mid + timedelta(days=1), to_day, company_id)
+                seen, out = set(), []
+                for it in left + right:
+                    if it["id"] not in seen:
+                        seen.add(it["id"])
+                        out.append(it)
+                return out
+        return self._reports_window(from_day, to_day, company_id)
+
+    def _reports_window(self, from_day: date, to_day: date,
+                        company_id: int | None = None) -> list[dict]:
+        """משיכה של חלון יחיד, בעימוד offset. עלול לחרוג מהתקרה."""
         base = {"fromDate": from_day.isoformat(), "toDate": to_day.isoformat(),
                 "limit": PAGE_SIZE}
         if company_id:

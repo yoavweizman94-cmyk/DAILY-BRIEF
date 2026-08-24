@@ -16,7 +16,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _maya_api import MayaSession, BASE
+from _maya_api import MayaSession, WindowTooLarge, BASE
 from _state import connect, filter_new
 
 import yaml
@@ -54,7 +54,34 @@ def main() -> int:
 
     maya = MayaSession()
     # ה-API יומי — מושכים מהיום של ה-cutoff ומסננים שעות בצד שלנו
-    raw = maya.reports_days(cutoff.date(), now_il.date())
+    try:
+        raw = maya.reports_days(cutoff.date(), now_il.date())
+    except WindowTooLarge as e:
+        # יום עמוס בודד יכול לחרוג מתקרת העימוד, ואז אין מה לפצל לפי
+        # תאריך. הרזולוציה הבאה היא חברה: שאילתה לכל חברת כיסוי מחזירה
+        # בדיוק את מה שהברייף צריך ולעולם אינה מתקרבת לתקרה.
+        # **זה עדיף על כישלון בכל מקרה** — הכישלון הפיל את המקור כולו,
+        # ושלוש מהדורות רצופות נכתבו בלי דיווחי כיסוי.
+        print(f"מאיה: {e} — יורד לשאילתה לפי חברה ({len(coverage)} חברות)",
+              file=sys.stderr)
+        raw, seen = [], set()
+        failed = 0
+        for cid in coverage:
+            try:
+                for it in maya.reports_days(cutoff.date(), now_il.date(),
+                                            company_id=cid):
+                    if it["id"] not in seen:
+                        seen.add(it["id"])
+                        raw.append(it)
+            except Exception as ce:  # noqa: BLE001
+                failed += 1
+                print(f"  חברה {cid}: {type(ce).__name__}", file=sys.stderr)
+        if failed:
+            print(f"::warning::מאיה: {failed} חברות נכשלו בשאילתה הפרטנית",
+                  file=sys.stderr)
+        if not raw:
+            print("::error::מאיה: גם המסלול לפי חברה לא החזיר דבר", file=sys.stderr)
+            return 1
 
     matched = []
     for it in raw:
