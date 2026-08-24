@@ -137,6 +137,23 @@ jobs:
           check_page nadlan '<td class="city">' 10
           check_page offex '<li class="tx' 3
 
+          # סקירות הדוחות: קובץ סטטי שנבנה מ-markdown. אם הרינדור נשבר,
+          # העמוד עדיין יחזיר 200 והכפתור עדיין יופיע — רק הפאנל יישאר ריק.
+          echo "=== 3.3 סקירות הדוחות הכספיים ==="
+          curl -sL --max-time 30 -H "Cookie: $COOKIE"                "$APP/filings/reviews/index.json" -o rev.json || true
+          rid=$(python3 -c "import json;d=json.load(open('rev.json'));print((d.get('ids') or [''])[0])" 2>/dev/null || echo "")
+          n=$(python3 -c "import json;print(len(json.load(open('rev.json')).get('ids') or []))" 2>/dev/null || echo 0)
+          note "אינדקס סקירות: $n"
+          if [ -z "$rid" ]; then
+            bad "אין אף סקירה באינדקס"
+          else
+            code=$(curl -sL -o rev.html -w '%{http_code}' --max-time 30                         -H "Cookie: $COOKIE" "$APP/filings/reviews/$rid.html" || true)
+            secs=$(grep -o '<h2>' rev.html 2>/dev/null | wc -l)
+            note "סקירה $rid → HTTP $code, $secs סעיפים"
+            [ "$code" = "200" ] || bad "הסקירה החזירה $code"
+            [ "$secs" -ge 7 ] || bad "הסקירה מכילה $secs סעיפים בלבד"
+          fi
+
           echo "=== 3.5 החלפת סיסמה ==="
           NEW="$PW-changed"
           code=$(curl -s -o pw.json -w '%{http_code}' --max-time 25 -X POST "$B/api/password"                  -H "Cookie: $COOKIE" -H 'content-type: application/json'                  --data "{\"current\":\"$PW\",\"next\":\"$NEW\"}" || true)
