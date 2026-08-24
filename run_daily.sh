@@ -83,9 +83,12 @@ run_source otc     python ingest/otc_pull.py
 if [ "$EDITION" = "morning" ]; then
   run_source nadlan  python ingest/nadlan_pull.py
 fi
-# סקירות הדוחות הכספיים: מנה קטנה בכל מהדורה. הן נצברות מהחדש אל הישן,
-# ולכן עונת הדוחות מתכסה תוך ימים בלי בקשה אחת גדולה.
-run_source reviews python ingest/filing_review.py
+# סקירות הדוחות הכספיים נוצרות **לפי דרישה**, בלחיצה בעמוד הדוחות, ולכן
+# המהדורה אינה מייצרת אותן מראש: אין טעם לשלם על דוח שאיש לא יפתח.
+# REVIEW_LIMIT גדול מאפס מחזיר את החימום מראש לריצה בודדת.
+if [ "${REVIEW_LIMIT:-0}" -gt 0 ] 2>/dev/null; then
+  run_source reviews python ingest/filing_review.py
+fi
 # אינדקס הדוחות מתוחזק ע"י maya-watch (כל רבע שעה) ולא כאן: כותב שלישי
 # לאותם קבצים היה מוסיף מרוץ בלי להוסיף טריות.
 if [ ${#FAILED[@]} -gt 0 ]; then

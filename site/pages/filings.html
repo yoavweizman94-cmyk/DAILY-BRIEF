@@ -43,7 +43,9 @@
   var all = [], shown = PAGE, byId = {};
   // מזהי הדוחות שיש להם סקירה מוכנה. נטען פעם אחת; כשהקובץ חסר
   // הכפתור פשוט לא מוצג, והעמוד ממשיך לעבוד בדיוק כמו קודם.
-  var reviewed = {}, openReview = null;
+  // `reviewed` — סקירות שכבר נבנו ומוגשות כקובץ סטטי (חינם).
+  // `canReview` — כל דוח שמותר לייצר עליו סקירה לפי דרישה (עולה כסף).
+  var reviewed = {}, canReview = {}, openReview = null;
 
   function say(t, cls) { msg.className = "msg " + (cls || ""); msg.textContent = t || ""; }
   function heDate(s) { return s ? s.split("-").reverse().join("/") : "—"; }
@@ -60,12 +62,68 @@
   }
 
   function loadReviews() {
-    return fetch("filings/reviews/index.json", { cache: "no-cache" })
-      .then(function (r) { return r.ok ? r.json() : { ids: [] }; })
-      .then(function (d) {
-        (d.ids || []).forEach(function (id) { reviewed[id] = true; });
-      })
-      .catch(function () { /* אין סקירות — לא שגיאה */ });
+    return Promise.all([
+      fetch("filings/reviews/index.json", { cache: "no-cache" })
+        .then(function (r) { return r.ok ? r.json() : { ids: [] }; })
+        .then(function (d) {
+          (d.ids || []).forEach(function (id) { reviewed[id] = true; });
+        })
+        .catch(function () { /* אין סקירות מוכנות — לא שגיאה */ }),
+      fetch("filings/pdfmap.json", { cache: "no-cache" })
+        .then(function (r) { return r.ok ? r.json() : {}; })
+        .then(function (m) { canReview = m || {}; })
+        .catch(function () { /* בלי המפה פשוט אין כפתור */ }),
+    ]);
+  }
+
+  // מרנדר markdown מצומצם — בדיוק מה שהסקירה מייצרת: כותרות ##, טבלה,
+  // הדגשה, פסקאות ורשימות. הפלט נוצר על ידינו ובמבנה קבוע, ולכן מנתח
+  // מלא היה תלות מיותרת. כל טקסט עובר escape לפני הכול.
+  function esc(t) {
+    return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function inline(t) {
+    return esc(t).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  }
+  function mdToHtml(md) {
+    var lines = md.split("\n"), out = [], i = 0;
+    function flush(buf, tag) { if (buf.length) out.push("<" + tag + ">" + buf.join(" ") + "</" + tag + ">"); }
+    while (i < lines.length) {
+      var ln = lines[i];
+      if (/^##\s+/.test(ln)) { out.push("<h2>" + inline(ln.replace(/^##\s+/, "")) + "</h2>"); i++; continue; }
+      if (/^\s*\|/.test(ln)) {
+        var rows = [];
+        while (i < lines.length && /^\s*\|/.test(lines[i])) { rows.push(lines[i]); i++; }
+        var cells = rows.map(function (r) {
+          return r.replace(/^\s*\||\|\s*$/g, "").split("|").map(function (c) { return c.trim(); });
+        }).filter(function (c) { return !/^-+$/.test(c[0].replace(/[\s:]/g, "")); });
+        if (cells.length) {
+          var h = "<div class=\"tw\"><table><thead><tr>" +
+            cells[0].map(function (c) { return "<th>" + inline(c) + "</th>"; }).join("") +
+            "</tr></thead><tbody>";
+          for (var k = 1; k < cells.length; k++) {
+            h += "<tr>" + cells[k].map(function (c) { return "<td>" + inline(c) + "</td>"; }).join("") + "</tr>";
+          }
+          out.push(h + "</tbody></table></div>");
+        }
+        continue;
+      }
+      if (/^\s*[-*]\s+/.test(ln)) {
+        var items = [];
+        while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) {
+          items.push("<li>" + inline(lines[i].replace(/^\s*[-*]\s+/, "")) + "</li>"); i++;
+        }
+        out.push("<ul>" + items.join("") + "</ul>");
+        continue;
+      }
+      if (!ln.trim()) { i++; continue; }
+      var para = [];
+      while (i < lines.length && lines[i].trim() && !/^(##\s|\s*\||\s*[-*]\s)/.test(lines[i])) {
+        para.push(inline(lines[i])); i++;
+      }
+      flush(para, "p");
+    }
+    return out.join("\n");
   }
 
   function load() {
@@ -198,11 +256,31 @@
     btn.classList.add("on");
     openReview = id;
 
-    fetch("filings/reviews/" + id + ".html", { cache: "no-cache" })
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.text();
-      })
+    // סקירה מוכנה מוגשת כקובץ סטטי ואינה עולה דבר; רק כשאין כזו
+    // נשלחת בקשה שמייצרת אותה, והיא נשמרת לשימוש הבא.
+    var got;
+    if (reviewed[id]) {
+      got = fetch("filings/reviews/" + id + ".html", { cache: "no-cache" })
+        .then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.text();
+        });
+    } else {
+      box.innerHTML = '<div class="rv-load">מייצר סקירה מהדוח המלא. ' +
+        'זה לוקח כדקה — אפשר להשאיר פתוח.</div>';
+      got = fetch("api/review/" + id, { cache: "no-cache" })
+        .then(function (r) {
+          return r.json().then(function (d) {
+            if (!r.ok) throw new Error(d.detail || d.error || "HTTP " + r.status);
+            return d;
+          });
+        })
+        .then(function (d) {
+          reviewed[id] = true;      // הבאה כבר מהמטמון
+          return mdToHtml(d.md);
+        });
+    }
+    got
       .then(function (html) {
         var e = byId[id] || {};
         box.innerHTML =
@@ -239,8 +317,11 @@
         ? '<a class="dl" href="' + FILES + e.p + '" target="_blank" rel="noopener" ' +
           'data-id="' + e.id + '">הורד PDF' + (e.s ? " · " + size(e.s) : "") + "</a>"
         : '<span class="d">אין PDF</span>';
-      var rev = reviewed[e.id]
-        ? '<button type="button" class="rev" data-id="' + e.id + '">סקירה</button>'
+      var rev = (reviewed[e.id] || canReview[e.id])
+        ? '<button type="button" class="rev' + (reviewed[e.id] ? " ready" : "") +
+          '" data-id="' + e.id + '" title="' +
+          (reviewed[e.id] ? "סקירה מוכנה" : "הסקירה תיווצר עכשיו — כדקה") +
+          '">סקירה</button>'
         : "";
       h += '<li class="fil" data-row="' + e.id + '">' +
            '<span class="d">' + heDate(e.d) + "</span>" +

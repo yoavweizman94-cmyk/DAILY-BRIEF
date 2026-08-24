@@ -807,6 +807,29 @@ def main() -> int:
         # הסקירות נשמרות כ-markdown ומרונדרות כאן ל-HTML. רינדור בדפדפן
         # היה מחייב ספריית markdown בצד הלקוח בשביל טבלת המספרים, ו-
         # wrap_tables — שנותן לה גלילה במובייל — רץ ממילא רק כאן.
+        # מפת הדוחות שמותר לסקור לפי דרישה. ה-Function קוראת ממנה את
+        # נתיב ה-PDF ואת שם החברה, ולכן היא גם מה שאוכף שרק דוח כספי של
+        # חברת כיסוי יכול להוציא כסף — הדפדפן שולח מזהה, לא נתיב.
+        try:
+            sys.path.insert(0, str(ROOT / "ingest"))
+            from _filings import reviewable
+            pdfmap = {}
+            for f in sorted((ROOT / "output" / "filings").glob("[0-9][0-9][0-9][0-9].jsonl")):
+                for line in f.read_text(encoding="utf-8").splitlines():
+                    if not line.strip():
+                        continue
+                    r = json.loads(line)
+                    if reviewable(r):
+                        pdfmap[str(r["id"])] = {
+                            "p": r["p"], "d": r.get("d"), "t": r.get("t"),
+                            "c": r.get("c")}
+            (OUT / "filings" / "pdfmap.json").write_text(
+                json.dumps(pdfmap, ensure_ascii=False), encoding="utf-8")
+            print(f"  דוחות שניתן לסקור: {len(pdfmap)}")
+        except Exception as e:  # noqa: BLE001
+            print(f"  ::warning::מפת הדוחות לא נבנתה ({type(e).__name__}) — "
+                  f"סקירה לפי דרישה לא תעבוד")
+
         rev = OUT / "filings" / "reviews"
         if rev.is_dir():
             n = 0

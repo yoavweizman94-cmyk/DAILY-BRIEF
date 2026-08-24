@@ -44,4 +44,5 @@ jobs:
           RESTORE_MAIL: ${{ inputs.restore_mail == 'true' && '1' || '' }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           SCAN_KEY: ${{ secrets.SCAN_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python3 scripts/auth_setup.py

@@ -32,6 +32,8 @@ harden()
 import anthropic  # noqa: E402
 from curl_cffi import requests as creq  # noqa: E402
 
+from _filings import is_financial, reviewable  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 FILINGS = ROOT / "output" / "filings"
 REVIEWS = FILINGS / "reviews"
@@ -41,10 +43,7 @@ MODEL = "claude-opus-5"
 # מגבלת הבקשה היא 32MB; נשארים מתחת לה בבטחה, ומעליה עוברים לחילוץ טקסט.
 MAX_PDF_BYTES = 28 * 1024 * 1024
 
-# כותרות שמזהות דוח כספי. "מצבת התחייבות" ו"מצגת" אינם דוח.
-FINANCIAL = ("דוח רבעון", "דוח תקופתי", "דוחות כספיים", "דוח שנתי",
-             "דוח חצי שנתי", "דוח רבעוני")
-NOT_FINANCIAL = ("מצבת התחייבות", "מצגת", "iXBRL", "תיקון", "אסיפה")
+
 
 SYSTEM = """אתה אנליסט מחקר שכותב עבור מנהל השקעות מקצועי. אתה מקבל דוח
 כספי של חברה ציבורית בבורסה בתל אביב, וכותב עליו סקירה בעברית.
@@ -108,13 +107,6 @@ SYSTEM = """אתה אנליסט מחקר שכותב עבור מנהל השקעו
 """
 
 
-def is_financial(title: str) -> bool:
-    t = title or ""
-    if any(x in t for x in NOT_FINANCIAL):
-        return False
-    return any(x in t for x in FINANCIAL)
-
-
 def load_index() -> list[dict]:
     rows = []
     for f in sorted(FILINGS.glob("[0-9][0-9][0-9][0-9].jsonl")):
@@ -134,14 +126,9 @@ def candidates(rows: list[dict], since: str | None = None) -> list[dict]:
     """
     out = []
     for r in rows:
-        if str(r.get("cov")) != "1":
+        if not reviewable(r):
             continue
         if since and (r.get("d") or "") < since:
-            continue
-        if not is_financial(r.get("t") or ""):
-            continue
-        p = r.get("p")
-        if not p or p == "None":
             continue
         if (REVIEWS / f"{r['id']}.md").exists():
             continue

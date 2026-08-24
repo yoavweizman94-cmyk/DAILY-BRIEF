@@ -125,6 +125,14 @@ def main():
 
     # SCAN_KEY נוצר ב-GitHub ומועתק לכאן, ולא נוצר כאן — שני הצדדים
     # חייבים אותו ערך: הסריקה שולחת אותו בכותרת, והממסר משווה אליו.
+    # מפתח ה-API נדרש ב-Pages בשביל סקירת דוח לפי דרישה. הוא זהה לזה
+    # שב-GitHub Secrets — לא נוצר כאן, רק מועתק.
+    ak = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if ak and (have.get("ANTHROPIC_API_KEY") is None
+               or os.environ.get("FORCE_ANTHROPIC_API_KEY") == "1"):
+        env["ANTHROPIC_API_KEY"] = {"type": "secret_text", "value": ak}
+        changed.append("ANTHROPIC_API_KEY")
+
     scan = os.environ.get("SCAN_KEY", "").strip()
     if scan and have.get("SCAN_KEY") is None:
         env["SCAN_KEY"] = {"type": "secret_text", "value": scan}
