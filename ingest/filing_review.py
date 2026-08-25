@@ -239,11 +239,15 @@ def main() -> int:
         try:
             md = review_one(client, rec, blob)
         except anthropic.APIStatusError as e:
-            print(f"    שגיאת API {e.status_code} — מדולג", file=sys.stderr)
+            # **הקוד לבדו אינו ניתן לאבחון.** 400 יכול להיות קרדיט שנגמר,
+            # קובץ פגום, או פרמטר שהשתנה ב-API — שלושה תיקונים שונים
+            # לגמרי. ההודעה של Anthropic מדויקת, ולכן היא מודפסת כלשונה.
+            msg = getattr(e, "message", "") or str(e)
+            print(f"    שגיאת API {e.status_code}: {msg[:300]}", file=sys.stderr)
             failed += 1
             continue
         except Exception as e:  # noqa: BLE001
-            print(f"    {type(e).__name__} — מדולג", file=sys.stderr)
+            print(f"    {type(e).__name__}: {str(e)[:300]}", file=sys.stderr)
             failed += 1
             continue
         if not md:
