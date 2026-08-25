@@ -31,7 +31,7 @@ harden()
 
 import yaml  # noqa: E402
 
-from _globes import (ARTICLE, BASE, NoCookie, NotSubscriber,  # noqa: E402
+from _globes import (ARTICLE, BASE, SIGNED_IN, NoCookie, NotSubscriber,  # noqa: E402
                      cookie_from_env, fetch, is_subscriber, session)
 
 # ערוץ "תמלולי שיחות משקיעים" בגלובס.
@@ -240,8 +240,18 @@ def main() -> int:
     # שער המנוי נבדק פעם אחת מול עמוד הבית, לפני כל משיכה של תוכן.
     home = sess.get(BASE + "/", timeout=60)
     if not is_subscriber(home.text):
+        # **הכישלון מאבחן את עצמו.** "הסשן אינו מחובר" נכון גם כשהעוגייה
+        # פגה וגם כשגלובס שינתה את סימני ההתחברות, ואלה שני תיקונים שונים
+        # לגמרי. ספירת הסימנים אומרת מיד באיזה מהם מדובר, בלי סבב נוסף.
+        marks = {k: home.text.count(k) for k in
+                 SIGNED_IN + ("התחבר", "מינוי", "userType")}
         print("::error::הסשן אינו מחובר לגלובס — רענן את GLOBES_COOKIE "
               "(Copy as cURL מתוך דפדפן מחובר).", file=sys.stderr)
+        print(f"  תשובת עמוד הבית: HTTP {home.status_code}, "
+              f"{len(home.text):,} תווים")
+        print(f"  ספירת סימנים: {marks}")
+        print('  אם "התחבר" הוא 0 וכל השאר 0 — גלובס שינתה את הסימנים, '
+              "ו-SIGNED_IN ב-_globes.py צריך עדכון.")
         return 1
     print("סשן מנוי: מאומת")
 
