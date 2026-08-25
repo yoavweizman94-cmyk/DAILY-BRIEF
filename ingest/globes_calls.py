@@ -209,16 +209,22 @@ def summarize(text: str, meta: dict) -> str:
     return md
 
 
-def load_done(year: str) -> set[str]:
-    f = OUT / f"transcripts_{year}.jsonl"
-    if not f.exists():
-        return set()
+def load_done() -> set[str]:
+    """מה כבר סוכם — **בכל השנים, לא רק בנוכחית.**
+
+    הערוץ מחזיק כשישים תמלילים אחרונים, ובתחילת ינואר הם עדיין של
+    דצמבר. סריקה של קובץ השנה הנוכחית בלבד הייתה מוצאת אותו ריק
+    ומשלמת שוב על מה שכבר סוכם.
+    """
     out = set()
-    for ln in f.read_text(encoding="utf-8").splitlines():
-        try:
-            out.add(json.loads(ln)["did"])
-        except Exception:
-            continue
+    if not OUT.is_dir():
+        return out
+    for f in sorted(OUT.glob("transcripts_*.jsonl")):
+        for ln in f.read_text(encoding="utf-8").splitlines():
+            try:
+                out.add(json.loads(ln)["did"])
+            except Exception:
+                continue
     return out
 
 
@@ -267,7 +273,7 @@ def main() -> int:
     print(f"בערוץ: {len(rows)} תמלילים | מהם בכיסוי: {len(mine)}")
 
     year = str(date.today().year)
-    done = load_done(year)
+    done = load_done()
     todo = [r for r in mine if r["did"] not in done]
     print(f"חדשים לסיכום: {len(todo)}")
     for r in mine[:20]:
