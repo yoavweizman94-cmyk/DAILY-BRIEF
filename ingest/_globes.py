@@ -226,8 +226,21 @@ def session(cookie: str, ua: str = ""):
     return s
 
 
+# **מפרידי שורה של יוניקוד שאינם "\n".** U+2028/2029, NEL וקרובים
+# עוברים כלשונם ב-json.dumps(ensure_ascii=False), אבל str.splitlines()
+# מפצל עליהם. רשומה שהכילה אחד מהם נשברה לשברים שאינם JSON תקין —
+# ומכאן גם קובץ הסיכומים שנקרא כריק, גם התמלולים שלא הופיעו באתר,
+# וגם שמונה תמלילים שסוכמו וששולם עליהם פעמיים. הנרמול כאן, במקור,
+# מונע את זה מכל צרכן עתידי של הטקסט.
+UNI_BREAKS = (" ", " ", "", "\v", "\f",
+              "\x1c", "\x1d", "\x1e")
+
+
 def clean_html(frag: str) -> str:
-    t = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", frag, flags=re.S | re.I)
+    t = frag or ""
+    for ch in UNI_BREAKS:
+        t = t.replace(ch, "\n")
+    t = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", t, flags=re.S | re.I)
     t = re.sub(r"<br\s*/?>|</p>|</div>|</h\d>", "\n", t, flags=re.I)
     t = re.sub(r"<[^>]+>", " ", t)
     t = t.replace("&nbsp;", " ").replace("&quot;", '"').replace("&amp;", "&")

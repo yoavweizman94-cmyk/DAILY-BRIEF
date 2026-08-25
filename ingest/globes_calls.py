@@ -348,7 +348,9 @@ def load_done() -> set[str]:
         return out
     for f in sorted(OUT.glob("transcripts_*.jsonl")):
         bad = 0
-        lines = f.read_text(encoding="utf-8").splitlines()
+        # פיצול על newline בלבד: splitlines מפצל גם על U+2028 ודומיו,
+        # שיושבים בתוך מחרוזות JSON תקינות לגמרי.
+        lines = f.read_text(encoding="utf-8").split("\n")
         for ln in lines:
             if not ln.strip():
                 continue

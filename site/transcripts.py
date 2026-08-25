@@ -22,7 +22,10 @@ def load() -> list[dict]:
         return []
     rows = []
     for f in sorted(SRC.glob("transcripts_*.jsonl")):
-        for line in f.read_text(encoding="utf-8").splitlines():
+        # פיצול על newline בלבד. `splitlines()` מפצל גם על U+2028 ודומיו,
+        # שיושבים כתווים גולמיים בתוך מחרוזות JSON תקינות לגמרי — ואז כל
+        # רשומה שמכילה אותם נשברת ונזרקת, והעמוד נראה ריק.
+        for line in f.read_text(encoding="utf-8").split("\n"):
             if line.strip():
                 try:
                     rows.append(json.loads(line))
