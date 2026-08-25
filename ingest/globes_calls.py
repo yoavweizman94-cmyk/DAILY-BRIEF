@@ -39,7 +39,8 @@ harden()
 import yaml  # noqa: E402
 
 from _globes import (ARTICLE, BASE, NoCookie, NotSubscriber,  # noqa: E402
-                     cookie_from_env, fetch, recognized, session)
+                     cookie_from_env, fetch, recognized, session,
+                     ua_from_env)
 
 # ערוץ "תמלולי שיחות משקיעים" בגלובס.
 CHANNEL = BASE + "/news/home.aspx?fid=16118"
@@ -284,6 +285,8 @@ def diagnose(sess, cookie: str) -> str:
     שנחוץ כדי להכריע למה הגישה נכשלה, וגם מה שמותר להדפיס ללוג ציבורי.
     """
     L = cookie_report(cookie)
+    ua = ua_from_env()
+    L.append(f"User-Agent מהבלוק: {ua[:70] if ua else 'לא נמצא — נשלח UA של curl_cffi'}")
     try:
         _, rep = recognized(sess)
         L += rep
@@ -367,7 +370,8 @@ def main() -> int:
     except NoCookie as e:
         print(f"::error::{e}", file=sys.stderr)
         return 1
-    sess = session(cookie)
+    ua = ua_from_env()
+    sess = session(cookie, ua)
 
     if args.probe:
         # **מצב האבחון אינו אוכף, הוא מדווח.** שער שנועל את הריצה לפני

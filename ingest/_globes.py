@@ -75,6 +75,24 @@ def form_shape(html: str) -> dict:
     }
 
 
+EMAILISH = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+
+
+def skeleton(line: str) -> str:
+    """שלד של שורת HTML — שמות תגיות ומאפיינים, בלי ערכים ובלי טקסט.
+
+    **דיווח על הבדלים בלי לדווח מה נמצא שם.** האזור האישי של מנוי
+    מחזיק את שמו ואת האימייל שלו, והאנוטציות ציבוריות. השלד אומר
+    *היכן* התשובות נבדלות ומספיק כדי לאבחן, ואינו מוציא ערך אחד.
+    """
+    tags = re.findall(r"<(\w+)([^>]*)>", line)
+    out = []
+    for tag, attrs in tags[:4]:
+        names = re.findall(r"([\w-]+)\s*=", attrs)
+        out.append(tag + ("[" + ",".join(names[:4]) + "]" if names else ""))
+    return " ".join(out) or "(טקסט בלבד)"
+
+
 def recognized(sess) -> tuple[bool, list[str]]:
     """האם השרת מזהה את הסשן — נבדק ב-A/B מול אותה בקשה בלי עוגייה.
 
@@ -86,36 +104,46 @@ def recognized(sess) -> tuple[bool, list[str]]:
 
     מה שכן נושא מידע הוא עמוד שדורש התחברות. אנחנו מבקשים את האזור
     האישי פעמיים — עם העוגייה ובלעדיה — ושואלים אם השרת ענה **אחרת**.
-    זו בדיקה שאינה תלויה בשום ניחוש על איך נראה עמוד של מנוי: אם
-    התשובה זהה, העוגייה אינה מזוהה, נקודה.
 
-    הכיוון היחיד שהיא יכולה לטעות בו הוא להחמיר, ולכן היא בטוחה כשער.
+    **ההכרעה היא על הטופס, לא על האורך.** עמוד עם טופס התחברות מלא
+    (שדות סיסמה) הוא עמוד של מי שאינו מחובר, גם כשאורכו זז ב-92 תווים
+    בגלל טוקן או פרסומת. אורך לבדו סימן "מזוהה" על הפרש רעש.
     """
     from curl_cffi import requests as creq
 
-    a = sess.get(ACCOUNT, timeout=60).text
+    ra = sess.get(ACCOUNT, timeout=60)
+    a = ra.text
     bare = creq.Session(impersonate="chrome")
     bare.headers.update({"Accept-Language": "he-IL,he;q=0.9", "Referer": BASE + "/"})
     b = bare.get(ACCOUNT, timeout=60).text
 
     fa, fb = form_shape(a), form_shape(b)
-    # הפרש אורך יחסי. פרסומות וטוקנים משתנים בין בקשות, ולכן סף ולא שוויון.
     delta = abs(fa["len"] - fb["len"]) / max(fb["len"], 1)
-    same_form = (fa["password"] == fb["password"] and fa["email"] == fb["email"])
-    ok = (not same_form) or delta > 0.02
+    ok = fa["password"] == 0 or (fa["password"] < fb["password"])
 
     rep = [
         f"אזור אישי עם עוגייה: {fa}",
         f"אזור אישי בלי עוגייה: {fb}",
-        f"הפרש אורך יחסי: {delta:.1%}",
-        f"טופס זהה: {same_form}",
+        f"הפרש אורך יחסי: {delta:.2%}",
+        f"מחרוזות דמויות אימייל בתשובה: עם={len(EMAILISH.findall(a))}, "
+        f"בלי={len(EMAILISH.findall(b))}",
+        f"Set-Cookie שהשרת החזיר: "
+        f"{sorted({c.split('=')[0] for c in ra.headers.get_list('set-cookie')}) if hasattr(ra.headers, 'get_list') else 'לא נקרא'}",
     ]
+
+    # היכן בדיוק נבדלו התשובות — בשלד בלבד, בלי ערכים.
+    la, lb = a.splitlines(), b.splitlines()
+    only_a = [l for l in la if l not in set(lb) and l.strip()]
+    if only_a:
+        rep.append(f"שורות שקיימות רק בתשובה עם העוגייה: {len(only_a)}")
+        for l in only_a[:6]:
+            rep.append(f"    {skeleton(l)[:90]}")
+
     if ok:
-        rep.append("מסקנה: השרת מגיב אחרת כשהעוגייה מוצגת — הסשן מזוהה.")
+        rep.append("מסקנה: טופס ההתחברות נעלם — הסשן מזוהה.")
     else:
-        rep.append("מסקנה: התשובה זהה לגלישה ללא עוגייה כלל. השרת אינו "
-                   "מזהה את הסשן — העוגייה פגה, או נלקחה מבקשה שלא נשלחה "
-                   "בה עוגיית ההתחברות.")
+        rep.append("מסקנה: השרת מגיש טופס התחברות מלא גם עם העוגייה. "
+                   "הסשן אינו מזוהה מהראנר.")
     return ok, rep
 
 
@@ -152,8 +180,33 @@ def cookie_from_env(var: str = "GLOBES_COOKIE") -> str:
     return extract_cookie(os.environ.get(var, ""))
 
 
-def session(cookie: str):
-    """חיקוי דפדפן — גלובס מאחורי WAF, כמו שאר המקורות הישראליים."""
+def ua_from_env(var: str = "GLOBES_COOKIE") -> str:
+    return extract_header(os.environ.get(var, ""), "user-agent")
+
+
+def extract_header(blob: str, name: str) -> str:
+    """כותרת כלשהי מתוך בלוק ה-cURL, לפי שמה."""
+    n = re.escape(name)
+    pats = [
+        r"-H\s+\$?'" + n + r":\s*(.*?)'",
+        r'-H\s+"' + n + r':\s*(.*?)"',
+        r'"' + n + r'"\s*=\s*"(.*?)"',
+    ]
+    for p in pats:
+        m = re.search(p, blob or "", re.I | re.S)
+        if m and m.group(1).strip():
+            return re.sub(r"\s*\\\s*\n\s*", "", m.group(1)).strip()
+    return ""
+
+
+def session(cookie: str, ua: str = ""):
+    """חיקוי דפדפן — גלובס מאחורי WAF, כמו שאר המקורות הישראליים.
+
+    **ה-User-Agent נלקח מבלוק ה-cURL כשהוא שם.** סשן שנוצר בדפדפן אחד
+    ומושמע מסוכן אחר הוא בדיוק התבנית שמערכות הזדהות חוסמות, ו-curl_cffi
+    שולח כברירת מחדל את ה-UA שלו ולא של הדפדפן שהעוגייה נולדה בו.
+    ההעתקה של הכותרת עולה כלום ומסלקת סיבת דחייה שלמה.
+    """
     from curl_cffi import requests as creq
     s = creq.Session(impersonate="chrome")
     s.headers.update({
@@ -161,6 +214,8 @@ def session(cookie: str):
         "Accept-Language": "he-IL,he;q=0.9",
         "Referer": BASE + "/",
     })
+    if ua:
+        s.headers["User-Agent"] = ua
     return s
 
 
