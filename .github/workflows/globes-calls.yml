@@ -3,15 +3,22 @@ name: Globes Calls
 # תמלולי שיחות משקיעים מגלובס — גילוי, משיכה מאומתת וסיכום.
 #
 # **תלוי בעוגיית מנוי.** GLOBES_COOKIE הוא פלט "Copy as cURL" מדפדפן
-# מחובר. עוגיות פגות, ולכן הכישלון הצפוי כאן הוא "הסשן אינו מחובר" —
-# והוא נאמר במפורש ונכשל, ולא מתחזה ל-0 תמלילים.
+# מחובר, והוא חייב לכלול גם את ה-User-Agent — סשן שמושמע מסוכן אחר
+# נדחה. עוגיות פגות, ולכן הכישלון הצפוי כאן הוא "הסשן אינו מזוהה";
+# הוא נאמר במפורש, קורה לפני כל קריאה ל-API, ואינו עולה דבר.
 #
 # **התמליל נשמר לצד הסיכום** — החלטה של יואב מ-25/08/2026, כשהאתר
 # משמש אותו בלבד. אם הוא ייפתח ללקוחות, ראה את רשימת ההחזרה בראש
 # ingest/globes_calls.py.
-#
-# הרצה ידנית בלבד, כמו שאר הצנרת מאז 24/08/2026.
 on:
+  # אחת ליום, אחרי שגלובס מספיקה לפרסם את תמלולי היום. שיחה שכבר סוכמה
+  # מדולגת לפי מזהה, ולכן ריצה שאין בה חדש אינה עולה דבר.
+  #
+  # **הריצה תלויה בעוגייה שפגה מדי פעם.** כשזה יקרה היא תיכשל לפני כל
+  # קריאה ל-API — כלומר ללא עלות — והאנוטציה תגיד במפורש לרענן את
+  # GLOBES_COOKIE. כישלון כזה הוא תזכורת, לא תקלה.
+  schedule:
+    - cron: "0 17 * * *"        # 20:00 ישראל בקיץ, 19:00 בחורף
   workflow_dispatch:
     inputs:
       mode:
@@ -81,8 +88,10 @@ jobs:
           GLOBES_COOKIE: ${{ secrets.GLOBES_COOKIE }}
         run: python ingest/globes_calls.py --probe
 
+      # ריצה מתוזמנת היא תמיד run: באירוע schedule אין inputs כלל,
+      # ותנאי שמשווה ל-'run' בלבד היה משאיר את התזמון פעיל וריק.
       - name: Summarize transcripts
-        if: inputs.mode == 'run'
+        if: github.event_name == 'schedule' || inputs.mode == 'run'
         env:
           GLOBES_COOKIE: ${{ secrets.GLOBES_COOKIE }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -90,7 +99,11 @@ jobs:
           set -o pipefail
           ALL=""
           if [ "${{ inputs.all }}" = "true" ]; then ALL="--all"; fi
-          python ingest/globes_calls.py --limit "${{ inputs.limit }}" $ALL 2>&1 | tee calls.log
+          # ריצה מתוזמנת מגיעה בלי inputs, ומחרוזת ריקה ל---limit מפילה
+          # את argparse עוד לפני שהסקריפט מתחיל.
+          LIMIT="${{ inputs.limit }}"
+          LIMIT="${LIMIT:-8}"
+          python ingest/globes_calls.py --limit "$LIMIT" $ALL 2>&1 | tee calls.log
           rc=${PIPESTATUS[0]}
           if [ "$rc" -ne 0 ]; then
             if grep -qi 'credit balance is too low\|insufficient.*credit\|quota' calls.log; then
@@ -106,7 +119,7 @@ jobs:
       # אפשר היה לדעת זאת בלי לשלם שלישית. הארטיפקט אינו תלוי בריפו
       # התוכן, ולכן ניתן להורידו גם כששלב השמירה נכשל.
       - name: Keep the summaries as an artifact
-        if: always() && inputs.mode == 'run'
+        if: always() && (github.event_name == 'schedule' || inputs.mode == 'run')
         uses: actions/upload-artifact@v4
         with:
           name: transcripts
@@ -118,7 +131,7 @@ jobs:
       # שולם עליו; לזרוק אותו כי הפריסה נכשלה הוא לשלם פעמיים.
       - name: Commit summaries
         id: commit
-        if: always() && inputs.mode == 'run'
+        if: always() && (github.event_name == 'schedule' || inputs.mode == 'run')
         run: |
           CH="$(git -C output status --porcelain 2>/dev/null | wc -l)"
           FILES="$(ls -1 output/calls/transcripts_*.jsonl 2>/dev/null | wc -l)"

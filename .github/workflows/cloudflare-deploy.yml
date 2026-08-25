@@ -6,6 +6,12 @@ name: Cloudflare Deploy
 # נבדק בבידוד לפני שנוגעים במה שעובד. אחרי שהוא מוכח, הצעד הזה נכנס
 # לשלושת ה-workflows במקום הפריסה ל-GitHub Pages.
 on:
+  # **פריסה על כל דחיפה ל-main.** תיקון בקוד האתר היה ממתין עד המהדורה
+  # הבאה כדי להגיע לקורא, וכשהמהדורות היו מושבתות הוא לא הגיע כלל: באג
+  # הקריאה ב-U+2028 תוקן, ו-transcripts.html נשאר ריק כי איש לא בנה
+  # מחדש. השלב הזה אינו קורא ל-Anthropic ולכן אינו עולה דבר.
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       custom_domain:
@@ -49,7 +55,10 @@ jobs:
       - name: Build site
         run: python site/build.py
 
+      # אבחון הטוקן הוא כלי הקמה, ולא משהו שצריך לרוץ בכל דחיפה. שלב
+      # הפריסה עצמו נכשל ברעש כשהאימות שבור, ולכן שום אות לא הולך לאיבוד.
       - name: Diagnose token
+        if: github.event_name == 'workflow_dispatch'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
