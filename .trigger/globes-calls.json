@@ -1,9 +1,9 @@
 {
   "note": "דחיפה של הקובץ הזה מריצה את Globes Calls. ראה scripts/globes_args.py.",
   "mode": "run",
-  "limit": 8,
-  "all": false,
-  "redo": true,
-  "run": 2,
-  "why": "המעטפת היא hex; הפענוח תוקן ונמדד 80.5% עברית"
+  "limit": 25,
+  "all": true,
+  "redo": false,
+  "run": 3,
+  "why": "כל התמלילים בערוץ, לא רק חברות כיסוי — החלטת יואב 25/08/2026"
 }

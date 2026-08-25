@@ -162,12 +162,15 @@ def index(rows: list[dict]) -> str:
     firms = sorted({r.get("company") or "" for r in rows} - {""})
     periods = sorted({r.get("period") or "" for r in rows} - {""}, reverse=True)
     last = max((r.get("date") or "") for r in rows)
+    n_cov = sum(1 for r in rows if r.get("match") != "none")
     chars = sum(r.get("chars", 0) for r in rows)
 
     tiles = (
         '<div class="strip">'
         f'<div class="tile"><div class="lbl">שיחות</div><div class="val">{len(rows)}</div></div>'
         f'<div class="tile"><div class="lbl">חברות</div><div class="val">{len(firms)}</div></div>'
+        f'<div class="tile"><div class="lbl">מהן בכיסוי</div>'
+        f'<div class="val">{n_cov}</div><div class="chg">שיחות</div></div>'
         f'<div class="tile"><div class="lbl">תמליל שנקרא</div>'
         f'<div class="val">{chars // 1000:,}K</div><div class="chg">תווים</div></div>'
         f'<div class="tile"><div class="lbl">אחרונה</div>'
@@ -182,6 +185,8 @@ def index(rows: list[dict]) -> str:
         'autocomplete="off" aria-label="סינון שיחות">'
         f'<select id="firm" aria-label="חברה"><option value="">כל החברות</option>{firm_opts}</select>'
         f'<select id="per" aria-label="תקופה"><option value="">כל התקופות</option>{opts}</select>'
+        '<label class="tr-cov"><input type="checkbox" id="cov"> '
+        'רק חברות כיסוי</label>'
         '<span class="stamp" id="cnt"></span></div>')
 
     cards = []
@@ -195,7 +200,8 @@ def index(rows: list[dict]) -> str:
             tag = '<span class="tr-approx">מחוץ לכיסוי</span>'
         cards.append(
             f'<a class="tr-card" href="transcripts/{slug(r)}" '
-            f'data-firm="{esc(r.get("company"))}" data-per="{esc(r.get("period"))}">'
+            f'data-firm="{esc(r.get("company"))}" data-per="{esc(r.get("period"))}" '
+            f'data-cov="{0 if r.get("match") == "none" else 1}">'
             f'<span class="tr-day">{he_date(r.get("date"))}</span>'
             f'<span class="tr-firm">{esc(r.get("company"))}</span>{tag}'
             f'<span class="tr-per">{esc(r.get("period"))}</span>'
@@ -205,20 +211,23 @@ def index(rows: list[dict]) -> str:
 <script>
 (function () {
   var q = document.getElementById('q'), per = document.getElementById('per'),
-      firm = document.getElementById('firm'), cnt = document.getElementById('cnt'),
+      firm = document.getElementById('firm'), cov = document.getElementById('cov'),
+      cnt = document.getElementById('cnt'),
       all = Array.prototype.slice.call(document.querySelectorAll('.tr-card'));
   function apply() {
     var t = (q.value || '').trim().toLowerCase(), p = per.value, f = firm.value, n = 0;
     all.forEach(function (d) {
       var show = (!p || d.dataset.per === p) && (!f || d.dataset.firm === f) &&
+                 (!cov.checked || d.dataset.cov === '1') &&
                  (!t || d.textContent.toLowerCase().indexOf(t) !== -1);
       d.hidden = !show;
       if (show) n++;
     });
     cnt.textContent = n === all.length ? '' : n + ' מתוך ' + all.length;
   }
-  [q, per, firm].forEach(function (el) {
-    el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', apply);
+  [q, per, firm, cov].forEach(function (el) {
+    el.addEventListener(el.tagName === 'INPUT' && el.type !== 'checkbox'
+                        ? 'input' : 'change', apply);
   });
 })();
 </script>"""
@@ -231,7 +240,8 @@ def note() -> str:
         '<p class="tr-note">התמלילים הם של <a href="https://www.globes.co.il" '
         'target="_blank" rel="noopener">גלובס</a> ונקראים במנוי. הסיכום נכתב '
         'אצלנו מתוך התמליל; התמליל המקורי מוצג בעמוד השיחה כארכיון אישי. '
-        'הסיכום מכסה שיחות של חברות הכיסוי, אלא אם ההרצה הייתה עם <code>--all</code>.</p>')
+        'הסיכום מכסה את כל שיחות המשקיעים בערוץ; שיחות של חברות מחוץ '
+        'לכיסוי מסומנות ככאלה.</p>')
 
 
 def pages(rows: list[dict], render) -> list[tuple[str, str, str]]:

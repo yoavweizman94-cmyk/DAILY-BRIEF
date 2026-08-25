@@ -19,7 +19,7 @@ on:
         required: false
         default: ""
       reviews:
-        description: "כמה סקירות דוחות לכתוב בריצה (0 = בלי, ריק = 8)"
+        description: "כמה סקירות דוחות לכתוב בריצה (0 = בלי, ריק = 12)"
         required: false
         default: ""
 
@@ -36,7 +36,9 @@ env:
 jobs:
   brief:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # הועלה מ-45: המהדורה מפיקה כעת עד 12 סקירות דוחות, וכל אחת היא
+    # קריאה עם PDF מלא. חסם קצר היה הופך את זה לריצות שנקטעות.
+    timeout-minutes: 120
     outputs:
       produced: ${{ steps.pipeline.outputs.produced }}
     steps:
@@ -95,7 +97,9 @@ jobs:
           TRADINGECONOMICS_KEY: ${{ secrets.TRADINGECONOMICS_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          REVIEW_LIMIT: ${{ inputs.reviews }}
+          # ריצה מתוזמנת מגיעה בלי inputs; בלי ברירת המחדל כאן
+          # אף מהדורה לא הייתה מפיקה סקירה מאז שהתזמון הוחזר.
+          REVIEW_LIMIT: ${{ inputs.reviews || 12 }}
           # Govmap חוסם את טווחי הענן של הראנרים; הסריקה עוברת דרך
           # Cloudflare Functions של האתר.
           GOVMAP_PROXY: https://app.tlvtaseview.com/api/govmap

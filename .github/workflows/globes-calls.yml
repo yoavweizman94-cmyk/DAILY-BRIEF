@@ -65,7 +65,8 @@ env:
 jobs:
   calls:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # הועלה מ-60: הריצה מסכמת כעת את כל הערוץ ולא רק חברות כיסוי.
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
         with:

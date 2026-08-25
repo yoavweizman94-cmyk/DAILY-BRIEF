@@ -1255,3 +1255,9 @@ li.revbox {
 .tr-note {
   margin-top: 1.8rem; font-size: 0.78rem; color: var(--faint); line-height: 1.6;
 }
+
+.tr-cov {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-size: 0.83rem; color: var(--muted); cursor: pointer; user-select: none;
+}
+.tr-cov input { accent-color: var(--accent); }

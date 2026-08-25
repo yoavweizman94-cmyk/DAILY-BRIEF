@@ -9,6 +9,11 @@ name: Filing Reviews
 # טיפוסי הוא כמה מאות אלפי טוקנים לקלט, ולכן `limit` הוא מעקה ולא
 # פורמליות — 200 סקירות בבת אחת הן הוצאה משמעותית.
 on:
+  # **צריכת המצבר.** יואב ביקש ב-25/08/2026 שסקירות חברות הכיסוי יהיו
+  # מוכנות מראש, כדי שהלחיצה בעמוד תחזיר תוצאה מיידית. הריצה הזו
+  # אוכלת את הפער בקצב קבוע; כשהוא ייגמר, כל ריצה תמצא אפס ותצא מיד.
+  schedule:
+    - cron: "40 */6 * * *"
   workflow_dispatch:
     inputs:
       limit:
@@ -30,7 +35,7 @@ concurrency:
 jobs:
   review:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -49,7 +54,9 @@ jobs:
       - name: Review
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          REVIEW_LIMIT: ${{ inputs.limit }}
+          # ריצה מתוזמנת מגיעה בלי inputs — בלי ברירת המחדל כאן היא
+          # הייתה נופלת על מחרוזת ריקה, או גרוע מזה, רצה על אפס בשקט.
+          REVIEW_LIMIT: ${{ inputs.limit || 25 }}
           REVIEW_SINCE: ${{ inputs.since }}
         run: python ingest/filing_review.py
 
