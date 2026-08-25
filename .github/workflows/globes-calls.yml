@@ -1,0 +1,46 @@
+name: Globes Calls
+
+# תמלולי שיחות ועידה מגלובס — גילוי, משיכה וסיכום.
+#
+# **תלוי בעוגיית מנוי.** GLOBES_COOKIE הוא פלט "Copy as cURL" מהדפדפן
+# של יואב. עוגיות פגות, ולכן הכישלון הצפוי כאן הוא "חזר תוכן של
+# לא-מנוי" — והוא נאמר במפורש ולא כ-0 תמלולים.
+on:
+  workflow_dispatch:
+    inputs:
+      probe:
+        description: "אבחון בלבד: מזהה כתבה לבדיקה (ריק = ריצה רגילה)"
+        required: false
+        default: ""
+      limit:
+        description: "כמה תמלולים לסכם בריצה (ברירת מחדל 5)"
+        required: false
+        default: "5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: content-write
+  cancel-in-progress: false
+
+jobs:
+  calls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install anthropic curl_cffi pyyaml truststore certifi
+
+      - name: Probe
+        if: inputs.probe != ''
+        env:
+          GLOBES_COOKIE: ${{ secrets.GLOBES_COOKIE }}
+          GLOBES_PROBE: ${{ inputs.probe }}
+        run: python scripts/globes_probe.py
