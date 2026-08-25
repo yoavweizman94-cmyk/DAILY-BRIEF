@@ -898,11 +898,23 @@ def main() -> int:
     # התמלילים והלוח הם שני חצאים של אותו נושא: הלוח אומר מתי, התמליל
     # אומר מה נאמר. הופרדו לשני עמודים כי הלוח נצרך לפני השיחה והתמליל
     # אחריה, ואיחודם היה מציג לקורא חצי לא רלוונטי בכל פעם.
+    tr_rows = transcripts.load()
     (OUT / "transcripts.html").write_text(
         PAGE.format(title=f"תמלולי שיחות משקיעים · {site_title}",
                     site_title=site_title, root="",
-                    body=transcripts.page(transcripts.load(), render)),
+                    body=transcripts.index(tr_rows)),
         encoding="utf-8")
+
+    # עמוד לכל שיחה. root="../" כי הם יושבים בתת-תיקייה, והניווט העליון
+    # חייב להמשיך להצביע לשורש.
+    if tr_rows:
+        (OUT / "transcripts").mkdir(exist_ok=True)
+        for fname, title, tbody in transcripts.pages(tr_rows, render):
+            (OUT / "transcripts" / fname).write_text(
+                PAGE.format(title=f"{title} · {site_title}",
+                            site_title=site_title, root="../", body=tbody),
+                encoding="utf-8")
+        print(f"  תמלולי שיחות: {len(tr_rows)}")
 
     # site/functions/ נשאר מחוץ ל-dist בכוונה: הוא קוד שרץ לפני כל בקשה,
     # לא נכס סטטי. העתקה לתוך תיקיית הפריסה גרמה לו להיות שניהם בו-זמנית,

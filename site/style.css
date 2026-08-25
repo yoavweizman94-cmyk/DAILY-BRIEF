@@ -1177,68 +1177,81 @@ li.revbox {
   font-size: 0.76rem; color: var(--faint); line-height: 1.5;
 }
 
-/* --- תמלולי שיחות משקיעים ------------------------------------------- */
+/* --- תמלולי שיחות משקיעים --------------------------------------------- */
 .tr-filters {
   display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
-  margin: 0.9rem 0 1.1rem;
+  margin: 1rem 0 1.1rem;
 }
 .tr-filters input, .tr-filters select {
   font: inherit; font-size: 0.86rem; padding: 0.38rem 0.6rem;
   border: 1px solid var(--border); border-radius: 6px;
   background: var(--surface); color: var(--fg);
 }
-.tr-filters input { flex: 1 1 15rem; min-width: 0; }
+.tr-filters input { flex: 1 1 14rem; min-width: 0; }
 
-details.tr {
-  border: 1px solid var(--border); border-radius: 8px;
-  background: var(--surface); margin-bottom: 0.55rem;
-}
-details.tr[open] { border-color: var(--accent); }
-details.tr > summary {
+/* כרטיס באינדקס — קישור, לא מקופל: התוכן יושב בעמוד נפרד. */
+.tr-card {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem;
-  padding: 0.6rem 0.75rem; cursor: pointer; list-style: none;
+  padding: 0.65rem 0.8rem; margin-bottom: 0.5rem;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: inherit; text-decoration: none;
 }
-details.tr > summary::-webkit-details-marker { display: none; }
-details.tr > summary::after {
-  content: "＋"; margin-inline-start: auto; color: var(--faint);
-  font-size: 0.8rem; line-height: 1;
-}
-details.tr[open] > summary::after { content: "－"; }
-details.tr > summary:hover { background: var(--table-head); }
-
+.tr-card:hover { border-color: var(--accent); background: var(--table-head); }
 .tr-day {
   font-family: var(--mono); font-size: 0.76rem; color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
-.tr-firm { font-weight: 700; font-size: 0.96rem; }
+.tr-firm { font-weight: 700; font-size: 0.97rem; }
 .tr-approx {
   font-weight: 400; font-size: 0.72rem; color: var(--faint);
-  border-bottom: 1px dotted var(--faint); cursor: help;
+  border-bottom: 1px dotted var(--faint);
 }
 .tr-per {
   font-size: 0.71rem; color: var(--muted); letter-spacing: 0.04em;
   border: 1px solid var(--border); border-radius: 999px; padding: 0.05rem 0.45rem;
 }
-/* שורת ה"בשורה אחת" נשברת לשורה משלה ברוחב מלא, כדי שלא תדחק את שם
-   החברה במסך צר. */
+/* שורת הפתיחה נשברת לשורה משלה ברוחב מלא, כדי שלא תדחק את שם החברה
+   במסך צר. */
 .tr-one {
-  flex: 1 0 100%; font-size: 0.86rem; color: var(--muted); line-height: 1.45;
+  flex: 1 0 100%; font-size: 0.86rem; color: var(--muted); line-height: 1.5;
 }
-.tr-body {
-  padding: 0.1rem 0.85rem 0.85rem; border-top: 1px solid var(--border);
-  font-size: 0.93rem;
+
+/* --- עמוד שיחה --- */
+.tr-back { font-size: 0.82rem; margin-bottom: 0.4rem; }
+.tr-other {
+  font-size: 0.82rem; color: var(--muted); margin: 0.5rem 0 0;
+  line-height: 1.7;
 }
-.tr-body h2 {
-  font-size: 0.85rem; letter-spacing: 0.05em; color: var(--accent);
-  margin: 1.1rem 0 0.35rem; font-weight: 700;
+.tr-full { font-size: 0.95rem; line-height: 1.75; }
+.tr-full h2 {
+  font-size: 0.88rem; letter-spacing: 0.05em; color: var(--accent);
+  margin: 2rem 0 0.5rem; padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border); font-weight: 700;
 }
-.tr-body h2:first-child { margin-top: 0.8rem; }
-.tr-body ul { margin: 0.3rem 0; padding-inline-start: 1.1rem; }
-.tr-body li { margin: 0.22rem 0; }
-.tr-src {
-  margin-top: 1rem; padding-top: 0.5rem; border-top: 1px dashed var(--border);
-  font-size: 0.78rem; color: var(--faint);
+.tr-full h2:first-child { margin-top: 1rem; }
+.tr-full h3 {
+  font-size: 0.95rem; margin: 1.2rem 0 0.3rem; font-weight: 700;
 }
+.tr-full ul { margin: 0.4rem 0; padding-inline-start: 1.2rem; }
+.tr-full li { margin: 0.3rem 0; }
+.tr-full table { font-size: 0.86rem; }
+/* שאלה ותשובה: הבלוק שנפתח ב"שאלה —" מקבל פס צד, כדי שרצף של עשרים
+   חילופי דברים יישאר קריא ולא ייראה כמו קיר טקסט. */
+.tr-full p > strong:first-child { color: var(--fg); }
+
+.tr-raw { margin-top: 2.2rem; }
+.tr-raw > summary {
+  cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--accent);
+  padding: 0.5rem 0; border-top: 1px solid var(--border);
+}
+.tr-text {
+  margin-top: 0.8rem; font-size: 0.9rem; line-height: 1.85;
+  max-height: 70vh; overflow-y: auto; padding-inline-end: 0.6rem;
+  border-inline-start: 2px solid var(--border); padding-inline-start: 0.9rem;
+}
+.tr-text p { margin: 0 0 0.75rem; }
+.tr-text p.sp b { color: var(--accent); font-weight: 700; }
+
 .tr-note {
-  margin-top: 1.6rem; font-size: 0.78rem; color: var(--faint); line-height: 1.6;
+  margin-top: 1.8rem; font-size: 0.78rem; color: var(--faint); line-height: 1.6;
 }

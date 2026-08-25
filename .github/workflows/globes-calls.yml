@@ -6,8 +6,9 @@ name: Globes Calls
 # מחובר. עוגיות פגות, ולכן הכישלון הצפוי כאן הוא "הסשן אינו מחובר" —
 # והוא נאמר במפורש ונכשל, ולא מתחזה ל-0 תמלילים.
 #
-# **התמליל אינו נשמר.** הוא נמשך, מסוכם, ונזרק. בריפו התוכן נשמר רק
-# הסיכום שלנו וקישור חזרה לגלובס.
+# **התמליל נשמר לצד הסיכום** — החלטה של יואב מ-25/08/2026, כשהאתר
+# משמש אותו בלבד. אם הוא ייפתח ללקוחות, ראה את רשימת ההחזרה בראש
+# ingest/globes_calls.py.
 #
 # הרצה ידנית בלבד, כמו שאר הצנרת מאז 24/08/2026.
 on:
@@ -22,7 +23,12 @@ on:
       limit:
         description: "כמה תמלילים לסכם (רק במצב run)"
         required: false
-        default: "5"
+        default: "8"
+      all:
+        description: "לסכם כל תמליל בערוץ ולא רק חברות כיסוי"
+        type: boolean
+        required: false
+        default: false
       article:
         description: "אבחון HTML של כתבה בודדת: מזהה did (אופציונלי)"
         required: false
@@ -82,7 +88,9 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -o pipefail
-          python ingest/globes_calls.py --limit "${{ inputs.limit }}" 2>&1 | tee calls.log
+          ALL=""
+          if [ "${{ inputs.all }}" = "true" ]; then ALL="--all"; fi
+          python ingest/globes_calls.py --limit "${{ inputs.limit }}" $ALL 2>&1 | tee calls.log
           rc=${PIPESTATUS[0]}
           if [ "$rc" -ne 0 ]; then
             if grep -qi 'credit balance is too low\|insufficient.*credit\|quota' calls.log; then
