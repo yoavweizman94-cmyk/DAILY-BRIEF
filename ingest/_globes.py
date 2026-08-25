@@ -119,14 +119,20 @@ def recognized(sess) -> tuple[bool, list[str]]:
 
     fa, fb = form_shape(a), form_shape(b)
     delta = abs(fa["len"] - fb["len"]) / max(fb["len"], 1)
-    ok = fa["password"] == 0 or (fa["password"] < fb["password"])
+    ea, eb = len(EMAILISH.findall(a)), len(EMAILISH.findall(b))
+
+    # **ההכרעה: תוכן אישי שמופיע רק כשהעוגייה מוצגת.**
+    # ספירת שדות הסיסמה נפסלה כשהתברר שהאזור האישי של מנוי מחזיק טופס
+    # החלפת סיסמה — שלושה שדות, בדיוק כמו טופס ההתחברות של האנונימי.
+    # כתובת אימייל, לעומת זאת, אינה יכולה להופיע בעמוד של מי שאינו
+    # מזוהה: נמדד 0 בגלישה נקייה ו-2 עם עוגייה מחוברת.
+    ok = ea > eb or fa["password"] < fb["password"]
 
     rep = [
         f"אזור אישי עם עוגייה: {fa}",
         f"אזור אישי בלי עוגייה: {fb}",
         f"הפרש אורך יחסי: {delta:.2%}",
-        f"מחרוזות דמויות אימייל בתשובה: עם={len(EMAILISH.findall(a))}, "
-        f"בלי={len(EMAILISH.findall(b))}",
+        f"מחרוזות דמויות אימייל בתשובה: עם={ea}, בלי={eb}",
         f"Set-Cookie שהשרת החזיר: "
         f"{sorted({c.split('=')[0] for c in ra.headers.get_list('set-cookie')}) if hasattr(ra.headers, 'get_list') else 'לא נקרא'}",
     ]
@@ -140,10 +146,11 @@ def recognized(sess) -> tuple[bool, list[str]]:
             rep.append(f"    {skeleton(l)[:90]}")
 
     if ok:
-        rep.append("מסקנה: טופס ההתחברות נעלם — הסשן מזוהה.")
+        rep.append("מסקנה: העמוד מציג תוכן אישי רק כשהעוגייה מוצגת — "
+                   "הסשן מזוהה.")
     else:
-        rep.append("מסקנה: השרת מגיש טופס התחברות מלא גם עם העוגייה. "
-                   "הסשן אינו מזוהה מהראנר.")
+        rep.append("מסקנה: התשובה אינה מציגה תוכן אישי. הסשן אינו מזוהה "
+                   "מהראנר.")
     return ok, rep
 
 

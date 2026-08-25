@@ -272,7 +272,7 @@ def cookie_report(cookie: str) -> list[str]:
         r"auth|session|token|login|member|subscri|^gls$|^pw", n, re.I)]
     return [
         f"עוגייה: {len(fields)} שדות, {len(cookie or '')} תווים, חתימה {sig}",
-        "  (חתימה זהה לריצה קודמת = הסוד לא הוחלף)",
+        "  (השווה את החתימה לריצה קודמת כדי לדעת אם הסוד הוחלף)",
         f"  שמות: {', '.join(names) if names else 'אין'}",
         f"  שדות שנראים כהזדהות: {auth or 'אין'}",
     ]
