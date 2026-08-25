@@ -14,7 +14,7 @@
 
 **הגילוי אנונימי, הקריאה מאומתת.** רשימת התמלילים בערוץ 16118 היא
 ניווט פומבי (כותרת, תאריך, מזהה) ואינה דורשת מנוי. גוף התמליל נקרא
-רק כשהשרת מגיש אותו פתוח — ראה `_globes.unlocked`.
+רק אחרי שהשרת אישר שהסשן מזוהה — ראה `_globes.recognized`.
 
 הרצה: ידנית בלבד (workflow_dispatch), כמו שאר הצנרת מאז שעברה
 להרצה לפי דרישה.
@@ -37,9 +37,8 @@ harden()
 
 import yaml  # noqa: E402
 
-from _globes import (ARTICLE, BASE, PAYWALL, SIGNED_IN, NoCookie,  # noqa: E402
-                     NotSubscriber, cookie_from_env, fetch, session,
-                     unlocked)
+from _globes import (ARTICLE, BASE, NoCookie, NotSubscriber,  # noqa: E402
+                     cookie_from_env, fetch, recognized, session)
 
 # ערוץ "תמלולי שיחות משקיעים" בגלובס.
 CHANNEL = BASE + "/news/home.aspx?fid=16118"
@@ -253,34 +252,31 @@ def cookie_report(cookie: str) -> list[str]:
 
     הלוגים והאנוטציות של הריפו ציבוריים, והעוגייה היא מפתח לחשבון של
     יואב. השמות מספיקים כדי להכריע בין "הסוד לא נקלט" ל"הסוד נקלט אך
-    פג", וזו כל השאלה שהאבחון צריך לענות עליה.
+    אינו מזוהה", וזו כל השאלה שהאבחון צריך לענות עליה.
     """
     fields = [p.strip() for p in (cookie or "").split(";") if "=" in p]
     names = sorted({p.split("=", 1)[0].strip() for p in fields})
-    # שמות שנראים כמו הזדהות. היעדרם פירושו שהעוגייה נלקחה מדפדפן
-    # שלא היה מחובר, ולא שהיא פגה.
     auth = [n for n in names if re.search(
-        r"auth|session|token|login|user|member|subscri|\.ASPXAUTH|sso", n, re.I)]
+        r"auth|session|token|login|member|subscri|^gls$|^pw", n, re.I)]
     return [
         f"עוגייה: {len(fields)} שדות, {len(cookie or '')} תווים",
         f"  שמות: {', '.join(names) if names else 'אין'}",
-        f"  שדות שנראים כהזדהות: {auth if auth else 'אין — כנראה נלקחה מדפדפן לא מחובר'}",
+        f"  שדות שנראים כהזדהות: {auth or 'אין'}",
     ]
 
 
 def diagnose(sess, cookie: str) -> str:
     """מה בדיוק חזר מגלובס — **בלי לפענח שום תוכן.**
 
-    האבחון מדווח אורכים, ערכי דגלים וספירות סימנים, ולא מילים. זה גם
-    מה שנחוץ כדי להכריע בין "העוגייה פגה" ל"התוכן מוגש חסום", וגם מה
-    שמותר להדפיס ללוג ציבורי.
+    האבחון מדווח אורכים, מבנה טפסים וספירות, ולא מילים. זה גם מה
+    שנחוץ כדי להכריע למה הגישה נכשלה, וגם מה שמותר להדפיס ללוג ציבורי.
     """
     L = cookie_report(cookie)
-
-    home = sess.get(BASE + "/", timeout=60)
-    L.append(f"עמוד הבית: HTTP {home.status_code}, {len(home.text):,} תווים")
-    L.append(f"  סימני תפריט: "
-             f"{ {k: home.text.count(k) for k in SIGNED_IN + ('התחבר',)} }")
+    try:
+        _, rep = recognized(sess)
+        L += rep
+    except Exception as e:
+        L.append(f"בדיקת הזיהוי נכשלה: {type(e).__name__}: {e}")
 
     try:
         rows = discover(sess)
@@ -289,26 +285,18 @@ def diagnose(sess, cookie: str) -> str:
         L.append(f"ערוץ התמלילים נכשל: {type(e).__name__}: {e}")
         rows = []
 
+    # מדדי הכתבה נשארים בדיווח כי הם מאשרים שהמשיכה עצמה עובדת — אבל
+    # **הם אינם עדות להרשאה**: IsPaywall הוא תכונה של הכתבה (חופשית=False,
+    # חסומה=True גם בגלישה אנונימית), ומחרוזות החסימה מופיעות בשתיהן.
     if rows:
         did = rows[0]["did"]
         r = sess.get(ARTICLE.format(did), timeout=60)
-        h = r.text
-        pw = re.search(r"IsPaywall\s*=\s*[\"']([^\"']*)", h)
-        env = re.search(r"textEnv\s*=\s*[\"']([^\"']*)", h)
-        blocks = [x for x in PAYWALL if x in h]
-        L.append(f"כתבה {did}: HTTP {r.status_code}, {len(h):,} תווים")
-        L.append(f"  IsPaywall={pw.group(1) if pw else 'לא נמצא'}")
-        L.append(f"  textEnv: {len(env.group(1)) if env else 0:,} תווים")
-        L.append(f"  סימני חסימה: {blocks or 'אין'}")
-        L.append(f"  unlocked(): {unlocked(h)}")
-        # שורת המסקנה, כדי שלא יידרש פענוח ידני של המספרים למעלה.
-        if unlocked(h):
-            L.append("מסקנה: השרת מגיש את התוכן פתוח — הסשן זכאי.")
-        elif blocks and (pw and pw.group(1) == "True"):
-            L.append("מסקנה: טביעת אצבע אנונימית מלאה. העוגייה אינה "
-                     "מזוהה מול השרת — פגה, או נלקחה מדפדפן לא מחובר.")
-        else:
-            L.append("מסקנה: תשובה חלקית — ראה את הסימנים למעלה.")
+        pw = re.search(r"IsPaywall\s*=\s*[\"']([^\"']*)", r.text)
+        env = re.search(r"textEnv\s*=\s*[\"']([^\"']*)", r.text)
+        L.append(f"כתבה {did}: HTTP {r.status_code}, {len(r.text):,} תווים "
+                 f"(IsPaywall={pw.group(1) if pw else '-'}, "
+                 f"textEnv={len(env.group(1)) if env else 0:,}) — "
+                 f"תכונות של הכתבה, לא של ההרשאה")
     return "\n".join(L)
 
 
@@ -377,6 +365,15 @@ def main() -> int:
         annotate("warning", "אבחון גישת גלובס", report)
         print(report)
         return 0
+
+    ok, rep = recognized(sess)
+    if not ok:
+        # **נכשל סגור.** בלי זיהוי אין ראיה שהתוכן שלנו לקרוא, ולכן
+        # אין פענוח — גם אם טכנית הוא מגיע לכאן מוצפן בכל מקרה.
+        annotate("error", "הסשן אינו מזוהה בגלובס",
+                 "\n".join(rep + [""] + cookie_report(cookie)))
+        return 1
+    print("זיהוי סשן: אושר")
 
     rows = discover(sess)
     cov = coverage()

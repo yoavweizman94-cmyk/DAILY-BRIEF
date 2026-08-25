@@ -95,7 +95,7 @@ jobs:
           if [ "$rc" -ne 0 ]; then
             if grep -qi 'credit balance is too low\|insufficient.*credit\|quota' calls.log; then
               echo "::error title=יתרת Anthropic אזלה::טעינה: console.anthropic.com/settings/billing"
-            elif grep -q 'הסשן אינו מחובר' calls.log; then
+            elif grep -q 'אינו מזוהה' calls.log; then
               echo "::error title=עוגיית גלובס פגה::רענן את הסוד GLOBES_COOKIE מ-Copy as cURL בדפדפן מחובר."
             fi
             exit "$rc"

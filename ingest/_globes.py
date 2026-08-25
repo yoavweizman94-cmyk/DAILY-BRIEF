@@ -19,6 +19,7 @@ import re
 
 BASE = "https://www.globes.co.il"
 ARTICLE = BASE + "/news/article.aspx?did={}"
+ACCOUNT = BASE + "/news/personal_zone/manageaccount.aspx"
 
 # הסימנים שגלובס מציג לגולש שאינו מנוי. נוכחותם פירושה שהעוגייה פגה או
 # שגויה — ולא שהכתבה ריקה. ההבחנה הזו היא כל ההבדל בין "לתקן את הסוד"
@@ -27,9 +28,13 @@ PAYWALL = ("למנויים בלבד", "מינוי גלובס בדיגיטל", "�
 
 RC4_KEY = "s@d45f2FTgd76f#Rd!"
 
-# סימנים שמופיעים רק בסשן מחובר. נמדדו מול משיכה אנונימית של אותה
-# כתבה: "התחבר" הופיע פעם אחת, וכל אלה — אפס.
-SIGNED_IN = ("התנתק", "החשבון שלי", "logout", "signout")
+# **שלושה סימנים שנוסו ונפסלו** — נשמרים כתיעוד כדי שלא ינוסו שוב:
+#   · מחרוזות תפריט ("התנתק", "החשבון שלי") — עמוד הבית בונה אותן ב-JS,
+#     ולכן הן חסרות משתי הצורות. גם "התחבר" מופיע 0 פעמים.
+#   · מחרוזות ה-PAYWALL שלמטה — מופיעות גם בכתבה **חופשית** לגמרי.
+#   · `IsPaywall` — תכונה של הכתבה ולא של הגולש: חופשית=False,
+#     חסומה=True, בשתיהן גם בגלישה אנונימית.
+# גוף הכתבה אינו נושא מידע על הזכאות. הזיהוי נבדק ב-`recognized`.
 
 
 class NoCookie(Exception):
@@ -60,29 +65,58 @@ def rc4(key: str, data: str) -> str:
     return "".join(out)
 
 
-def unlocked(html: str) -> bool:
-    """האם **השרת** הגיש את הכתבה הזו כפתוחה.
+def form_shape(html: str) -> dict:
+    """טביעת אצבע מבנית של טופס בעמוד — בלי לקרוא את תוכנו."""
+    return {
+        "password": len(re.findall(r'type="password"', html, re.I)),
+        "email": len(re.findall(r'type="email"', html, re.I)),
+        "forms": len(re.findall(r"<form", html, re.I)),
+        "len": len(html),
+    }
 
-    **התנאי לפענוח, ולא קישוט.** בלעדיו הקוד היה קורא תוכן חסום גם בלי
-    מנוי, וזה בדיוק מה שהוחלט לא לעשות.
 
-    הגרסה הראשונה חיפשה מחרוזות תפריט ("התנתק", "החשבון שלי") בעמוד
-    הבית. אבחון ב-25/08/2026 הראה ששתי הנחות שם היו שגויות: עמוד הבית
-    אינו מכיל אף אחת מהן בשום מצב — גם לא "התחבר" — כי התפריט נבנה
-    ב-JS; והשאלה בכלל אינה איך נראה התפריט אלא מה השרת החליט להגיש.
+def recognized(sess) -> tuple[bool, list[str]]:
+    """האם השרת מזהה את הסשן — נבדק ב-A/B מול אותה בקשה בלי עוגייה.
 
-    לכן הבדיקה עברה לסימנים של השרת עצמו על גוף הכתבה. הבסיס האנונימי
-    נמדד ומתועד: `IsPaywall="True"`, `textEnv` מלא, וסימני החסימה
-    בגוף העמוד. כל אלה **נעדרים** כשהתוכן הוגש פתוח.
+    **למה A/B ולא חיפוש סימן.** שלוש בדיקות קודמות נכשלו כי כל אחת
+    מהן מדדה משהו שאינו הרשאה: מחרוזות תפריט (עמוד הבית בונה אותן
+    ב-JS ולכן הן חסרות תמיד), סימני חסימה (מופיעים גם בכתבה חופשית),
+    ו-`IsPaywall` (תכונה של הכתבה — חופשית=False, חסומה=True, בשתיהן
+    בגלישה אנונימית). גוף הכתבה פשוט אינו נושא מידע על הזכאות.
+
+    מה שכן נושא מידע הוא עמוד שדורש התחברות. אנחנו מבקשים את האזור
+    האישי פעמיים — עם העוגייה ובלעדיה — ושואלים אם השרת ענה **אחרת**.
+    זו בדיקה שאינה תלויה בשום ניחוש על איך נראה עמוד של מנוי: אם
+    התשובה זהה, העוגייה אינה מזוהה, נקודה.
+
+    הכיוון היחיד שהיא יכולה לטעות בו הוא להחמיר, ולכן היא בטוחה כשער.
     """
-    if any(p in html for p in PAYWALL):
-        return False
-    m = re.search(r"IsPaywall\s*=\s*[\"']([^\"']*)", html)
-    return not (m and m.group(1).strip().lower() == "true")
+    from curl_cffi import requests as creq
 
+    a = sess.get(ACCOUNT, timeout=60).text
+    bare = creq.Session(impersonate="chrome")
+    bare.headers.update({"Accept-Language": "he-IL,he;q=0.9", "Referer": BASE + "/"})
+    b = bare.get(ACCOUNT, timeout=60).text
 
-# שם ישן, נשמר כדי לא לשבור קוראים קיימים.
-is_subscriber = unlocked
+    fa, fb = form_shape(a), form_shape(b)
+    # הפרש אורך יחסי. פרסומות וטוקנים משתנים בין בקשות, ולכן סף ולא שוויון.
+    delta = abs(fa["len"] - fb["len"]) / max(fb["len"], 1)
+    same_form = (fa["password"] == fb["password"] and fa["email"] == fb["email"])
+    ok = (not same_form) or delta > 0.02
+
+    rep = [
+        f"אזור אישי עם עוגייה: {fa}",
+        f"אזור אישי בלי עוגייה: {fb}",
+        f"הפרש אורך יחסי: {delta:.1%}",
+        f"טופס זהה: {same_form}",
+    ]
+    if ok:
+        rep.append("מסקנה: השרת מגיב אחרת כשהעוגייה מוצגת — הסשן מזוהה.")
+    else:
+        rep.append("מסקנה: התשובה זהה לגלישה ללא עוגייה כלל. השרת אינו "
+                   "מזהה את הסשן — העוגייה פגה, או נלקחה מבקשה שלא נשלחה "
+                   "בה עוגיית ההתחברות.")
+    return ok, rep
 
 
 def extract_cookie(blob: str) -> str:
@@ -143,10 +177,6 @@ def clean_html(frag: str) -> str:
 
 def article_text(html: str) -> tuple[str, str]:
     """(כותרת, גוף) מתוך HTML של כתבה שהוחזרה לסשן מנוי."""
-    if not unlocked(html):
-        raise NotSubscriber("השרת הגיש את הכתבה חסומה — הסשן אינו של מנוי. "
-                            "רענן את GLOBES_COOKIE מדפדפן מחובר.")
-
     m = re.search(r"<title>(.*?)</title>", html, re.S)
     title = re.sub(r"\s*-\s*גלובס\s*$", "", (m.group(1) if m else "").strip())
 
