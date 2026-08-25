@@ -914,7 +914,7 @@ def main() -> int:
                 PAGE.format(title=f"{title} · {site_title}",
                             site_title=site_title, root="../", body=tbody),
                 encoding="utf-8")
-        print(f"  תמלולי שיחות: {len(tr_rows)}")
+        print(f"::notice::תמלולי שיחות שנבנו לאתר: {len(tr_rows)}")
 
     # site/functions/ נשאר מחוץ ל-dist בכוונה: הוא קוד שרץ לפני כל בקשה,
     # לא נכס סטטי. העתקה לתוך תיקיית הפריסה גרמה לו להיות שניהם בו-זמנית,
