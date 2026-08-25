@@ -438,8 +438,14 @@ def main() -> int:
         try:
             title, body = fetch(sess, r["did"])
         except NotSubscriber as e:
-            # העוגייה פגה באמצע הריצה — עצירה, ולא המשך בגלישה אנונימית.
-            print(f"::error::{e}", file=sys.stderr)
+            # העוגייה פגה או אינה מזוהה — עצירה, ולא המשך בגלישה אנונימית.
+            #
+            # **האבחון נשלח כאן ולא בריצה נפרדת.** כישלון שאומר רק "לא
+            # מנוי" מחייב עוד סבב probe כדי לדעת אם הסוד לא נקלט או שפג,
+            # וסבב כזה עולה זמן של אדם. האבחון חינם — הוא רק קורא שני
+            # עמודים — ולכן הוא רץ מיד ונכנס לאותה אנוטציה.
+            annotate("error", "גישת גלובס נכשלה",
+                     f"{e}\n\n{diagnose(sess, cookie)}")
             return 1
         except Exception as e:
             print(f"::warning::{r['company']} ({r['did']}): {type(e).__name__}: {e}")
