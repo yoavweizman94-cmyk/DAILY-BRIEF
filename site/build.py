@@ -21,6 +21,7 @@ import yaml
 import nadlan
 import otc
 import offex
+import transcripts
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "site" / "dist"
@@ -52,7 +53,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a><a href="{root}reports.html">דיווחים</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a><a href="{root}reports.html">דיווחים</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
   <a class="brand" href="{root}index.html">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
 </header>
 <main>
@@ -636,7 +637,8 @@ def calls_page(calls: list[dict], today: str) -> str:
     n_link = sum(1 for c in upcoming if c.get("link"))
     body = ('<h1>שיחות ועידה</h1>'
             '<p class="lead">שיחות סיכום רבעון של חברות נסחרות, לפי לוח האירועים '
-            'של מאיה. קישור הכניסה נשלף מדיווח החברה עצמו.</p>'
+            'של מאיה. קישור הכניסה נשלף מדיווח החברה עצמו. '
+            'שיחות שכבר התקיימו — <a href="transcripts.html">סיכומי התמלילים</a>.</p>'
             f'<p class="stamp">{len(upcoming)} שיחות קרובות · '
             f'{n_link} עם קישור כניסה</p>')
     body += table(upcoming) if upcoming else "<p>אין שיחות קרובות.</p>"
@@ -891,6 +893,15 @@ def main() -> int:
     (OUT / "calls.html").write_text(
         PAGE.format(title=f"שיחות ועידה · {site_title}", site_title=site_title,
                     root="", body=calls_page(calls, date.today().isoformat())),
+        encoding="utf-8")
+
+    # התמלילים והלוח הם שני חצאים של אותו נושא: הלוח אומר מתי, התמליל
+    # אומר מה נאמר. הופרדו לשני עמודים כי הלוח נצרך לפני השיחה והתמליל
+    # אחריה, ואיחודם היה מציג לקורא חצי לא רלוונטי בכל פעם.
+    (OUT / "transcripts.html").write_text(
+        PAGE.format(title=f"תמלולי שיחות משקיעים · {site_title}",
+                    site_title=site_title, root="",
+                    body=transcripts.page(transcripts.load(), render)),
         encoding="utf-8")
 
     # site/functions/ נשאר מחוץ ל-dist בכוונה: הוא קוד שרץ לפני כל בקשה,

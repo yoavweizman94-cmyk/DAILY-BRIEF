@@ -1,28 +1,42 @@
 name: Globes Calls
 
-# תמלולי שיחות ועידה מגלובס — גילוי, משיכה וסיכום.
+# תמלולי שיחות משקיעים מגלובס — גילוי, משיכה מאומתת וסיכום.
 #
-# **תלוי בעוגיית מנוי.** GLOBES_COOKIE הוא פלט "Copy as cURL" מהדפדפן
-# של יואב. עוגיות פגות, ולכן הכישלון הצפוי כאן הוא "חזר תוכן של
-# לא-מנוי" — והוא נאמר במפורש ולא כ-0 תמלולים.
+# **תלוי בעוגיית מנוי.** GLOBES_COOKIE הוא פלט "Copy as cURL" מדפדפן
+# מחובר. עוגיות פגות, ולכן הכישלון הצפוי כאן הוא "הסשן אינו מחובר" —
+# והוא נאמר במפורש ונכשל, ולא מתחזה ל-0 תמלילים.
+#
+# **התמליל אינו נשמר.** הוא נמשך, מסוכם, ונזרק. בריפו התוכן נשמר רק
+# הסיכום שלנו וקישור חזרה לגלובס.
+#
+# הרצה ידנית בלבד, כמו שאר הצנרת מאז 24/08/2026.
 on:
   workflow_dispatch:
     inputs:
-      probe:
-        description: "אבחון בלבד: מזהה כתבה לבדיקה (ריק = ריצה רגילה)"
-        required: false
-        default: ""
+      mode:
+        description: "מצב הרצה"
+        type: choice
+        required: true
+        default: probe
+        options: [probe, run]
       limit:
-        description: "כמה תמלולים לסכם בריצה (ברירת מחדל 5)"
+        description: "כמה תמלילים לסכם (רק במצב run)"
         required: false
         default: "5"
+      article:
+        description: "אבחון HTML של כתבה בודדת: מזהה did (אופציונלי)"
+        required: false
+        default: ""
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: content-write
+  group: globes-calls
   cancel-in-progress: false
+
+env:
+  TZ: Asia/Jerusalem
 
 jobs:
   calls:
@@ -30,17 +44,86 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
 
-      - name: Install
-        run: pip install anthropic curl_cffi pyyaml truststore certifi
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
 
-      - name: Probe
-        if: inputs.probe != ''
+      - name: Install
+        run: pip install anthropic curl_cffi pyyaml truststore certifi markdown
+
+      # אבחון HTML של כתבה בודדת — רק כשמבקשים במפורש מזהה.
+      - name: Probe article
+        if: inputs.article != ''
         env:
           GLOBES_COOKIE: ${{ secrets.GLOBES_COOKIE }}
-          GLOBES_PROBE: ${{ inputs.probe }}
+          GLOBES_PROBE: ${{ inputs.article }}
         run: python scripts/globes_probe.py
+
+      # אימות סשן + גילוי + משיכה אחת. אינו קורא ל-API ואינו עולה כסף.
+      - name: Probe
+        if: inputs.mode == 'probe'
+        env:
+          GLOBES_COOKIE: ${{ secrets.GLOBES_COOKIE }}
+        run: python ingest/globes_calls.py --probe
+
+      - name: Summarize transcripts
+        if: inputs.mode == 'run'
+        env:
+          GLOBES_COOKIE: ${{ secrets.GLOBES_COOKIE }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -o pipefail
+          python ingest/globes_calls.py --limit "${{ inputs.limit }}" 2>&1 | tee calls.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            if grep -qi 'credit balance is too low\|insufficient.*credit\|quota' calls.log; then
+              echo "::error title=יתרת Anthropic אזלה::טעינה: console.anthropic.com/settings/billing"
+            elif grep -q 'הסשן אינו מחובר' calls.log; then
+              echo "::error title=עוגיית גלובס פגה::רענן את הסוד GLOBES_COOKIE מ-Copy as cURL בדפדפן מחובר."
+            fi
+            exit "$rc"
+          fi
+
+      # **הסיכומים נשמרים גם כשהשלבים הבאים ייפלו.** תמליל שסוכם כבר
+      # שולם עליו; לזרוק אותו כי הפריסה נכשלה הוא לשלם פעמיים.
+      - name: Commit summaries
+        id: commit
+        if: always() && inputs.mode == 'run'
+        run: |
+          if [ -n "$(git -C output status --porcelain 2>/dev/null)" ]; then
+            CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' \
+              bash scripts/content_repo.sh push globes-calls
+            echo "changed=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "אין סיכומים חדשים לשמירה"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rebuild site
+        if: always() && steps.commit.outputs.changed == 'yes'
+        run: python site/build.py
+
+      - uses: actions/setup-node@v4
+        if: always() && steps.commit.outputs.changed == 'yes'
+        with:
+          node-version: "20"
+
+      - name: Deploy to Cloudflare Pages
+        if: always() && steps.commit.outputs.changed == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
+          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
+            echo "::error::הפריסה לא החזירה כתובת"; exit 1; }
