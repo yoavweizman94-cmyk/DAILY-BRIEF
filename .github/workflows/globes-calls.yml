@@ -36,6 +36,11 @@ on:
         type: boolean
         required: false
         default: false
+      redo:
+        description: "לסכם מחדש גם מה שכבר סוכם (בתשלום) — אחרי תיקון בפענוח"
+        type: boolean
+        required: false
+        default: false
       article:
         description: "אבחון HTML של כתבה בודדת: מזהה did (אופציונלי)"
         required: false
@@ -99,6 +104,7 @@ jobs:
           set -o pipefail
           ALL=""
           if [ "${{ inputs.all }}" = "true" ]; then ALL="--all"; fi
+          if [ "${{ inputs.redo }}" = "true" ]; then ALL="$ALL --redo"; fi
           # ריצה מתוזמנת מגיעה בלי inputs, ומחרוזת ריקה ל---limit מפילה
           # את argparse עוד לפני שהסקריפט מתחיל.
           LIMIT="${{ inputs.limit }}"

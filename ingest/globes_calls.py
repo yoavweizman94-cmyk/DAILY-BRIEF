@@ -38,9 +38,9 @@ harden()
 
 import yaml  # noqa: E402
 
-from _globes import (ARTICLE, BASE, NoCookie, NotSubscriber,  # noqa: E402
-                     cookie_from_env, fetch, recognized, session,
-                     ua_from_env)
+from _globes import (ARTICLE, BASE, Garbled, NoCookie,  # noqa: E402
+                     NotSubscriber, cookie_from_env, fetch, hebrew_ratio,
+                     recognized, session, ua_from_env)
 
 # ערוץ "תמלולי שיחות משקיעים" בגלובס.
 CHANNEL = BASE + "/news/home.aspx?fid=16118"
@@ -371,6 +371,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=8,
                     help="כמה תמלילים חדשים לסכם בריצה (עלות API)")
+    ap.add_argument("--redo", action="store_true",
+                    help="לסכם מחדש גם תמלילים שכבר סוכמו (למשל אחרי "
+                         "תיקון בפענוח שהפך סיכומים קודמים לחסרי ערך)")
     ap.add_argument("--all", action="store_true",
                     help="לסכם כל תמליל בערוץ ולא רק חברות כיסוי")
     ap.add_argument("--probe", action="store_true",
@@ -449,7 +452,9 @@ def main() -> int:
           + (f" | לסיכום (--all): {len(mine)}" if args.all else ""))
 
     year = str(date.today().year)
-    done = load_done()
+    done = set() if args.redo else load_done()
+    if args.redo:
+        print("::warning::--redo פעיל: תמלילים שכבר סוכמו יסוכמו שוב בתשלום")
     todo = [r for r in mine if r["did"] not in done]
     print(f"חדשים לסיכום: {len(todo)}")
     for r in mine[:40]:
@@ -498,6 +503,12 @@ def main() -> int:
             annotate("error", "גישת גלובס נכשלה",
                      f"{e}\n\n{diagnose(sess, cookie)}")
             return 1
+        except Garbled as e:
+            # פענוח שנכשל אינו מגיע למודל. תשלום על סיכום של ג'יבריש
+            # כבר קרה פעמיים, וזה בדיוק מה שהשער הזה מונע.
+            print(f"::warning::{r['company']} ({r['did']}): {e}")
+            fail += 1
+            continue
         except Exception as e:
             print(f"::warning::{r['company']} ({r['did']}): {type(e).__name__}: {e}")
             fail += 1
@@ -515,6 +526,7 @@ def main() -> int:
             "globes_name": r["globes_name"], "period": r["period"],
             "match": r["match"],
             "title": title, "url": r["url"], "chars": len(body),
+            "heb": round(hebrew_ratio(body), 3),
             "summary": md, "text": body,
             "generated": datetime.now().isoformat(timespec="seconds"),
         }

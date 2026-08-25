@@ -49,6 +49,10 @@ class Paywalled(Exception):
     """הסשן תקין אך לא נמצא גוף כתבה."""
 
 
+class Garbled(Exception):
+    """הגוף נמשך ופוענח, אך התוצאה אינה טקסט קריא."""
+
+
 def rc4(key: str, data: str) -> str:
     ks = [ord(c) for c in key]
     S = list(range(256))
@@ -63,6 +67,51 @@ def rc4(key: str, data: str) -> str:
         S[i], S[j] = S[j], S[i]
         out.append(chr(ord(ch) ^ S[(S[i] + S[j]) & 0xFF]))
     return "".join(out)
+
+
+def decrypt(env: str) -> str:
+    """‏textEnv → טקסט קריא.
+
+    **שני שלבים, לא אחד.** ‏RC4 מחזיר רצף בתים, וב-JS הוא מוחזק כמחרוזת
+    שבה כל תו הוא בית (0–255). הטקסט עצמו הוא UTF-8, ולכן בלי המרה
+    חזרה מבתים לתווים מתקבל ג'יבריש: "המנכ" הופך ל-"×××".
+
+    זה בדיוק מה שקרה — שמונה תמלילים נמשכו, סוכמו ושולם עליהם, והמודל
+    כתב עליהם שהתוכן אינו קריא. הוא צדק.
+
+    הנפילה החלופית קיימת כי לא כל כתבה חייבת להיות UTF-8; אם הפענוח
+    ל-UTF-8 נכשל, מוחזר הפענוח הגולמי ושער העברית שלמטה יכריע.
+    """
+    raw = rc4(RC4_KEY, env)
+    try:
+        return raw.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return raw
+
+
+def hebrew_ratio(text: str) -> float:
+    """חלקן של האותיות העבריות מבין התווים שאינם רווח."""
+    body = [c for c in (text or "") if not c.isspace()]
+    if not body:
+        return 0.0
+    heb = sum(1 for c in body if "֐" <= c <= "׿")
+    return heb / len(body)
+
+
+# סף נמוך בכוונה. תמליל אמיתי נמדד סביב 70% אותיות עבריות, וג'יבריש
+# של קידוד שגוי נותן אפס; כל ערך ביניהם מספיק כדי להבחין. הסף הנמוך
+# מותיר מקום לתמליל עמוס במספרים, בשמות לועזיים ובמונחי אנגלית.
+HEB_MIN = 0.15
+
+
+def is_hebrew(text: str) -> bool:
+    """**שער נגד תשלום על ג'יבריש.**
+
+    בלעדיו, פענוח שגוי עובר הלאה ומשלמים על סיכום של טקסט שאינו קריא —
+    וזה קרה, פעמיים, על שמונה תמלילים בכל פעם. הבדיקה עולה כלום ורצה
+    לפני כל קריאה למודל.
+    """
+    return hebrew_ratio(text) >= HEB_MIN
 
 
 def form_shape(html: str) -> dict:
@@ -259,8 +308,12 @@ def article_text(html: str) -> tuple[str, str]:
     # ל-.articleInner; כאן נעשה אותו דבר, אחרי שאומת שהסשן זכאי.
     m2 = re.search(r"textEnv\s*=\s*[\"']([^\"']*)[\"']", html)
     if m2 and m2.group(1):
-        txt = clean_html(rc4(RC4_KEY, m2.group(1)))
+        txt = clean_html(decrypt(m2.group(1)))
         if len(txt) > 500:
+            if not is_hebrew(txt):
+                raise Garbled(
+                    f"הפענוח לא הניב עברית ({hebrew_ratio(txt):.1%} אותיות "
+                    f"עבריות מתוך {len(txt):,} תווים)")
             return title, txt
 
     # נפילה חלופית: כתבה חופשית, שבה הגוף יושב ב-HTML כרגיל.
