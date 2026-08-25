@@ -19,6 +19,12 @@ on:
   # GLOBES_COOKIE. כישלון כזה הוא תזכורת, לא תקלה.
   schedule:
     - cron: "0 17 * * *"        # 20:00 ישראל בקיץ, 19:00 בחורף
+  # **הפעלה בדחיפה של קובץ טריגר.** שיגור workflow מרחוק דורש אסימון
+  # GitHub, ואין כזה בסביבת העבודה כאן; דחיפה כן אפשרית. הפרמטרים
+  # נקראים מתוך הקובץ — ראה scripts/globes_args.py.
+  push:
+    paths:
+      - ".trigger/globes-calls.json"
   workflow_dispatch:
     inputs:
       mode:
@@ -93,23 +99,25 @@ jobs:
           GLOBES_COOKIE: ${{ secrets.GLOBES_COOKIE }}
         run: python ingest/globes_calls.py --probe
 
-      # ריצה מתוזמנת היא תמיד run: באירוע schedule אין inputs כלל,
-      # ותנאי שמשווה ל-'run' בלבד היה משאיר את התזמון פעיל וריק.
+      # ריצה מתוזמנת או מטריגר היא תמיד run: לאירועים האלה אין inputs
+      # כלל, ותנאי שמשווה ל-'run' בלבד היה משאיר אותם פעילים וריקים.
+      - name: Resolve arguments
+        if: github.event_name != 'workflow_dispatch' || inputs.mode == 'run'
+        env:
+          IN_LIMIT: ${{ inputs.limit }}
+          IN_ALL: ${{ inputs.all }}
+          IN_REDO: ${{ inputs.redo }}
+        run: python scripts/globes_args.py | tee -a "$GITHUB_ENV"
+
       - name: Summarize transcripts
-        if: github.event_name == 'schedule' || inputs.mode == 'run'
+        if: github.event_name != 'workflow_dispatch' || inputs.mode == 'run'
         env:
           GLOBES_COOKIE: ${{ secrets.GLOBES_COOKIE }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -o pipefail
-          ALL=""
-          if [ "${{ inputs.all }}" = "true" ]; then ALL="--all"; fi
-          if [ "${{ inputs.redo }}" = "true" ]; then ALL="$ALL --redo"; fi
-          # ריצה מתוזמנת מגיעה בלי inputs, ומחרוזת ריקה ל---limit מפילה
-          # את argparse עוד לפני שהסקריפט מתחיל.
-          LIMIT="${{ inputs.limit }}"
-          LIMIT="${LIMIT:-8}"
-          python ingest/globes_calls.py --limit "$LIMIT" $ALL 2>&1 | tee calls.log
+          echo "מקור הפרמטרים: $CALL_SRC | limit=$CALL_LIMIT | flags=${CALL_FLAGS:-אין}"
+          python ingest/globes_calls.py --limit "$CALL_LIMIT" $CALL_FLAGS 2>&1 | tee calls.log
           rc=${PIPESTATUS[0]}
           if [ "$rc" -ne 0 ]; then
             if grep -qi 'credit balance is too low\|insufficient.*credit\|quota' calls.log; then
@@ -125,7 +133,7 @@ jobs:
       # אפשר היה לדעת זאת בלי לשלם שלישית. הארטיפקט אינו תלוי בריפו
       # התוכן, ולכן ניתן להורידו גם כששלב השמירה נכשל.
       - name: Keep the summaries as an artifact
-        if: always() && (github.event_name == 'schedule' || inputs.mode == 'run')
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'run')
         uses: actions/upload-artifact@v4
         with:
           name: transcripts
@@ -137,7 +145,7 @@ jobs:
       # שולם עליו; לזרוק אותו כי הפריסה נכשלה הוא לשלם פעמיים.
       - name: Commit summaries
         id: commit
-        if: always() && (github.event_name == 'schedule' || inputs.mode == 'run')
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'run')
         run: |
           CH="$(git -C output status --porcelain 2>/dev/null | wc -l)"
           FILES="$(ls -1 output/calls/transcripts_*.jsonl 2>/dev/null | wc -l)"
