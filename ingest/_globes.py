@@ -53,40 +53,59 @@ class Garbled(Exception):
     """הגוף נמשך ופוענח, אך התוצאה אינה טקסט קריא."""
 
 
-def rc4(key: str, data: str) -> str:
-    ks = [ord(c) for c in key]
+def rc4_bytes(key: str, data: bytes) -> bytes:
+    ks = key.encode("utf-8")
     S = list(range(256))
     j = 0
     for i in range(256):
         j = (j + S[i] + ks[i % len(ks)]) & 0xFF
         S[i], S[j] = S[j], S[i]
-    out, i, j = [], 0, 0
-    for ch in data:
+    out, i, j = bytearray(), 0, 0
+    for b in data:
         i = (i + 1) & 0xFF
         j = (j + S[i]) & 0xFF
         S[i], S[j] = S[j], S[i]
-        out.append(chr(ord(ch) ^ S[(S[i] + S[j]) & 0xFF]))
-    return "".join(out)
+        out.append(b ^ S[(S[i] + S[j]) & 0xFF])
+    return bytes(out)
+
+
+def rc4(key: str, data: str) -> str:
+    """גרסת מחרוזות, נשמרת לבדיקות ולתאימות."""
+    return "".join(chr(b) for b in
+                   rc4_bytes(key, bytes(ord(c) & 0xFF for c in data)))
+
+
+# הקידודים שנוסים על הבתים המפוענחים, לפי הסדר. windows-1255 הוא קידוד
+# העברית הישן של אתרי ASP.NET, ולכן הוא נפילה סבירה ולא ניחוש.
+DECODINGS = ("utf-8", "windows-1255")
 
 
 def decrypt(env: str) -> str:
     """‏textEnv → טקסט קריא.
 
-    **שני שלבים, לא אחד.** ‏RC4 מחזיר רצף בתים, וב-JS הוא מוחזק כמחרוזת
-    שבה כל תו הוא בית (0–255). הטקסט עצמו הוא UTF-8, ולכן בלי המרה
-    חזרה מבתים לתווים מתקבל ג'יבריש: "המנכ" הופך ל-"×××".
+    **המעטפת היא hex, לא מחרוזת בתים.** נמדד: 114,018 תווים מתוך
+    אלפבית של 16 תווים בדיוק (0-9a-f), כלומר 57,009 בתים. הגרסה
+    הראשונה טיפלה בכל תו כבית, ולכן פענחה את הייצוג במקום את התוכן
+    והחזירה אפס אותיות עבריות — שער העברית תפס את זה על שמונה
+    תמלילים, לפני שהוצא שקל.
 
-    זה בדיוק מה שקרה — שמונה תמלילים נמשכו, סוכמו ושולם עליהם, והמודל
-    כתב עליהם שהתוכן אינו קריא. הוא צדק.
-
-    הנפילה החלופית קיימת כי לא כל כתבה חייבת להיות UTF-8; אם הפענוח
-    ל-UTF-8 נכשל, מוחזר הפענוח הגולמי ושער העברית שלמטה יכריע.
+    שלושה שלבים: פירוק ה-hex לבתים, RC4 עליהם, ופענוח הקידוד.
     """
-    raw = rc4(RC4_KEY, env)
+    raw = "".join((env or "").split())
     try:
-        return raw.encode("latin-1").decode("utf-8")
-    except (UnicodeEncodeError, UnicodeDecodeError):
-        return raw
+        data = bytes.fromhex(raw)
+    except ValueError:
+        # לא hex — ייתכן שגלובס שינתה ייצוג. הנפילה לגרסת המחרוזות
+        # שומרת על התנהגות קודמת, ושער העברית יכריע אם היא הצליחה.
+        return rc4(RC4_KEY, env or "")
+
+    plain = rc4_bytes(RC4_KEY, data)
+    for enc in DECODINGS:
+        try:
+            return plain.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return plain.decode("utf-8", "replace")
 
 
 def hebrew_ratio(text: str) -> float:
