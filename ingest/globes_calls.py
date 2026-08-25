@@ -347,11 +347,21 @@ def load_done() -> set[str]:
     if not OUT.is_dir():
         return out
     for f in sorted(OUT.glob("transcripts_*.jsonl")):
-        for ln in f.read_text(encoding="utf-8").splitlines():
+        bad = 0
+        lines = f.read_text(encoding="utf-8").splitlines()
+        for ln in lines:
+            if not ln.strip():
+                continue
             try:
                 out.add(json.loads(ln)["did"])
             except Exception:
-                continue
+                bad += 1
+        # **שורה שלא נקראה חייבת להישמע.** הבליעה השקטה כאן היא שגרמה
+        # לסיכום חוזר של שמונה תמלילים ששולם עליהם: הקובץ היה במקומו,
+        # אף מזהה לא נקרא ממנו, ושום דבר לא אמר זאת.
+        if bad:
+            print(f"::warning::{f.name}: {bad} מתוך {len(lines)} שורות "
+                  f"לא נקראו — הדה-דופ חלקי ותמלילים עלולים לסוכם שוב")
     return out
 
 
@@ -385,13 +395,27 @@ def main() -> int:
         # את אותם שמונה תמלילים שילמה פעמיים, ובלי הדיווח הזה אי אפשר
         # היה לדעת מי משני הכיוונים נשבר בלי לשלם שלישית.
         done = load_done()
-        files = sorted(f.name for f in OUT.glob("transcripts_*.jsonl")) if OUT.is_dir() else []
-        annotate("warning", "מצב ריפו התוכן",
-                 f"תיקיית {OUT.relative_to(ROOT)} קיימת: {OUT.is_dir()}\n"
-                 f"קבצי תמלולים: {files or 'אין'}\n"
-                 f"מזהים שכבר סוכמו: {len(done)}\n"
-                 f"כל הקבצים בתיקייה: "
-                 f"{sorted(f.name for f in OUT.iterdir()) if OUT.is_dir() else '—'}")
+        L = [f"תיקיית {OUT.relative_to(ROOT)} קיימת: {OUT.is_dir()}",
+             f"מזהים שכבר סוכמו: {len(done)}"]
+        for tf in (sorted(OUT.glob("transcripts_*.jsonl")) if OUT.is_dir() else []):
+            raw = tf.read_bytes()
+            lines = raw.decode("utf-8", "replace").splitlines()
+            L.append(f"{tf.name}: {len(raw):,} בתים, {len(lines)} שורות")
+            for i, ln in enumerate(lines[:3], 1):
+                if not ln.strip():
+                    L.append(f"  שורה {i}: ריקה")
+                    continue
+                try:
+                    # **מפתחות בלבד ולא ערכים** — הרשומה מחזיקה תמליל מלא,
+                    # והאנוטציות ציבוריות.
+                    L.append(f"  שורה {i}: {len(ln):,} תווים, "
+                             f"מפתחות {sorted(json.loads(ln).keys())}")
+                except Exception as e:
+                    L.append(f"  שורה {i}: {len(ln):,} תווים, "
+                             f"שגיאת פרסור {type(e).__name__} — {e}")
+        if OUT.is_dir():
+            L.append(f"כל הקבצים בתיקייה: {sorted(f.name for f in OUT.iterdir())}")
+        annotate("warning", "מצב ריפו התוכן", "\n".join(L))
         return 0
 
     ok, rep = recognized(sess)
