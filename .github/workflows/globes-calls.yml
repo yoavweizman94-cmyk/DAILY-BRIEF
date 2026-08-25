@@ -101,15 +101,40 @@ jobs:
             exit "$rc"
           fi
 
+      # **ביטוח על עבודה משולמת.** ריצה #9 הפיקה שמונה סיכומים, ריצה #10
+      # הפיקה את אותם שמונה שוב — כלומר הראשונים לא שרדו את השמירה, ואי
+      # אפשר היה לדעת זאת בלי לשלם שלישית. הארטיפקט אינו תלוי בריפו
+      # התוכן, ולכן ניתן להורידו גם כששלב השמירה נכשל.
+      - name: Keep the summaries as an artifact
+        if: always() && inputs.mode == 'run'
+        uses: actions/upload-artifact@v4
+        with:
+          name: transcripts
+          path: output/calls/transcripts_*.jsonl
+          if-no-files-found: warn
+          retention-days: 30
+
       # **הסיכומים נשמרים גם כשהשלבים הבאים ייפלו.** תמליל שסוכם כבר
       # שולם עליו; לזרוק אותו כי הפריסה נכשלה הוא לשלם פעמיים.
       - name: Commit summaries
         id: commit
         if: always() && inputs.mode == 'run'
         run: |
-          if [ -n "$(git -C output status --porcelain 2>/dev/null)" ]; then
+          CH="$(git -C output status --porcelain 2>/dev/null | wc -l)"
+          FILES="$(ls -1 output/calls/transcripts_*.jsonl 2>/dev/null | wc -l)"
+          LINES="$(cat output/calls/transcripts_*.jsonl 2>/dev/null | wc -l)"
+          echo "::notice title=מצב לפני השמירה::שינויים בריפו התוכן $CH · קבצי תמלולים $FILES · שורות $LINES"
+          if [ "$CH" -gt 0 ]; then
+            set +e
             CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' \
-              bash scripts/content_repo.sh push globes-calls
+              bash scripts/content_repo.sh push globes-calls 2>&1 | tee push.log
+            rc=${PIPESTATUS[0]}
+            set -e
+            echo "::notice title=תוצאת השמירה::קוד $rc — $(tail -1 push.log)"
+            if [ "$rc" -ne 0 ]; then
+              echo "::error title=הסיכומים לא נשמרו::הם זמינים כארטיפקט transcripts בריצה הזו."
+              exit 1
+            fi
             echo "changed=yes" >> "$GITHUB_OUTPUT"
           else
             echo "אין סיכומים חדשים לשמירה"

@@ -380,6 +380,18 @@ def main() -> int:
         report = diagnose(sess, cookie)
         annotate("warning", "אבחון גישת גלובס", report)
         print(report)
+        # **מה כבר שמור בריפו התוכן** — הבדיקה החינמית שמפרידה בין
+        # "הסיכומים לא נשמרו" ל"נשמרו ואינם מוצגים". ריצה שסיכמה שוב
+        # את אותם שמונה תמלילים שילמה פעמיים, ובלי הדיווח הזה אי אפשר
+        # היה לדעת מי משני הכיוונים נשבר בלי לשלם שלישית.
+        done = load_done()
+        files = sorted(f.name for f in OUT.glob("transcripts_*.jsonl")) if OUT.is_dir() else []
+        annotate("warning", "מצב ריפו התוכן",
+                 f"תיקיית {OUT.relative_to(ROOT)} קיימת: {OUT.is_dir()}\n"
+                 f"קבצי תמלולים: {files or 'אין'}\n"
+                 f"מזהים שכבר סוכמו: {len(done)}\n"
+                 f"כל הקבצים בתיקייה: "
+                 f"{sorted(f.name for f in OUT.iterdir()) if OUT.is_dir() else '—'}")
         return 0
 
     ok, rep = recognized(sess)
