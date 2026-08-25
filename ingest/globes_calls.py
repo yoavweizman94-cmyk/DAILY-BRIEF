@@ -37,8 +37,9 @@ harden()
 
 import yaml  # noqa: E402
 
-from _globes import (ARTICLE, BASE, SIGNED_IN, NoCookie, NotSubscriber,  # noqa: E402
-                     cookie_from_env, fetch, is_subscriber, session)
+from _globes import (ARTICLE, BASE, PAYWALL, SIGNED_IN, NoCookie,  # noqa: E402
+                     NotSubscriber, cookie_from_env, fetch, is_subscriber,
+                     session)
 
 # ערוץ "תמלולי שיחות משקיעים" בגלובס.
 CHANNEL = BASE + "/news/home.aspx?fid=16118"
@@ -235,6 +236,61 @@ def discover(sess) -> list[dict]:
     return rows
 
 
+def annotate(level: str, title: str, body: str) -> None:
+    """אנוטציה של Actions — נראית בעמוד הריצה **וב-API**.
+
+    הלוגים של ריצה דורשים אימות כדי להורידם (403 לקורא אנונימי), ולכן
+    `print` רגיל אינו נגיש למי שמאבחן מבחוץ. אנוטציה כן. שורות מקודדות
+    ב-%0A כי פקודות Actions הן חד-שורתיות.
+    """
+    msg = (body.replace("%", "%25").replace("\r", "")
+               .replace("\n", "%0A"))
+    print(f"::{level} title={title}::{msg}")
+
+
+def diagnose(sess, home, signed: bool) -> str:
+    """מה בדיוק חזר מגלובס — **בלי לפענח שום תוכן.**
+
+    האבחון מדווח אורכים, ערכי דגלים וספירות סימנים, ולא מילים. זה גם
+    מה שנחוץ כדי להכריע בין "העוגייה פגה" ל"הסימנים השתנו", וגם מה
+    שמותר להדפיס ללוג שאינו שלנו.
+    """
+    L = []
+    marks = {k: home.text.count(k) for k in
+             SIGNED_IN + ("התחבר", "מינוי", "userType", "התנתקות", "פרופיל")}
+    L.append(f"עמוד הבית: HTTP {home.status_code}, {len(home.text):,} תווים")
+    L.append(f"is_subscriber: {signed}")
+    L.append(f"סימנים בעמוד הבית: {marks}")
+
+    try:
+        rows = discover(sess)
+        L.append(f"ערוץ התמלילים: {len(rows)} שורות")
+    except Exception as e:
+        L.append(f"ערוץ התמלילים נכשל: {type(e).__name__}: {e}")
+        rows = []
+
+    if rows:
+        did = rows[0]["did"]
+        r = sess.get(ARTICLE.format(did), timeout=60)
+        h = r.text
+        pw = re.search(r"IsPaywall\s*=\s*[\"']([^\"']*)", h)
+        env = re.search(r"textEnv\s*=\s*[\"']([^\"']*)", h)
+        L.append(f"כתבה {did}: HTTP {r.status_code}, {len(h):,} תווים")
+        L.append(f"  IsPaywall={pw.group(1) if pw else 'לא נמצא'}")
+        L.append(f"  textEnv: {len(env.group(1)) if env else 0:,} תווים")
+        L.append(f"  סימני חסימה: {[x for x in PAYWALL if x in h] or 'אין'}")
+        L.append(f"  סימנים בעמוד הכתבה: "
+                 f"{ {k: h.count(k) for k in SIGNED_IN + ('התחבר',)} }")
+        # **גוף גלוי = הרשאה מהשרת עצמו.** אם למנוי גלובס שולחת את
+        # הכתבה בלי הצפנה, זה סימן חד-משמעי יותר מכל מחרוזת בתפריט.
+        plain = 0
+        for c in re.findall(r'<div[^>]*class="[^"]*articleInner[^"]*"[^>]*>(.*?)</div>',
+                            h, re.S | re.I):
+            plain = max(plain, len(re.sub(r"<[^>]+>", " ", c).strip()))
+        L.append(f"  גוף גלוי ב-articleInner: {plain:,} תווים")
+    return "\n".join(L)
+
+
 def summarize(text: str, meta: dict) -> str:
     from anthropic import Anthropic
     head = (f"חברה: {meta['company']}\nתקופה: {meta['period']}\n"
@@ -294,19 +350,27 @@ def main() -> int:
 
     # שער המנוי נבדק פעם אחת מול עמוד הבית, לפני כל משיכה של תוכן.
     home = sess.get(BASE + "/", timeout=60)
-    if not is_subscriber(home.text):
-        # **הכישלון מאבחן את עצמו.** "הסשן אינו מחובר" נכון גם כשהעוגייה
-        # פגה וגם כשגלובס שינתה את סימני ההתחברות, ואלה שני תיקונים שונים
-        # לגמרי. ספירת הסימנים אומרת מיד באיזה מהם מדובר, בלי סבב נוסף.
+    signed = is_subscriber(home.text)
+
+    if args.probe:
+        # **מצב האבחון אינו אוכף, הוא מדווח.** שער שנועל את הריצה לפני
+        # שהוא אומר מה ראה מחייב סבב נוסף בשביל כל שאלה, והלוגים כאן
+        # דורשים אימות לקריאה — ולכן הדיווח יוצא כאנוטציה ולא כ-print.
+        report = diagnose(sess, home, signed)
+        annotate("warning", "אבחון גישת גלובס", report)
+        print(report)
+        return 0
+
+    if not signed:
         marks = {k: home.text.count(k) for k in
                  SIGNED_IN + ("התחבר", "מינוי", "userType")}
-        print("::error::הסשן אינו מחובר לגלובס — רענן את GLOBES_COOKIE "
-              "(Copy as cURL מתוך דפדפן מחובר).", file=sys.stderr)
-        print(f"  תשובת עמוד הבית: HTTP {home.status_code}, "
-              f"{len(home.text):,} תווים")
-        print(f"  ספירת סימנים: {marks}")
-        print('  אם "התחבר" הוא 0 וכל השאר 0 — גלובס שינתה את הסימנים, '
-              "ו-SIGNED_IN ב-_globes.py צריך עדכון.")
+        annotate("error", "הסשן אינו מחובר לגלובס",
+                 "רענן את GLOBES_COOKIE (Copy as cURL מדפדפן מחובר).\n"
+                 f"עמוד הבית: HTTP {home.status_code}, {len(home.text):,} תווים.\n"
+                 f"ספירת סימנים: {marks}\n"
+                 'אם "התחבר" הוא 0 וכל השאר 0 — גלובס שינתה את הסימנים, '
+                 "ו-SIGNED_IN ב-_globes.py צריך עדכון. הרץ mode: probe "
+                 "לאבחון מלא, הוא חינם.")
         return 1
     print("סשן מנוי: מאומת")
 
