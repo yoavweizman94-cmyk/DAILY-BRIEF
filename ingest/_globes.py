@@ -60,13 +60,29 @@ def rc4(key: str, data: str) -> str:
     return "".join(out)
 
 
-def is_subscriber(html: str) -> bool:
-    """האם התשובה הוחזרה לסשן מחובר.
+def unlocked(html: str) -> bool:
+    """האם **השרת** הגיש את הכתבה הזו כפתוחה.
 
-    **התנאי לפענוח, ולא קישוט.** בלעדיה הקוד היה קורא תוכן חסום גם בלי
+    **התנאי לפענוח, ולא קישוט.** בלעדיו הקוד היה קורא תוכן חסום גם בלי
     מנוי, וזה בדיוק מה שהוחלט לא לעשות.
+
+    הגרסה הראשונה חיפשה מחרוזות תפריט ("התנתק", "החשבון שלי") בעמוד
+    הבית. אבחון ב-25/08/2026 הראה ששתי הנחות שם היו שגויות: עמוד הבית
+    אינו מכיל אף אחת מהן בשום מצב — גם לא "התחבר" — כי התפריט נבנה
+    ב-JS; והשאלה בכלל אינה איך נראה התפריט אלא מה השרת החליט להגיש.
+
+    לכן הבדיקה עברה לסימנים של השרת עצמו על גוף הכתבה. הבסיס האנונימי
+    נמדד ומתועד: `IsPaywall="True"`, `textEnv` מלא, וסימני החסימה
+    בגוף העמוד. כל אלה **נעדרים** כשהתוכן הוגש פתוח.
     """
-    return any(k in html for k in SIGNED_IN)
+    if any(p in html for p in PAYWALL):
+        return False
+    m = re.search(r"IsPaywall\s*=\s*[\"']([^\"']*)", html)
+    return not (m and m.group(1).strip().lower() == "true")
+
+
+# שם ישן, נשמר כדי לא לשבור קוראים קיימים.
+is_subscriber = unlocked
 
 
 def extract_cookie(blob: str) -> str:
@@ -90,7 +106,7 @@ def extract_cookie(blob: str) -> str:
     for p in pats:
         m = re.search(p, b, re.I | re.S)
         if m and m.group(1).strip():
-            return re.sub(r"\s*\\s*\n\s*", "", m.group(1)).strip()
+            return re.sub(r"\s*\\\s*\n\s*", "", m.group(1)).strip()
 
     # מחרוזת עוגייה נקייה: זוגות name=value מופרדים בנקודה-פסיק
     if "=" in b and ";" in b and "\n" not in b.strip():
@@ -127,9 +143,9 @@ def clean_html(frag: str) -> str:
 
 def article_text(html: str) -> tuple[str, str]:
     """(כותרת, גוף) מתוך HTML של כתבה שהוחזרה לסשן מנוי."""
-    if not is_subscriber(html):
-        raise NotSubscriber("הסשן אינו מחובר — כנראה שהעוגייה פגה. "
-                            "רענן את GLOBES_COOKIE מהדפדפן.")
+    if not unlocked(html):
+        raise NotSubscriber("השרת הגיש את הכתבה חסומה — הסשן אינו של מנוי. "
+                            "רענן את GLOBES_COOKIE מדפדפן מחובר.")
 
     m = re.search(r"<title>(.*?)</title>", html, re.S)
     title = re.sub(r"\s*-\s*גלובס\s*$", "", (m.group(1) if m else "").strip())

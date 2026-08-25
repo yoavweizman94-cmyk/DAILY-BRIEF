@@ -14,7 +14,7 @@
 
 **הגילוי אנונימי, הקריאה מאומתת.** רשימת התמלילים בערוץ 16118 היא
 ניווט פומבי (כותרת, תאריך, מזהה) ואינה דורשת מנוי. גוף התמליל נקרא
-רק בסשן מחובר — ראה `_globes.is_subscriber`.
+רק כשהשרת מגיש אותו פתוח — ראה `_globes.unlocked`.
 
 הרצה: ידנית בלבד (workflow_dispatch), כמו שאר הצנרת מאז שעברה
 להרצה לפי דרישה.
@@ -38,8 +38,8 @@ harden()
 import yaml  # noqa: E402
 
 from _globes import (ARTICLE, BASE, PAYWALL, SIGNED_IN, NoCookie,  # noqa: E402
-                     NotSubscriber, cookie_from_env, fetch, is_subscriber,
-                     session)
+                     NotSubscriber, cookie_from_env, fetch, session,
+                     unlocked)
 
 # ערוץ "תמלולי שיחות משקיעים" בגלובס.
 CHANNEL = BASE + "/news/home.aspx?fid=16118"
@@ -248,19 +248,39 @@ def annotate(level: str, title: str, body: str) -> None:
     print(f"::{level} title={title}::{msg}")
 
 
-def diagnose(sess, home, signed: bool) -> str:
+def cookie_report(cookie: str) -> list[str]:
+    """מה יש בעוגייה — **שמות ואורכים, לעולם לא ערכים.**
+
+    הלוגים והאנוטציות של הריפו ציבוריים, והעוגייה היא מפתח לחשבון של
+    יואב. השמות מספיקים כדי להכריע בין "הסוד לא נקלט" ל"הסוד נקלט אך
+    פג", וזו כל השאלה שהאבחון צריך לענות עליה.
+    """
+    fields = [p.strip() for p in (cookie or "").split(";") if "=" in p]
+    names = sorted({p.split("=", 1)[0].strip() for p in fields})
+    # שמות שנראים כמו הזדהות. היעדרם פירושו שהעוגייה נלקחה מדפדפן
+    # שלא היה מחובר, ולא שהיא פגה.
+    auth = [n for n in names if re.search(
+        r"auth|session|token|login|user|member|subscri|\.ASPXAUTH|sso", n, re.I)]
+    return [
+        f"עוגייה: {len(fields)} שדות, {len(cookie or '')} תווים",
+        f"  שמות: {', '.join(names) if names else 'אין'}",
+        f"  שדות שנראים כהזדהות: {auth if auth else 'אין — כנראה נלקחה מדפדפן לא מחובר'}",
+    ]
+
+
+def diagnose(sess, cookie: str) -> str:
     """מה בדיוק חזר מגלובס — **בלי לפענח שום תוכן.**
 
     האבחון מדווח אורכים, ערכי דגלים וספירות סימנים, ולא מילים. זה גם
-    מה שנחוץ כדי להכריע בין "העוגייה פגה" ל"הסימנים השתנו", וגם מה
-    שמותר להדפיס ללוג שאינו שלנו.
+    מה שנחוץ כדי להכריע בין "העוגייה פגה" ל"התוכן מוגש חסום", וגם מה
+    שמותר להדפיס ללוג ציבורי.
     """
-    L = []
-    marks = {k: home.text.count(k) for k in
-             SIGNED_IN + ("התחבר", "מינוי", "userType", "התנתקות", "פרופיל")}
+    L = cookie_report(cookie)
+
+    home = sess.get(BASE + "/", timeout=60)
     L.append(f"עמוד הבית: HTTP {home.status_code}, {len(home.text):,} תווים")
-    L.append(f"is_subscriber: {signed}")
-    L.append(f"סימנים בעמוד הבית: {marks}")
+    L.append(f"  סימני תפריט: "
+             f"{ {k: home.text.count(k) for k in SIGNED_IN + ('התחבר',)} }")
 
     try:
         rows = discover(sess)
@@ -275,19 +295,20 @@ def diagnose(sess, home, signed: bool) -> str:
         h = r.text
         pw = re.search(r"IsPaywall\s*=\s*[\"']([^\"']*)", h)
         env = re.search(r"textEnv\s*=\s*[\"']([^\"']*)", h)
+        blocks = [x for x in PAYWALL if x in h]
         L.append(f"כתבה {did}: HTTP {r.status_code}, {len(h):,} תווים")
         L.append(f"  IsPaywall={pw.group(1) if pw else 'לא נמצא'}")
         L.append(f"  textEnv: {len(env.group(1)) if env else 0:,} תווים")
-        L.append(f"  סימני חסימה: {[x for x in PAYWALL if x in h] or 'אין'}")
-        L.append(f"  סימנים בעמוד הכתבה: "
-                 f"{ {k: h.count(k) for k in SIGNED_IN + ('התחבר',)} }")
-        # **גוף גלוי = הרשאה מהשרת עצמו.** אם למנוי גלובס שולחת את
-        # הכתבה בלי הצפנה, זה סימן חד-משמעי יותר מכל מחרוזת בתפריט.
-        plain = 0
-        for c in re.findall(r'<div[^>]*class="[^"]*articleInner[^"]*"[^>]*>(.*?)</div>',
-                            h, re.S | re.I):
-            plain = max(plain, len(re.sub(r"<[^>]+>", " ", c).strip()))
-        L.append(f"  גוף גלוי ב-articleInner: {plain:,} תווים")
+        L.append(f"  סימני חסימה: {blocks or 'אין'}")
+        L.append(f"  unlocked(): {unlocked(h)}")
+        # שורת המסקנה, כדי שלא יידרש פענוח ידני של המספרים למעלה.
+        if unlocked(h):
+            L.append("מסקנה: השרת מגיש את התוכן פתוח — הסשן זכאי.")
+        elif blocks and (pw and pw.group(1) == "True"):
+            L.append("מסקנה: טביעת אצבע אנונימית מלאה. העוגייה אינה "
+                     "מזוהה מול השרת — פגה, או נלקחה מדפדפן לא מחובר.")
+        else:
+            L.append("מסקנה: תשובה חלקית — ראה את הסימנים למעלה.")
     return "\n".join(L)
 
 
@@ -348,31 +369,14 @@ def main() -> int:
         return 1
     sess = session(cookie)
 
-    # שער המנוי נבדק פעם אחת מול עמוד הבית, לפני כל משיכה של תוכן.
-    home = sess.get(BASE + "/", timeout=60)
-    signed = is_subscriber(home.text)
-
     if args.probe:
         # **מצב האבחון אינו אוכף, הוא מדווח.** שער שנועל את הריצה לפני
         # שהוא אומר מה ראה מחייב סבב נוסף בשביל כל שאלה, והלוגים כאן
         # דורשים אימות לקריאה — ולכן הדיווח יוצא כאנוטציה ולא כ-print.
-        report = diagnose(sess, home, signed)
+        report = diagnose(sess, cookie)
         annotate("warning", "אבחון גישת גלובס", report)
         print(report)
         return 0
-
-    if not signed:
-        marks = {k: home.text.count(k) for k in
-                 SIGNED_IN + ("התחבר", "מינוי", "userType")}
-        annotate("error", "הסשן אינו מחובר לגלובס",
-                 "רענן את GLOBES_COOKIE (Copy as cURL מדפדפן מחובר).\n"
-                 f"עמוד הבית: HTTP {home.status_code}, {len(home.text):,} תווים.\n"
-                 f"ספירת סימנים: {marks}\n"
-                 'אם "התחבר" הוא 0 וכל השאר 0 — גלובס שינתה את הסימנים, '
-                 "ו-SIGNED_IN ב-_globes.py צריך עדכון. הרץ mode: probe "
-                 "לאבחון מלא, הוא חינם.")
-        return 1
-    print("סשן מנוי: מאומת")
 
     rows = discover(sess)
     cov = coverage()
