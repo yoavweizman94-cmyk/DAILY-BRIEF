@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -256,10 +257,21 @@ def cookie_report(cookie: str) -> list[str]:
     """
     fields = [p.strip() for p in (cookie or "").split(";") if "=" in p]
     names = sorted({p.split("=", 1)[0].strip() for p in fields})
+
+    # **חתימה שמבדילה בין "הסוד לא עודכן" ל"עודכן ועדיין לא עובד".**
+    # שתי ריצות רצופות נכשלו על אותה עוגייה בדיוק, ובלי חתימה אי אפשר
+    # היה לדעת זאת אלא בהשוואה ידנית של רשימת שמות בת 62 איברים.
+    #
+    # נחתם התוכן המלא ולא רק שמות ואורכים: עוגיית סשן מתחדשת שומרת
+    # לרוב על אורכה, וחתימה על המבנה בלבד לא הייתה זזה בדיוק במקרה
+    # שבשבילו היא נועדה. שמונה תווים מ-SHA-256 של מחרוזת בת 4KB הם
+    # מזהה שינוי, ואינם ניתנים להיפוך לסוד.
+    sig = hashlib.sha256((cookie or "").encode()).hexdigest()[:8]
     auth = [n for n in names if re.search(
         r"auth|session|token|login|member|subscri|^gls$|^pw", n, re.I)]
     return [
-        f"עוגייה: {len(fields)} שדות, {len(cookie or '')} תווים",
+        f"עוגייה: {len(fields)} שדות, {len(cookie or '')} תווים, חתימה {sig}",
+        "  (חתימה זהה לריצה קודמת = הסוד לא הוחלף)",
         f"  שמות: {', '.join(names) if names else 'אין'}",
         f"  שדות שנראים כהזדהות: {auth or 'אין'}",
     ]
