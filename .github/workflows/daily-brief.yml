@@ -12,6 +12,12 @@ on:
     - cron: "0 15,16 * * 1,2,3,4" # 18:00 ישראל — נעילה, שני–חמישי (מסחר עד 17:14)
     - cron: "30 11,12 * * 5"      # 14:30 ישראל — נעילה בשישי (מסחר עד 13:34)
     - cron: "0 21,22 * * *"       # 00:00 ישראל — מהדורת לילה, כל יום
+  # **הפעלה בדחיפת קובץ טריגר.** שיגור workflow מרחוק דורש אסימון
+  # GitHub שאינו קיים בסביבת העבודה כאן; דחיפה כן אפשרית. הפרמטרים
+  # נקראים מהקובץ — ראה scripts/brief_args.py.
+  push:
+    paths:
+      - ".trigger/daily-brief.json"
   workflow_dispatch:
     inputs:
       edition:
@@ -69,6 +75,17 @@ jobs:
           pip install -r requirements.txt
           npm install -g @anthropic-ai/claude-code
 
+      # הפרמטרים מוכרעים במקום אחד, כי לשלושת האירועים מקורות שונים
+      # ולאירוע push אין inputs כלל.
+      - name: Resolve arguments
+        env:
+          IN_EDITION: ${{ inputs.edition }}
+          IN_REVIEWS: ${{ inputs.reviews }}
+        run: |
+          python scripts/brief_args.py > /tmp/brief.env
+          cat /tmp/brief.env >> "$GITHUB_ENV"
+          cat /tmp/brief.env
+
       # המהדורה נגזרת מביטוי ה-cron שהפעיל את הריצה, לא משעת הביצוע בפועל.
       # ב-12/08/2026 ריצת הבוקר (cron 03:45 UTC) יצאה לפועל רק ב-05:19 UTC —
       # איחור של 94 דקות מצד GitHub — ואז השעה המקומית הייתה 08:19, מחוץ
@@ -81,7 +98,7 @@ jobs:
             "45 3,4 * * *")                          ED=morning ;;
             "0 15,16 * * 1,2,3,4"|"30 11,12 * * 5")  ED=close ;;
             "0 21,22 * * *")                         ED=night ;;
-            *)                                       ED="${{ github.event.inputs.edition }}" ;;
+            *)                                       ED="$BRIEF_EDITION_IN" ;;
           esac
           echo "edition=$ED" >> "$GITHUB_OUTPUT"
           echo "מהדורה: ${ED:-לפי השעה המקומית}"
@@ -91,7 +108,7 @@ jobs:
         env:
           BRIEF_EDITION: ${{ steps.ed.outputs.edition }}
           # הרצה ידנית תמיד מפיקה מחדש; מתוזמנת מדלגת אם כבר יש ברייף טרי
-          BRIEF_FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
+          BRIEF_FORCE: ${{ env.BRIEF_FORCE_IN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS }}
           TRADINGECONOMICS_KEY: ${{ secrets.TRADINGECONOMICS_KEY }}
@@ -99,7 +116,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           # ריצה מתוזמנת מגיעה בלי inputs; בלי ברירת המחדל כאן
           # אף מהדורה לא הייתה מפיקה סקירה מאז שהתזמון הוחזר.
-          REVIEW_LIMIT: ${{ inputs.reviews || 12 }}
+          REVIEW_LIMIT: ${{ env.BRIEF_REVIEWS }}
           # Govmap חוסם את טווחי הענן של הראנרים; הסריקה עוברת דרך
           # Cloudflare Functions של האתר.
           GOVMAP_PROXY: https://app.tlvtaseview.com/api/govmap
