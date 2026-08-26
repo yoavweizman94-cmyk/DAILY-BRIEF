@@ -1,0 +1,6 @@
+{
+  "note": "דחיפה מריצה את Users Admin. מהטריגר מותרות list ו-show בלבד.",
+  "action": "list",
+  "email": "",
+  "run": 1
+}

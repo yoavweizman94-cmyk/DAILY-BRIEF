@@ -3,6 +3,13 @@ name: Users Admin
 # ניהול משתמשי השירות. הטופס באתר יודע רק ליצור חשבון ממתין, וקישור
 # האישור רק להפעיל אותו — כל השאר נעשה כאן.
 on:
+  # **הפעלה בדחיפת קובץ טריגר.** שיגור workflow מרחוק דורש אסימון
+  # GitHub שאינו קיים בסביבה כאן, ודחיפה כן אפשרית. הקובץ מחזיק את
+  # הפעולה, ובריצה מדחיפה נאכפת **רשימת פעולות קריאה בלבד** — שינוי
+  # במצב של חשבון אדם נשאר בהפעלה ידנית ומכוונת.
+  push:
+    paths:
+      - ".trigger/users-admin.json"
   workflow_dispatch:
     inputs:
       action:
@@ -44,4 +51,13 @@ jobs:
           EMAIL: ${{ inputs.email }}
           PASSWORD: ${{ inputs.password }}
           NAME: ${{ inputs.name }}
-        run: python3 scripts/users.py
+          EVENT: ${{ github.event_name }}
+        run: |
+          # GITHUB_ENV משפיע רק על שלבים הבאים, ולכן הערכים נטענים
+          # לסביבה של השלב הזה עצמו.
+          if [ "$EVENT" != "workflow_dispatch" ]; then
+            python3 scripts/users_args.py > /tmp/users.env
+            set -a; . /tmp/users.env; set +a
+            echo "מטריגר: ACTION=$ACTION EMAIL=${EMAIL:-—}"
+          fi
+          python3 scripts/users.py
