@@ -124,7 +124,14 @@ jobs:
         run: |
           bash run_daily.sh
           # site/dist נוצר רק כשהופק ברייף; ריצת "skip" יוצאת לפני כן.
-          if [ -d site/dist ]; then echo "produced=yes" >> "$GITHUB_OUTPUT"; fi
+          if [ -d site/dist ]; then
+            echo "produced=yes" >> "$GITHUB_OUTPUT"
+          else
+            # **ריצה ירוקה בלי ברייף היא הכשל המסוכן כאן.** היא נראית
+            # מוצלחת, לא פורסת דבר, ואיש אינו מבחין שהאתר לא התעדכן.
+            echo "::warning title=הריצה לא הפיקה ברייף::לא נוצר site/dist, ולכן לא נשמר תוכן ולא נפרס אתר. הסיבה באנוטציה שמעל."
+            echo "produced=no" >> "$GITHUB_OUTPUT"
+          fi
 
       # **עבודה ששולם עליה אינה נזרקת.** הסקירות נכתבות לפני הפקת הברייף,
       # ואם הברייף נופל — נגמר קרדיט, שגיאת מודל, timeout — הן היו הולכות

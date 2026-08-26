@@ -25,6 +25,7 @@ edition_from_hour() {
 EDITION="${BRIEF_EDITION:-$(edition_from_hour "$(date +%H)")}"
 if [ "$EDITION" = "skip" ]; then
   echo "השעה $(date +%H:%M) אינה שעת מהדורה — יוצאים בלי להפיק ברייף."
+  echo "::warning title=לא הופק ברייף::השעה $(date +%H:%M) אינה בחלון של אף מהדורה. אם ההרצה הייתה מכוונת, ציין edition בקובץ הטריגר."
   exit 0
 fi
 
@@ -52,8 +53,10 @@ BRIEF="output/brief_${DATE}${SUFFIX}.md"
 # המחסומים למטה), ולכן הפעימה השנייה של אותה מהדורה תפיק אותו.
 if [ -z "${BRIEF_FORCE:-}" ] && [ -s "$BRIEF" ]; then
   echo "$BRIEF כבר קיים — הפעימה הכפולה של מהדורת $ED_HE מדולגת."
+  echo "::warning title=לא הופק ברייף::מהדורת $ED_HE של $DATE כבר קיימת ו-BRIEF_FORCE כבוי. זו ההתנהגות הנכונה לפעימה הכפולה של ה-cron, אבל בהרצה מכוונת היא סימן ש-BRIEF_FORCE לא הגיע."
   exit 0
 fi
+echo "מפיק: $BRIEF | מהדורה $ED_HE | FORCE=${BRIEF_FORCE:-כבוי}"
 
 # **מקור שנכשל חייב להישמע.** הכישלון נרשם ללוג בלבד, והלוגים של ריצה
 # דורשים אימות כדי להיקרא — כלומר ריצה ירוקה עם otc שנפל נראתה תקינה

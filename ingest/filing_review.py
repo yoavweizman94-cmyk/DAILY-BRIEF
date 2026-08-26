@@ -244,6 +244,15 @@ def main() -> int:
             # לגמרי. ההודעה של Anthropic מדויקת, ולכן היא מודפסת כלשונה.
             msg = getattr(e, "message", "") or str(e)
             print(f"    שגיאת API {e.status_code}: {msg[:300]}", file=sys.stderr)
+            # **יתרה שאזלה אינה שגיאה של דוח בודד.** בלי העצירה כאן
+            # הלולאה ממשיכה על כל היתר ומקבלת את אותה תשובה — נמדד
+            # בתמלולים, שבזבזו כך ארבעה-עשר ניסיונות. מה שכבר נכתב
+            # נשמר, והריצה הבאה תמשיך מהמקום שנעצר.
+            if "credit balance" in msg.lower() or "insufficient" in msg.lower():
+                print(f"::error title=יתרת Anthropic אזלה::הריצה נעצרה אחרי "
+                      f"{done} סקירות. טעינה: console.anthropic.com/settings/billing")
+                failed += 1
+                break
             failed += 1
             continue
         except Exception as e:  # noqa: BLE001
