@@ -83,6 +83,13 @@ def put_user(email, user):
     return True
 
 
+def mask_email(e: str) -> str:
+    """כתובת בצורה שמאפשרת זיהוי בידי מי שמכיר אותה, ולא בידי אחר."""
+    local, _, dom = (e or "").partition("@")
+    keep = local[:2] if len(local) > 3 else local[:1]
+    return f"{keep}{'*' * max(1, len(local) - len(keep))}@{dom}"
+
+
 def redact(u):
     return {k: v for k, v in u.items() if k not in ("hash", "salt")}
 
@@ -100,10 +107,23 @@ def main():
         keys = [k["name"] for k in json.loads(body).get("result", [])
                 if k["name"].startswith("user:")]
         print(f"משתמשים: {len(keys)}")
+        by_status = {}
+        masked = []
         for k in sorted(keys):
             u = get_user(k[5:]) or {}
-            print(f"  {u.get('status','?'):8s} {k[5:]:38s} "
+            st = u.get("status", "?")
+            by_status[st] = by_status.get(st, 0) + 1
+            print(f"  {st:8s} {k[5:]:38s} "
                   f"{u.get('name','')[:22]:24s} נכנס לאחרונה: {u.get('lastLogin') or '—'}")
+            masked.append(f"{st}:{mask_email(k[5:])}")
+
+        # **ספירות ומזהים ממוסכים בלבד לאנוטציה.** הלוג של הריצה דורש
+        # אימות ולכן הוא פרטי, אבל אנוטציות בריפו ציבורי גלויות לכל —
+        # ורשימת המשתמשים היא כתובות של אנשים אמיתיים. המיסוך מאפשר
+        # לאבחן "האם ההרשמה נקלטה" בלי לפרסם את הכתובת.
+        summary = " · ".join(f"{k}: {v}" for k, v in sorted(by_status.items()))
+        print(f"::notice title=מצב המשתמשים::סה\"כ {len(keys)} — "
+              f"{summary or 'אין'}%0A" + "%0A".join(masked))
         return 0
 
     if not email:

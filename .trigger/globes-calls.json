@@ -1,9 +1,9 @@
 {
   "note": "דחיפה של הקובץ הזה מריצה את Globes Calls. ראה scripts/globes_args.py.",
   "mode": "run",
-  "limit": 25,
+  "limit": 70,
   "all": true,
   "redo": false,
-  "run": 3,
-  "why": "כל התמלילים בערוץ, לא רק חברות כיסוי — החלטת יואב 25/08/2026"
+  "run": 4,
+  "why": "הקרדיט נטען מחדש; השלמת כל הערוץ"
 }

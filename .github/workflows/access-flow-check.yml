@@ -13,6 +13,11 @@ name: Access Flow Check
 # לזיוף. האחרון הוא הבדיקה החשובה — קישור אישור שאפשר להמציא פירושו
 # שכל אחד מכניס את עצמו לאתר.
 on:
+  # אין cron בכוונה — הבדיקה שולחת מייל אמיתי. דחיפת קובץ הטריגר
+  # מפעילה אותה כשצריך לאבחן, בלי לדרוש אסימון GitHub.
+  push:
+    paths:
+      - ".trigger/access-check.json"
   workflow_dispatch: {}
 
 permissions:
