@@ -17,6 +17,13 @@
   <p class="auth-note"><a href="/api/logout">יציאה מהחשבון</a></p>
 </section>
 
+<!-- נטען רק לבעלים; לכל שאר המשתמשים הנתיב מחזיר 403 והסעיף נשאר מוסתר. -->
+<section class="auth pend" id="pend" hidden>
+  <h2>בקשות גישה ממתינות</h2>
+  <p class="auth-sub" id="pendsub">טוען…</p>
+  <div id="pendlist"></div>
+</section>
+
 <script>
 (function () {
   "use strict";
@@ -30,6 +37,48 @@
       ? "מחובר כ-" + d.email
       : "לא מחובר.";
   }).catch(function () { who.textContent = ""; });
+
+  // **הרשימה היא המקור, המייל הוא רק התראה עליו.** ערוץ יחיד שנכשל
+  // בשקט אינו ערוץ; ב-26/08/2026 אדם נרשם ולא הגיעה הודעה, ולברר זאת
+  // דרש הרצת workflow וקריאת לוג.
+  var pend = document.getElementById("pend"),
+      psub = document.getElementById("pendsub"),
+      plist = document.getElementById("pendlist");
+
+  function esc(t) {
+    return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  fetch("/api/pending").then(function (r) {
+    // 403 הוא התשובה למשתמש רגיל, ולא תקלה — הסעיף פשוט אינו שלו.
+    if (r.status === 401 || r.status === 403) return null;
+    return r.json();
+  }).then(function (d) {
+    if (!d) return;
+    pend.hidden = false;
+    if (!d.pending || !d.pending.length) {
+      psub.textContent = "אין בקשות ממתינות.";
+      return;
+    }
+    psub.textContent = d.count + " ממתינות לאישור.";
+    plist.innerHTML = d.pending.map(function (u) {
+      var head = '<div class="pend-head"><b>' + esc(u.name || "ללא שם") + "</b>" +
+                 '<span class="pend-mail">' + esc(u.email) + "</span>" +
+                 (u.org ? '<span class="pend-org">' + esc(u.org) + "</span>" : "") +
+                 (u.test ? '<span class="pend-test">חשבון בדיקה</span>' : "") + "</div>";
+      var why = u.why ? '<p class="pend-why">' + esc(u.why) + "</p>" : "";
+      var when = u.created
+        ? '<p class="pend-when">נרשם ' + esc(String(u.created).slice(0, 16).replace("T", " ")) + "</p>"
+        : "";
+      // חשבון הבדיקה חסום להפעלה בצד השרת ממילא, ולכן אין לו כפתור.
+      var act = u.approve
+        ? '<p><a class="pend-go" href="' + esc(u.approve) + '">אישור והפעלה</a></p>'
+        : '<p class="pend-when">אין קישור אישור לחשבון הזה.</p>';
+      return '<div class="pend-item">' + head + why + when + act + "</div>";
+    }).join("");
+  }).catch(function () { /* הסעיף נשאר מוסתר */ });
 
   f.addEventListener("submit", function (e) {
     e.preventDefault();
