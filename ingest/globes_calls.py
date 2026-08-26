@@ -371,6 +371,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=8,
                     help="כמה תמלילים חדשים לסכם בריצה (עלות API)")
+    ap.add_argument("--since", default="",
+                    help="לסכם רק תמלילים מתאריך זה ואילך (YYYY-MM-DD)")
     ap.add_argument("--redo", action="store_true",
                     help="לסכם מחדש גם תמלילים שכבר סוכמו (למשל אחרי "
                          "תיקון בפענוח שהפך סיכומים קודמים לחסרי ערך)")
@@ -443,6 +445,14 @@ def main() -> int:
             if not r["company"]:
                 r["company"], r["match"] = r["globes_name"], "none"
     mine = [r for r in rows if r["company"]]
+
+    # **חלון תאריכים.** הערוץ מחזיק כשבעים תמלילים, ולעיתים רוצים רק
+    # את מה שפורסם בימים האחרונים. הסינון כאן ולא בגילוי, כדי שספירת
+    # "מה יש בערוץ" תישאר נכונה בדיווח.
+    if args.since:
+        before = len(mine)
+        mine = [r for r in mine if (r.get("date") or "") >= args.since]
+        print(f"סינון מ-{args.since}: {len(mine)} מתוך {before}")
     for r in mine:
         if r["match"] == "prefix":
             print(f"::notice::התאמת תחילית: גלובס {r['globes_name']!r} "

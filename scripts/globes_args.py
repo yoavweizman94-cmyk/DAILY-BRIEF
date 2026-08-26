@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -34,6 +35,7 @@ def main() -> int:
         limit = (os.environ.get("IN_LIMIT") or "").strip() or "8"
         want_all = truthy(os.environ.get("IN_ALL"))
         redo = truthy(os.environ.get("IN_REDO"))
+        since = (os.environ.get("IN_SINCE") or "").strip()
         src = "workflow_dispatch"
     else:
         cfg = {}
@@ -48,6 +50,7 @@ def main() -> int:
         limit = str(cfg.get("limit") or 8)
         want_all = truthy(cfg.get("all"))
         redo = truthy(cfg.get("redo"))
+        since = str(cfg.get("since") or "").strip()
         src = f"{event or 'unknown'} (.trigger)"
 
         # **redo לעולם אינו נשמע בריצה מתוזמנת.** הוא נועד לפעולה חד-פעמית
@@ -69,6 +72,12 @@ def main() -> int:
         flags.append("--all")
     if redo:
         flags.append("--redo")
+    if since:
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", since):
+            flags += ["--since", since]
+        else:
+            print(f"::warning::since={since!r} אינו בתבנית YYYY-MM-DD — מתעלמים",
+                  file=sys.stderr)
 
     print(f"CALL_LIMIT={limit}")
     print(f"CALL_FLAGS={' '.join(flags)}")

@@ -47,6 +47,10 @@ on:
         type: boolean
         required: false
         default: false
+      since:
+        description: "רק תמלילים מתאריך זה ואילך (YYYY-MM-DD, ריק = הכל)"
+        required: false
+        default: ""
       article:
         description: "אבחון HTML של כתבה בודדת: מזהה did (אופציונלי)"
         required: false
@@ -108,6 +112,7 @@ jobs:
           IN_LIMIT: ${{ inputs.limit }}
           IN_ALL: ${{ inputs.all }}
           IN_REDO: ${{ inputs.redo }}
+          IN_SINCE: ${{ inputs.since }}
         run: python scripts/globes_args.py | tee -a "$GITHUB_ENV"
 
       - name: Summarize transcripts
