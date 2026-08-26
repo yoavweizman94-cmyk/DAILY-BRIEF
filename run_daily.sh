@@ -55,12 +55,17 @@ if [ -z "${BRIEF_FORCE:-}" ] && [ -s "$BRIEF" ]; then
   exit 0
 fi
 
+# **מקור שנכשל חייב להישמע.** הכישלון נרשם ללוג בלבד, והלוגים של ריצה
+# דורשים אימות כדי להיקרא — כלומר ריצה ירוקה עם otc שנפל נראתה תקינה
+# לחלוטין, והנתונים באתר התיישנו בשקט. אנוטציה צפה לראש עמוד הריצה.
 run_source() {
   local name="$1"; shift
   if "$@"; then
     echo "[$name] OK"
   else
-    echo "[$name] FAILED (exit $?)"
+    local rc=$?
+    echo "[$name] FAILED (exit $rc)"
+    echo "::warning title=מקור נכשל: $name::קוד יציאה $rc. הנתונים של $name לא התעדכנו בריצה הזו."
     FAILED+=("$name")
   fi
 }
@@ -96,6 +101,7 @@ fi
 # לאותם קבצים היה מוסיף מרוץ בלי להוסיף טריות.
 if [ ${#FAILED[@]} -gt 0 ]; then
   echo "מקורות שנכשלו: ${FAILED[*]}"
+  echo "::error title=${#FAILED[@]} מקורות נכשלו::${FAILED[*]} — הברייף נכתב בלעדיהם."
 fi
 
 # ה-clone של remy-mcp משמש רק לטבלת קודי היישוב שבו (data/kod_yeshuv.py),

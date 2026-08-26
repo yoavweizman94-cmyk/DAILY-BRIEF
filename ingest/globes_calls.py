@@ -26,6 +26,7 @@ import hashlib
 import json
 import re
 import sys
+import time
 from datetime import date, datetime
 from pathlib import Path
 
@@ -315,19 +316,63 @@ def diagnose(sess, cookie: str) -> str:
     return "\n".join(L)
 
 
-def summarize(text: str, meta: dict) -> str:
+class OutOfCredit(Exception):
+    """היתרה אזלה. אין טעם להמשיך לתמליל הבא."""
+
+
+# שגיאות שחולפות מעצמן: עומס בצד המודל, מגבלת קצב, ותקלות שער זמניות.
+# **בלעדי הניסיון החוזר אבדו 46 תמלילים בריצה אחת** — כולם על
+# overloaded_error, שהיא בהגדרה זמנית.
+TRANSIENT = ("overloaded", "rate_limit", "429", "500", "502", "503", "529",
+             "timeout", "connection", "temporarily")
+
+
+def transient(err: Exception) -> bool:
+    t = f"{type(err).__name__} {err}".lower()
+    if "credit balance" in t or "insufficient" in t:
+        return False
+    return any(k in t for k in TRANSIENT)
+
+
+def summarize(text: str, meta: dict, tries: int = 4) -> str:
+    """סיכום עם ניסיון חוזר על שגיאות חולפות.
+
+    **היתרה אינה שגיאה חולפת.** כשהיא אזלה, הריצה מפסיקה מיד במקום
+    לנסות עוד חמישים תמלילים ולקבל את אותה תשובה — נמדד בריצה #18,
+    שבזבזה ארבע-עשרה ניסיונות אחרי שכבר היה ברור שאין כסף.
+    """
     from anthropic import Anthropic
+
     head = (f"חברה: {meta['company']}\nתקופה: {meta['period']}\n"
             f"תאריך פרסום התמליל: {meta['date']}\nמקור: גלובס\n\n"
             "להלן התמליל. כתוב את הסיכום.\n\n")
-    with Anthropic().messages.stream(
-            model=MODEL,
-            max_tokens=32000,
-            system=SYSTEM,
-            thinking={"type": "adaptive"},
-            output_config={"effort": "high"},
-            messages=[{"role": "user", "content": head + text}]) as st:
-        msg = st.get_final_message()
+    client = Anthropic()
+    delay = 20
+    last = None
+    for attempt in range(1, tries + 1):
+        try:
+            with client.messages.stream(
+                    model=MODEL,
+                    max_tokens=32000,
+                    system=SYSTEM,
+                    thinking={"type": "adaptive"},
+                    output_config={"effort": "high"},
+                    messages=[{"role": "user", "content": head + text}]) as st:
+                msg = st.get_final_message()
+            break
+        except Exception as e:
+            last = e
+            if "credit balance" in str(e).lower() or "insufficient" in str(e).lower():
+                raise OutOfCredit(str(e)[:200]) from e
+            if not transient(e) or attempt == tries:
+                raise
+            print(f"    ניסיון {attempt}/{tries} נכשל ({type(e).__name__}) — "
+                  f"המתנה {delay}ש", flush=True)
+            time.sleep(delay)
+            delay *= 2
+    else:
+        raise last or RuntimeError("הסיכום נכשל")
+
     if msg.stop_reason == "refusal":
         raise RuntimeError("המודל סירב לסכם את התמליל")
     md = "".join(b.text for b in msg.content if b.type == "text").strip()
@@ -513,6 +558,19 @@ def main() -> int:
             annotate("error", "גישת גלובס נכשלה",
                      f"{e}\n\n{diagnose(sess, cookie)}")
             return 1
+        except OutOfCredit as e:
+            # **היתרה אזלה — עוצרים מיד.** ריצה #18 המשיכה לנסות
+            # ארבעה-עשר תמלילים אחרי שכבר היה ברור שאין כסף, וכל אחד
+            # מהם קיבל את אותה תשובה. מה שכבר סוכם נשמר בשלב הבא.
+            annotate("error", "יתרת Anthropic אזלה",
+                     "\n".join([
+                         f"הריצה נעצרה אחרי {ok} סיכומים.",
+                         str(e),
+                         "טעינה: console.anthropic.com/settings/billing",
+                         "הריצה הבאה תמשיך מהמקום שבו נעצרה — "
+                         "הדה-דופ מונע תשלום כפול.",
+                     ]))
+            break
         except Garbled as e:
             # פענוח שנכשל אינו מגיע למודל. תשלום על סיכום של ג'יבריש
             # כבר קרה פעמיים, וזה בדיוק מה שהשער הזה מונע.
