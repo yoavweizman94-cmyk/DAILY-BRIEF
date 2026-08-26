@@ -1261,3 +1261,11 @@ li.revbox {
   font-size: 0.83rem; color: var(--muted); cursor: pointer; user-select: none;
 }
 .tr-cov input { accent-color: var(--accent); }
+
+/* דרישה שנאמרת מראש. הטופס אכף אורך סיסמה מינימלי דרך minlength בלבד,
+   כלומר הדפדפן חסם שליחה עם בועית מערכת שקל לפספס — ונרשם שלא הבין
+   פשוט עזב. הכלל נאמר עכשיו ליד השדה, לפני ההקלדה. */
+label .hint {
+  font-weight: 400; font-size: 0.74rem; color: var(--faint);
+  margin-inline-start: 0.4rem;
+}

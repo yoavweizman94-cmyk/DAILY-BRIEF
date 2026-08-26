@@ -28,6 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
+      # **בלי זה אין scripts/users.py בסביבת העבודה**, והניקוי שבסוף
+      # הבדיקה נכשל בכל ריצה. הוא נכשל בשקט (`|| true`), ולכן חשבונות
+      # הבדיקה נערמו ברשימת המשתמשים — בדיוק מה שהוא נועד למנוע.
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -46,7 +50,11 @@ jobs:
           # ברשימת המשתמשים ומטשטשים מי באמת ביקש גישה.
           cleanup() {
             for e in access-check@tlvtaseview.com short-pw@tlvtaseview.com; do
-              ACTION=delete EMAIL="$e" python3 scripts/users.py >/dev/null 2>&1 || true
+              # ניקוי שנכשל בשקט הוא בדיוק מה שהשאיר חשבון בדיקה תקוע
+              # ברשימה וגרם לחשוב שמישהו אמיתי ממתין לאישור.
+              if ! ACTION=delete EMAIL="$e" python3 scripts/users.py >/dev/null 2>&1; then
+                echo "::warning::ניקוי חשבון הבדיקה $e נכשל — הוא נשאר ברשימת המשתמשים"
+              fi
             done
           }
           trap cleanup EXIT
