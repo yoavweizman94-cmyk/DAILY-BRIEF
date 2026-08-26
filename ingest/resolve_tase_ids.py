@@ -85,7 +85,11 @@ def main() -> int:
         if comp.get("listing") != "TASE":
             skipped += 1
             continue
-        if comp.get("tase_id") and not args.force:
+        # **מדלגים רק כששני המזהים קיימים.** מספר הנייר מגיע מרשימת
+        # הכיסוי של יואב ולכן הוא קיים לכולן, אבל maya_company_id אינו
+        # נגזר ממנו — נמדד ש-44 מתוך 73 אינם tase_id//1000 — ולכן תנאי
+        # שבדק tase_id בלבד היה מדלג על כל הרשימה ולא פותר דבר.
+        if comp.get("tase_id") and comp.get("maya_company_id") and not args.force:
             skipped += 1
             continue
 
@@ -100,19 +104,43 @@ def main() -> int:
         if len(name.split()) > 1 and first not in queries:
             queries.append(first)
 
-        candidates, used_q = [], None
+        # **שאילתה שמחזירה תוצאות עמומות אינה סוף הדרך.** הגרסה הקודמת
+        # עצרה בראשונה שהחזירה משהו, ולכן "מר" — שמחזיר שמונה חברות
+        # שאף אחת מהן אינה הנכונה — חסם את השם החלופי "ח.מר תעשיות"
+        # שכן פותר אותה. עכשיו ממשיכים עד להכרעה.
+        candidates, used_q, chosen, why = [], None, None, "לא נמצאו תוצאות"
         for q in queries:
             try:
-                candidates = maya.autocomplete(q)
+                cands = maya.autocomplete(q)
             except Exception as ex:
                 errors.append(f"{name}: שגיאת API בחיפוש '{q}': {ex}")
-                candidates = []
+                cands = []
                 break
-            if candidates:
-                used_q = q
+            if not cands:
+                continue
+            candidates, used_q = cands, q
+            chosen, why = pick(cands, queries)
+            if chosen is not None:
                 break
 
-        chosen, why = pick(candidates, queries)
+        # **מספר הנייר מכריע עמימות.** כשהשם מחזיר כמה מועמדים, ההתאמה
+        # לפי טקסט היא ניחוש — אבל מספר הנייר שבקובץ הוא עובדה. שליפת
+        # ה-details של כל מועמד והשוואה מול mainSecurityId הופכת את
+        # ההכרעה לדטרמיניסטית: או שיש בדיוק אחד שתואם, או שאין אף אחד.
+        if chosen is None and comp.get("tase_id") and candidates:
+            want = int(comp["tase_id"])
+            hits = []
+            for cand in candidates:
+                try:
+                    d2 = maya.company_details(cand["key"])
+                except Exception:
+                    continue
+                if d2.get("mainSecurityId") and int(d2["mainSecurityId"]) == want:
+                    hits.append(cand)
+            if len(hits) == 1:
+                chosen = hits[0]
+                why = f"הוכרע לפי מספר נייר {want}"
+
         if chosen is None:
             errors.append(f"{name}: {why} (חיפושים: {', '.join(queries)})")
             continue
@@ -131,6 +159,16 @@ def main() -> int:
             errors.append(f"{name}: אין mainSecurityId ב-details (id={chosen['key']})")
             continue
 
+        # **מספר הנייר שבקובץ הוא הסמכות, ומאיה מאמתת אותו.** רשימת
+        # הכיסוי היא קלט אנושי מכוון; אם מאיה מחזירה נייר אחר, פירושו
+        # שההתאמה לפי שם תפסה חברה אחרת — וזו שגיאה שצריך לראות, לא
+        # ערך שצריך לדרוס בשקט. maya_company_id מהתאמה כזו אינו נכתב.
+        have = comp.get("tase_id")
+        if have and int(sec_id) != int(have):
+            errors.append(
+                f"{name}: מאיה מחזירה נייר {sec_id} ({candidate_names(chosen)[0]}) "
+                f"אך בקובץ {have} — ההתאמה לפי שם כנראה תפסה חברה אחרת")
+            continue
         comp["tase_id"] = int(sec_id)
         comp["maya_company_id"] = int(chosen["key"])
         resolved += 1

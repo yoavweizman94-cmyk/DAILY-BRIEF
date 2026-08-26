@@ -1,242 +1,3181 @@
 # companies.yaml — TLV TASE View
-# גרסה 0.2 · 2026-08-03 · מקור: רשימה ידנית מיואב (94 שמות → 82 פעילות, 12 מוחרגות)
+# גרסה 0.3 · 2026-08-26 · מקור: רשימת הכיסוי המעודכנת של יואב (400 חברות)
 #
 # עקרונות:
-# 1. דרייברים מוגדרים ברמת סקטור (sector_profiles) — לחברה מוסיפים רק drivers_extra ספציפיים.
-# 2. tase_id נשאר null בכוונה — ימולא ע"י סקריפט resolver מול TASE/מאיה. לא מנחשים מספרי נייר.
-#    ה-resolver הוא גם בקרת האיכות: שם שלא נמצא ב-TASE = שגיאה שמדווחת, לא מתעלמים.
-# 3. aliases — שמות חלופיים בעברית/אנגלית לצורך התאמת חדשות (news matching).
-# 4. generic_name: true — שם שהוא גם מילה עברית רגילה. התאמה רק עם גבולות מילה ובהקשר עסקי.
+# 1. דרייברים מוגדרים ברמת סקטור (sector_profiles). הפרופיל אינו תווית — הוא
+#    קובע במה החברה תלויה, וממנו נגזרים האייטמים העקיפים: ידיעה על מחיר חומר
+#    גלם או מהלך רגולטורי שאינם מזכירים אף חברה בשם.
+# 2. tase_id מגיע מהרשימה של יואב והוא הסמכות. maya_company_id **אינו** נגזר
+#    ממנו — נמדד ש-44 מתוך 73 אינם tase_id//1000 — ולכן הוא נפתר מול מאיה
+#    ע"י ingest/resolve_tase_ids.py. null פירושו טרם נפתר, לא 'אין'.
+# 3. tase_sector הוא הסיווג הרשמי של הבורסה, נשמר לצד הפרופיל הפנימי כדי
+#    שאפשר יהיה להצליב מול מקורות חיצוניים.
+# 4. generic_name: true — שם שהוא גם מילה עברית רגילה או מונח שאול. התאמה
+#    רק עם גבולות מילה ובהקשר עסקי מובהק.
+# 5. drivers_catalog מכסה את הדרייברים של **הפרופילים**, שהם משותפים לסקטור
+#    ולכל אחד מהם מקור נתונים. drivers_extra ברמת חברה הוא חופשי בכוונה:
+#    אלה תלויות ספציפיות (למשל gear_components לעשות) שאין להן מקור נפרד,
+#    ורישום שלהן בקטלוג היה ממציא להן "מקור" שאינו קיים.
 
 meta:
-  version: "0.2"
-  updated: "2026-08-03"
-  companies_count: 82
-  excluded_count: 12
+  version: '0.3'
+  updated: '2026-08-26'
+  companies_count: 400
+  excluded_count: 0
   scope_note: הסוכן מכסה את הרשימה הזו בלבד — לא את כל הבורסה
-
-# ---------------------------------------------------------------------------
-# קטלוג דרייברים מרכזיים → מקור נתונים
-# ---------------------------------------------------------------------------
 drivers_catalog:
-  boi_rate: {desc: ריבית בנק ישראל והצפי, source: BOI}
-  mortgage_volumes: {desc: נטילות משכנתאות חודשיות, source: BOI}
-  cbs_home_price_index: {desc: מדד מחירי דירות, source: skill israeli-statistics}
-  cbs_building_starts: {desc: התחלות וגמר בנייה, source: skill israeli-statistics}
-  building_inputs_index: {desc: מדד תשומות הבנייה, source: skill israeli-statistics}
-  cpi_il: {desc: מדד המחירים לצרכן + הצמדות, source: skill israeli-statistics}
-  rmi_tenders: {desc: מכרזי קרקע רמ"י, source: skill israeli-land-tenders}
-  fx_usd_ils: {desc: 'שער יציג דולר/שקל', source: BOI API}
-  fx_eur_ils: {desc: 'שער יציג אירו/שקל', source: BOI API}
-  crude_oil: {desc: 'ברנט/WTI → נגזר לפולימרים ולוגיסטיקה', source: yfinance BZ=F CL=F}
-  polymers: {desc: 'מחירי PE/PP/PVC/פוליקרבונט (פרוקסי: נפט + מקורות ענפיים)', source: markets_pull}
-  aluminum_lme: {desc: אלומיניום LME, source: yfinance ALI=F}
-  steel: {desc: פלדה/ברזל בנייה, source: markets_pull}
-  soft_commodities: {desc: 'חיטה/תירס/סויה/סוכר/קקאו/חלב', source: yfinance}
-  shipping_freight: {desc: מחירי הובלה ימית ומכולות, source: markets_pull}
-  us10y: {desc: תשואת אג"ח ארה"ב 10ש, source: yfinance ^TNX}
-  il_gov_yields: {desc: תשואות ממשלתי שקלי/צמוד, source: markets_pull}
-  nasdaq_sentiment: {desc: מדדי טק ארה"ב, source: yfinance}
-  construction_labor: {desc: 'זמינות כוח אדם בענף הבנייה (עובדים זרים/פלסטינים)', source: news}
-  planning_policy: {desc: 'רגולציית תכנון — ותמ"ל, שבס, היטלים', source: news + maya}
-  defense_budgets: {desc: תקציבי ביטחון והזמנות משהב"ט, source: news + maya}
-
-# ---------------------------------------------------------------------------
-# פרופילי סקטור
-# ---------------------------------------------------------------------------
+  boi_rate:
+    desc: ריבית בנק ישראל והצפי
+    source: BOI
+  mortgage_volumes:
+    desc: נטילות משכנתאות חודשיות
+    source: BOI
+  cbs_home_price_index:
+    desc: מדד מחירי דירות
+    source: skill israeli-statistics
+  cbs_building_starts:
+    desc: התחלות וגמר בנייה
+    source: skill israeli-statistics
+  building_inputs_index:
+    desc: מדד תשומות הבנייה
+    source: skill israeli-statistics
+  cpi_il:
+    desc: מדד המחירים לצרכן + הצמדות
+    source: skill israeli-statistics
+  rmi_tenders:
+    desc: מכרזי קרקע רמ"י
+    source: skill israeli-land-tenders
+  fx_usd_ils:
+    desc: שער יציג דולר/שקל
+    source: BOI API
+  fx_eur_ils:
+    desc: שער יציג אירו/שקל
+    source: BOI API
+  crude_oil:
+    desc: ברנט/WTI → נגזר לפולימרים ולוגיסטיקה
+    source: yfinance BZ=F CL=F
+  polymers:
+    desc: 'מחירי PE/PP/PVC/פוליקרבונט (פרוקסי: נפט + מקורות ענפיים)'
+    source: markets_pull
+  aluminum_lme:
+    desc: אלומיניום LME
+    source: yfinance ALI=F
+  steel:
+    desc: פלדה/ברזל בנייה
+    source: markets_pull
+  soft_commodities:
+    desc: חיטה/תירס/סויה/סוכר/קקאו/חלב
+    source: yfinance
+  shipping_freight:
+    desc: מחירי הובלה ימית ומכולות
+    source: markets_pull
+  us10y:
+    desc: תשואת אג"ח ארה"ב 10ש
+    source: yfinance ^TNX
+  il_gov_yields:
+    desc: תשואות ממשלתי שקלי/צמוד
+    source: markets_pull
+  nasdaq_sentiment:
+    desc: מדדי טק ארה"ב
+    source: yfinance
+  construction_labor:
+    desc: זמינות כוח אדם בענף הבנייה (עובדים זרים/פלסטינים)
+    source: news
+  planning_policy:
+    desc: רגולציית תכנון — ותמ"ל, שבס, היטלים
+    source: news + maya
+  defense_budgets:
+    desc: תקציבי ביטחון והזמנות משהב"ט
+    source: news + maya
+  cap_rates:
+    desc: שיעורי היוון בנכסים מניבים
+    source: דוחות + חדשות
+  office_retail_demand:
+    desc: ביקוש למשרדים ולמסחר, תפוסות
+    source: חדשות + דוחות
+  rental_market_il:
+    desc: שכר דירה ומדד מחירי השכירות
+    source: skill israeli-statistics
+  reit_regulation:
+    desc: רגולציית קרנות ריט וחלוקת רווחים
+    source: רשות ניירות ערך
+  renewal_regulation:
+    desc: רגולציית התחדשות עירונית, תמא ופינוי-בינוי
+    source: חדשות + רמי
+  municipal_planning:
+    desc: ועדות תכנון מקומיות ואישורי היתרים
+    source: חדשות
+  renovation_demand:
+    desc: ביקוש לשיפוצים ולמוצרי גמר
+    source: חדשות ענפיות
+  infra_tenders:
+    desc: מכרזי תשתיות ותחבורה
+    source: חדשות + מאיה
+  gov_infra_budget:
+    desc: תקציב המדינה לתשתיות
+    source: חדשות פיסקליות
+  local_re_markets:
+    desc: שווקי נדלן זרים שבהם פועלת החברה
+    source: חדשות בינלאומיות
+  nav_discount:
+    desc: דיסקאונט מול שווי נכסי נקי בחברות אחזקה
+    source: דוחות
+  credit_spreads:
+    desc: מרווחי אשראי בשוק הקונצרני
+    source: TASE + חדשות
+  ecb_fed_policy:
+    desc: מדיניות הריבית של פד ו-ECB
+    source: חדשות מאקרו
+  polypropylene:
+    desc: מחיר פוליפרופילן וחומרי גלם לאל-ארוג
+    source: חדשות סחורות
+  hygiene_demand:
+    desc: ביקוש למוצרי היגיינה חד-פעמיים
+    source: חדשות ענפיות
+  china_competition:
+    desc: תחרות מיצרנים סינים ומכסי מגן
+    source: חדשות ענפיות
+  global_industrial_demand:
+    desc: ביקוש תעשייתי גלובלי
+    source: חדשות מאקרו
+  global_auto_production:
+    desc: ייצור רכב עולמי
+    source: חדשות ענפיות
+  ev_transition:
+    desc: מעבר לרכב חשמלי וביקוש רכיבי דלק
+    source: חדשות ענפיות
+  food_regulation_il:
+    desc: רגולציית מזון, פיקוח מחירים ויבוא
+    source: חדשות + משרד הבריאות
+  senior_housing_regulation:
+    desc: רגולציית דיור מוגן ופיקדונות
+    source: חדשות
+  sector_specific_news:
+    desc: חדשות ענפיות ללא דרייבר ייעודי
+    source: rss
+  credit_growth:
+    desc: צמיחת אשראי ואיכות תיק
+    source: BOI + דוחות
+  net_interest_margin:
+    desc: מרווח ריבית ורגישות לריבית בנק ישראל
+    source: BOI + דוחות
+  regulatory_capital:
+    desc: דרישות הון ורגולציית בנק ישראל
+    source: BOI
+  insurance_reserves:
+    desc: עתודות, ריבית היוון ורווחי השקעות
+    source: רשות שוק ההון
+  tase_volumes:
+    desc: מחזורי מסחר ודמי ניהול
+    source: TASE
+  electricity_tariff:
+    desc: תעריף החשמל והחלטות רשות החשמל
+    source: רשות החשמל
+  natgas_prices:
+    desc: מחירי גז טבעי וחוזי אספקה
+    source: חדשות + דוחות
+  solar_capex:
+    desc: עלות הקמה סולארית ומכרזי אגירה
+    source: חדשות + רשות החשמל
+  semis_cycle:
+    desc: מחזור השבבים והשקעות פאבים
+    source: חדשות ענפיות
+  it_budgets:
+    desc: תקציבי IT ותמחור SaaS
+    source: חדשות + דוחות
+  consumer_spending:
+    desc: צריכה פרטית ומדד הקמעונאות
+    source: skill israeli-statistics
+  tourism_demand:
+    desc: כניסות תיירים, תפוסה ומצב ביטחוני
+    source: skill israeli-statistics
+  drug_pricing:
+    desc: תמחור תרופות, גנריקה ורגולציית FDA
+    source: חדשות ענפיות
+  clinical_pipeline:
+    desc: אבני דרך קליניות ורגולטוריות
+    source: מאיה + חדשות
+  paper_pulp:
+    desc: מחירי עיסה, נייר וקרטון
+    source: חדשות ענפיות
+  copper_lme:
+    desc: מחיר נחושת LME
+    source: חדשות סחורות
+  wage_index:
+    desc: שכר ממוצע ועלויות העסקה
+    source: skill israeli-statistics
+  cannabis_regulation:
+    desc: רגולציית קנאביס רפואי ויצוא
+    source: חדשות
+  vc_funding:
+    desc: גיוסי הון בהייטק ושוויי אחזקות
+    source: חדשות
 sector_profiles:
-
   resi_dev_il:
     label: יזום למגורים — ישראל
-    drivers: [boi_rate, mortgage_volumes, cbs_home_price_index, cbs_building_starts, building_inputs_index, rmi_tenders, planning_policy, construction_labor, il_gov_yields, cpi_il]
-
+    drivers:
+    - boi_rate
+    - mortgage_volumes
+    - cbs_home_price_index
+    - cbs_building_starts
+    - building_inputs_index
+    - rmi_tenders
+    - planning_policy
+    - construction_labor
+    - il_gov_yields
+    - cpi_il
   urban_renewal:
     label: התחדשות עירונית
     inherits: resi_dev_il
-    drivers_extra: [renewal_regulation, municipal_planning]
-
+    drivers_extra:
+    - renewal_regulation
+    - municipal_planning
   income_il:
     label: נדל"ן מניב — ישראל
-    drivers: [il_gov_yields, cpi_il, boi_rate, office_retail_demand, cap_rates]
-
+    drivers:
+    - il_gov_yields
+    - cpi_il
+    - boi_rate
+    - office_retail_demand
+    - cap_rates
   income_intl:
     label: נדל"ן מניב/יזום — חו"ל
-    drivers: [fx_eur_ils, fx_usd_ils, us10y, ecb_fed_policy, local_re_markets]
-
+    drivers:
+    - fx_eur_ils
+    - fx_usd_ils
+    - us10y
+    - ecb_fed_policy
+    - local_re_markets
   rental_reit:
     label: קרנות ריט לדיור להשכרה
-    drivers: [cpi_il, il_gov_yields, boi_rate, rental_market_il, reit_regulation]
-
+    drivers:
+    - cpi_il
+    - il_gov_yields
+    - boi_rate
+    - rental_market_il
+    - reit_regulation
   senior_housing:
     label: דיור מוגן
-    drivers: [cbs_home_price_index, cpi_il, il_gov_yields, senior_housing_regulation]
-
+    drivers:
+    - cbs_home_price_index
+    - cpi_il
+    - il_gov_yields
+    - senior_housing_regulation
   construction_infra:
     label: קבלנות ותשתיות
-    drivers: [gov_infra_budget, infra_tenders, steel, building_inputs_index, construction_labor, crude_oil]
-
+    drivers:
+    - gov_infra_budget
+    - infra_tenders
+    - steel
+    - building_inputs_index
+    - construction_labor
+    - crude_oil
   industrials_plastics:
     label: תעשיית פלסטיק ופולימרים
-    drivers: [crude_oil, polymers, fx_usd_ils, fx_eur_ils, shipping_freight, global_industrial_demand]
-
+    drivers:
+    - crude_oil
+    - polymers
+    - fx_usd_ils
+    - fx_eur_ils
+    - shipping_freight
+    - global_industrial_demand
   nonwovens:
     label: בדים לא ארוגים
     inherits: industrials_plastics
-    drivers_extra: [polypropylene, hygiene_demand, china_competition]
-
+    drivers_extra:
+    - polypropylene
+    - hygiene_demand
+    - china_competition
   building_products:
     label: מוצרי בנייה וגמר
-    drivers: [cbs_building_starts, building_inputs_index, renovation_demand, shipping_freight, fx_usd_ils]
-
+    drivers:
+    - cbs_building_starts
+    - building_inputs_index
+    - renovation_demand
+    - shipping_freight
+    - fx_usd_ils
   food_agri:
     label: מזון וחקלאות
-    drivers: [soft_commodities, fx_eur_ils, fx_usd_ils, shipping_freight, cpi_il, food_regulation_il]
-
+    drivers:
+    - soft_commodities
+    - fx_eur_ils
+    - fx_usd_ils
+    - shipping_freight
+    - cpi_il
+    - food_regulation_il
   defense_industry:
     label: תעשייה ביטחונית
-    drivers: [defense_budgets, steel, fx_usd_ils]
-
+    drivers:
+    - defense_budgets
+    - steel
+    - fx_usd_ils
   auto_components:
     label: רכיבי רכב
-    drivers: [global_auto_production, ev_transition, fx_usd_ils, fx_eur_ils]
-
+    drivers:
+    - global_auto_production
+    - ev_transition
+    - fx_usd_ils
+    - fx_eur_ils
   tech_us:
     label: טכנולוגיה — נסחרות בארה"ב
-    drivers: [nasdaq_sentiment, us10y, fx_usd_ils, sector_specific_news]
-
+    drivers:
+    - nasdaq_sentiment
+    - us10y
+    - fx_usd_ils
+    - sector_specific_news
   holdings_credit:
     label: אחזקות / אשראי / אחר
-    drivers: [il_gov_yields, credit_spreads, nav_discount]
-
-# ---------------------------------------------------------------------------
-# חברות (82 פעילות)
-# ---------------------------------------------------------------------------
+    drivers:
+    - il_gov_yields
+    - credit_spreads
+    - nav_discount
+  banks:
+    label: בנקים
+    drivers:
+    - boi_rate
+    - net_interest_margin
+    - credit_growth
+    - regulatory_capital
+    - cpi_il
+    - il_gov_yields
+  insurance:
+    label: ביטוח
+    drivers:
+    - boi_rate
+    - insurance_reserves
+    - il_gov_yields
+    - nasdaq_sentiment
+    - cpi_il
+  financial_services:
+    label: שירותים פיננסיים
+    drivers:
+    - tase_volumes
+    - boi_rate
+    - nasdaq_sentiment
+    - il_gov_yields
+  nonbank_credit:
+    label: אשראי חוץ בנקאי
+    drivers:
+    - boi_rate
+    - credit_growth
+    - regulatory_capital
+    - cpi_il
+  energy_utilities:
+    label: אנרגיה ותשתיות אנרגיה
+    drivers:
+    - crude_oil
+    - natgas_prices
+    - electricity_tariff
+    - fx_usd_ils
+    - cpi_il
+  oil_gas_ep:
+    label: חיפושי נפט וגז
+    drivers:
+    - crude_oil
+    - natgas_prices
+    - fx_usd_ils
+    - planning_policy
+  renewables:
+    label: אנרגיה מתחדשת
+    drivers:
+    - electricity_tariff
+    - solar_capex
+    - boi_rate
+    - il_gov_yields
+    - planning_policy
+  cleantech:
+    label: קלינטק
+    drivers:
+    - electricity_tariff
+    - solar_capex
+    - vc_funding
+  software_internet:
+    label: תוכנה ואינטרנט
+    drivers:
+    - it_budgets
+    - nasdaq_sentiment
+    - fx_usd_ils
+    - wage_index
+  it_services:
+    label: שירותי מידע ואינטגרציה
+    drivers:
+    - it_budgets
+    - wage_index
+    - fx_usd_ils
+  semiconductors:
+    label: מוליכים למחצה
+    drivers:
+    - semis_cycle
+    - nasdaq_sentiment
+    - fx_usd_ils
+  electronics_optics:
+    label: אלקטרוניקה ואופטיקה
+    drivers:
+    - semis_cycle
+    - defense_budgets
+    - fx_usd_ils
+    - copper_lme
+  comms_equipment:
+    label: ציוד תקשורת
+    drivers:
+    - it_budgets
+    - fx_usd_ils
+    - semis_cycle
+  robotics:
+    label: רובוטיקה ותלת מימד
+    drivers:
+    - semis_cycle
+    - vc_funding
+    - fx_usd_ils
+  tech_holdings:
+    label: השקעות בהייטק
+    drivers:
+    - vc_funding
+    - nasdaq_sentiment
+  foodtech:
+    label: פודטק
+    drivers:
+    - soft_commodities
+    - vc_funding
+    - consumer_spending
+  paper_wood:
+    label: עץ, נייר ודפוס
+    drivers:
+    - paper_pulp
+    - shipping_freight
+    - fx_usd_ils
+    - consumer_spending
+  electrical_equipment:
+    label: ציוד חשמל
+    drivers:
+    - copper_lme
+    - electricity_tariff
+    - construction_labor
+    - fx_usd_ils
+  apparel:
+    label: אופנה והלבשה
+    drivers:
+    - consumer_spending
+    - shipping_freight
+    - fx_usd_ils
+    - soft_commodities
+  food_retail:
+    label: רשתות שיווק
+    drivers:
+    - consumer_spending
+    - cpi_il
+    - soft_commodities
+    - wage_index
+  trade_distribution:
+    label: מסחר והפצה
+    drivers:
+    - consumer_spending
+    - shipping_freight
+    - fx_usd_ils
+    - fx_eur_ils
+  business_services:
+    label: שירותים עסקיים
+    drivers:
+    - wage_index
+    - consumer_spending
+    - cpi_il
+  telecom_media:
+    label: תקשורת ומדיה
+    drivers:
+    - consumer_spending
+    - cpi_il
+    - boi_rate
+  hospitality:
+    label: מלונאות ותיירות
+    drivers:
+    - tourism_demand
+    - consumer_spending
+    - fx_usd_ils
+    - fx_eur_ils
+  pharma:
+    label: פארמה
+    drivers:
+    - drug_pricing
+    - fx_usd_ils
+    - clinical_pipeline
+  biotech:
+    label: ביוטכנולוגיה
+    drivers:
+    - clinical_pipeline
+    - vc_funding
+    - nasdaq_sentiment
+  medical_devices:
+    label: מכשור רפואי
+    drivers:
+    - clinical_pipeline
+    - fx_usd_ils
+    - it_budgets
+  cannabis:
+    label: קנאביס
+    drivers:
+    - cannabis_regulation
+    - consumer_spending
+  life_science_holdings:
+    label: השקעות במדעי החיים
+    drivers:
+    - clinical_pipeline
+    - vc_funding
+    - nasdaq_sentiment
 companies:
-
-  # --- יזום למגורים ישראל ---
-- {name_he: צרפתי, name_en: Tzarfati, listing: TASE, tase_id: 425017, sector: resi_dev_il, aliases: [צרפתי שמעון], maya_company_id: 425}
-- {name_he: רוטשטיין, name_en: Rotshtein, listing: TASE, tase_id: 539015, sector: resi_dev_il, maya_company_id: 539}
-- {name_he: אפריקה מגורים, name_en: Africa Residences, listing: TASE, tase_id: 1097948, sector: resi_dev_il, maya_company_id: 1338}
-- {name_he: פרשקובסקי, name_en: Prashkovsky, listing: TASE, tase_id: 1102128, sector: resi_dev_il, maya_company_id: 1330}
-- {name_he: נתנאל גרופ, name_en: Netanel Group, listing: TASE, tase_id: 421016, sector: resi_dev_il, maya_company_id: 421}
-- {name_he: דמרי, name_en: Y.H. Dimri, listing: TASE, tase_id: 1090315, sector: resi_dev_il, aliases: [י.ח. דמרי], maya_company_id: 1193}
-- {name_he: אלמוגים, name_en: Almogim, listing: TASE, tase_id: 1136829, sector: resi_dev_il, maya_company_id: 1553}
-- {name_he: בוני תיכון, name_en: Bonei Hatichon, listing: TASE, tase_id: 531012, sector: resi_dev_il, aliases: [בוני התיכון], maya_company_id: 531}
-- {name_he: אנשי העיר, name_en: Anshei Hair, listing: TASE, tase_id: 1198266, sector: resi_dev_il, maya_company_id: 2417}
-- {name_he: קנדה גלובל, name_en: Canada Global, listing: TASE, tase_id: 106013, sector: resi_dev_il, drivers_extra: [luxury_tlv], maya_company_id: 106}
-- {name_he: מגידו, name_en: Megiddo, listing: TASE, tase_id: 1216605, sector: resi_dev_il, maya_company_id: 2458}
-- {name_he: שובל, name_en: Shoval, listing: TASE, tase_id: 1207968, sector: resi_dev_il, generic_name: true, maya_company_id: 2441}
-- {name_he: אביב בניה, name_en: Aviv Bniya, listing: TASE, tase_id: 444018, sector: resi_dev_il, generic_name: true, maya_company_id: 444}
-- {name_he: יעז יזמות, name_en: Yaaz, listing: TASE, tase_id: 1227321, sector: resi_dev_il, aliases: [י.ע.ז], maya_company_id: 2490}
-- {name_he: חג'ג' אירופה, name_en: Hagag Europe, listing: TASE, tase_id: 1143635, sector: resi_dev_il, drivers_extra: [europe_resi], maya_company_id: 1722}
-
-  # --- התחדשות עירונית ---
-- {name_he: אאורה, name_en: Aura, listing: TASE, tase_id: 373019, sector: urban_renewal, aliases: [אאורה השקעות], maya_company_id: 373}
-- {name_he: אב-גד, name_en: Av-Gad, listing: TASE, tase_id: 1171818, sector: urban_renewal, maya_company_id: 1829}
-- {name_he: רותם שני, name_en: Rotem Shani, listing: TASE, tase_id: 1171529, sector: urban_renewal, maya_company_id: 1797}
-- {name_he: בית וגג, name_en: Bayit VeGag, listing: TASE, tase_id: 1185362, sector: urban_renewal, generic_name: true, maya_company_id: 2371}
-- {name_he: הכשרה התחדשות, name_en: null, listing: TASE, tase_id: 1121474, sector: urban_renewal, maya_company_id: 1561}
-
-  # --- נדל"ן מניב ישראל ---
-- {name_he: עזריאלי קבוצה, name_en: Azrieli Group, listing: TASE, tase_id: 1119478, sector: income_il, drivers_extra: [data_centers, senior_housing], maya_company_id: 1420}
-- {name_he: אלרוב נדלן, name_en: Alrov, listing: TASE, tase_id: 387019, sector: income_il, drivers_extra: [luxury_hotels, europe_assets], maya_company_id: 387}
-- {name_he: נכסים ובנין, name_en: Property & Building, listing: TASE, tase_id: 699017, sector: income_il, maya_company_id: 699}
-- {name_he: ישרס אחזקות, name_en: Isras, listing: TASE, tase_id: 1202977, sector: income_il, maya_company_id: 2435}
-- {name_he: רבד, name_en: Ravad, listing: TASE, tase_id: 526012, sector: income_il, maya_company_id: 526}
-- {name_he: אספן גרופ, name_en: Aspen Group, listing: TASE, tase_id: 313015, sector: income_il, drivers_extra: [europe_assets], maya_company_id: 313}
-- {name_he: שמן נדלן, name_en: Shemen Real Estate, listing: TASE, tase_id: 634030, sector: income_il, maya_company_id: 634}
-- {name_he: וילאר, name_en: Villar, listing: TASE, tase_id: 416016, sector: income_il, maya_company_id: 416}
-- {name_he: נתנאל מניבים, name_en: null, listing: TASE, tase_id: 1194513, sector: income_il, maya_company_id: 2412}
-- {name_he: ארי נדלן, name_en: null, listing: TASE, tase_id: 366013, sector: income_il, maya_company_id: 366}
-- {name_he: יסודות, name_en: Yesodot, listing: TASE, tase_id: 1188416, sector: income_il, generic_name: true, maya_company_id: 2386}
-
-  # --- נדל"ן חו"ל ---
-- {name_he: ג'י סיטי, name_en: G City, listing: TASE, tase_id: 126011, sector: income_intl, aliases: [גזית גלוב, Gazit Globe], maya_company_id: 126}
-- {name_he: נורסטאר, name_en: Norstar, listing: TASE, tase_id: 723007, sector: income_intl, drivers_extra: [gcity_holding_discount], maya_company_id: 723}
-- {name_he: סאמיט, name_en: Summit, listing: TASE, tase_id: 1081686, sector: income_intl, drivers_extra: [germany_re, us_re], maya_company_id: 1060}
-- {name_he: ארגו פרופרטיז, name_en: Argo Properties, listing: TASE, tase_id: 1175371, sector: income_intl, drivers_extra: [germany_resi], maya_company_id: 1884}
-- {name_he: בוליגו, name_en: Buligo Capital, listing: TASE, tase_id: 1180595, sector: income_intl, drivers_extra: [us_re_funds], maya_company_id: 1980}
-- {name_he: אלקטרה נדלן, name_en: Electra Real Estate, listing: TASE, tase_id: 1094044, sector: income_intl, drivers_extra: [us_multifamily, fee_business], maya_company_id: 1264}
-
-  # --- ריט להשכרה ---
-- {name_he: מגוריט, name_en: Megureit, listing: TASE, tase_id: 1139195, sector: rental_reit, maya_company_id: 1668}
-- {name_he: ריט אזורים ליוי, name_en: Azorim Living REIT, listing: TASE, tase_id: 1162775, sector: rental_reit, aliases: [אזורים ליווינג], maya_company_id: 1794}
-
-  # --- דיור מוגן ---
-- {name_he: בית הזהב, name_en: Beit Hazahav, listing: TASE, tase_id: 235010, sector: senior_housing, maya_company_id: 235}
-- {name_he: בית בכפר, name_en: Beit Bakfar, listing: TASE, tase_id: 1183656, sector: senior_housing, maya_company_id: 1802}
-- {name_he: מגדלי תיכון, name_en: Mediterranean Towers, listing: TASE, tase_id: 1131523, sector: senior_housing, aliases: [מגדלי הים התיכון], maya_company_id: 1614}
-
-  # --- קבלנות ותשתיות ---
-- {name_he: שיכון ובינוי, name_en: Shikun & Binui, listing: TASE, tase_id: 1081942, sector: construction_infra, drivers_extra: [intl_concessions, energy_projects], maya_company_id: 1068}
-- {name_he: דניה סיבוס, name_en: Danya Cebus, listing: TASE, tase_id: 1173137, sector: construction_infra, maya_company_id: 1096}
-- {name_he: אשטרום קבוצה, name_en: Ashtrom Group, listing: TASE, tase_id: 1132315, sector: construction_infra, drivers_extra: [income_re, industry], maya_company_id: 1618}
-- {name_he: שפיר הנדסה, name_en: Shapir Engineering, listing: TASE, tase_id: 1133875, sector: construction_infra, drivers_extra: [cement_quarries, ppp_concessions], maya_company_id: 1633}
-- {name_he: לסיכו, name_en: Lesico, listing: TASE, tase_id: 1140946, sector: construction_infra, drivers_extra: [water_infra], maya_company_id: 1680}
-- {name_he: אורון קבוצה, name_en: Oron Group, listing: TASE, tase_id: 1135706, sector: construction_infra, maya_company_id: 1644}
-- {name_he: יעקובי קבוצה, name_en: Yaacobi Group, listing: TASE, tase_id: 1142421, sector: construction_infra, maya_company_id: 1703}
-- {name_he: רימון, name_en: Rimon, listing: TASE, tase_id: 1178722, sector: construction_infra, generic_name: true, maya_company_id: 1928}
-
-  # --- תעשיית פלסטיק ---
-- {name_he: פלרם, name_en: Palram Industries, listing: TASE, tase_id: 644013, sector: industrials_plastics, drivers_extra: [polycarbonate, pvc, us_eu_construction], maya_company_id: 644}
-- {name_he: פלסאון תעשיות, name_en: Plasson Industries, listing: TASE, tase_id: 1081603, sector: industrials_plastics, drivers_extra: [water_fittings, poultry_systems, avian_flu], maya_company_id: 1057}
-- {name_he: רימוני, name_en: Rimoni Industries, listing: TASE, tase_id: 1080456, sector: industrials_plastics, drivers_extra: [injection_molds, medical_devices], maya_company_id: 76}
-- {name_he: פלסטופיל, name_en: Plastopil, listing: TASE, tase_id: 1092840, sector: industrials_plastics, drivers_extra: [food_packaging_films], maya_company_id: 1240}
-
-  # --- בדים לא ארוגים ---
-- {name_he: אבגול, name_en: Avgol, listing: TASE, tase_id: 1100957, sector: nonwovens, drivers_extra: [polypropylene], maya_company_id: 1390}
-- {name_he: ספאנטק, name_en: Spuntech, listing: TASE, tase_id: 1090117, sector: nonwovens, drivers_extra: [spunlace, us_plant], maya_company_id: 1182}
-- {name_he: עלבד, name_en: Albaad, listing: TASE, tase_id: 625012, sector: nonwovens, drivers_extra: [wet_wipes, europe_demand], maya_company_id: 625}
-
-  # --- מוצרי בנייה וגמר ---
-- {name_he: קליל, name_en: Klil Industries, listing: TASE, tase_id: 797035, sector: building_products, drivers_extra: [aluminum_lme], maya_company_id: 797}
-- {name_he: חמת, name_en: Hamat, listing: TASE, tase_id: 384016, sector: building_products, drivers_extra: [sanitary_ware], maya_company_id: 384}
-- {name_he: אינרום, name_en: Inrom Construction, listing: TASE, tase_id: 1132356, sector: building_products, maya_company_id: 1616}
-- {name_he: קבוצת אקרשטיין, name_en: Ackerstein Group, listing: TASE, tase_id: 1176205, sector: building_products, drivers_extra: [income_re, infra_products], maya_company_id: 1896}
-- {name_he: בירמן, name_en: Birman, listing: TASE, tase_id: 530014, sector: building_products, drivers_extra: [wood_trade, import_costs], maya_company_id: 530}
-- {name_he: ויז'ן סיגמא, name_en: Vision Sigma, listing: TASE, tase_id: 350017, sector: building_products, maya_company_id: 350}
-- {name_he: לודזיה, name_en: Lodzia, listing: TASE, tase_id: 753012, sector: building_products, maya_company_id: 753}
-
-  # --- מזון וחקלאות ---
-- {name_he: מהדרין, name_en: Mehadrin, listing: TASE, tase_id: 686014, sector: food_agri, drivers_extra: [citrus_prices, water_quotas, fx_eur_ils], maya_company_id: 686}
-- {name_he: זנלכל, name_en: Zanlakol, listing: TASE, tase_id: 130013, sector: food_agri, drivers_extra: [canned_food, tin_packaging], maya_company_id: 130}
-- {name_he: מחלבות גד, name_en: Gad Dairies, listing: TASE, tase_id: 1228808, sector: food_agri, drivers_extra: [raw_milk_price, dairy_regulation], maya_company_id: 2509}
-- {name_he: נטו אחזקות, name_en: Neto Holdings, listing: TASE, tase_id: 168013, sector: food_agri, drivers_extra: [food_import, meat_poultry, shipping_freight], maya_company_id: 168}
-
-  # --- ביטחוני / רכב ---
-- {name_he: עשות, name_en: Ashot Ashkelon, listing: TASE, tase_id: 312017, sector: defense_industry, drivers_extra: [imod_orders, gear_components], generic_name: true, maya_company_id: 312}
-- {name_he: רבל, name_en: Raval, listing: TASE, tase_id: 1103878, sector: auto_components, drivers_extra: [fuel_system_valves, ev_transition_risk], maya_company_id: 1436}
-
-  # --- טכנולוגיה ארה"ב ---
-- {name_he: Check Point, name_en: Check Point Software, listing: NASDAQ, ticker: CHKP, sector: tech_us, drivers_extra: [cybersecurity], aliases: [צ'ק פוינט]}
-- {name_he: אמדוקס US, name_en: Amdocs, listing: NASDAQ, ticker: DOX, sector: tech_us, drivers_extra: [telecom_capex], aliases: [אמדוקס]}
-- {name_he: WIX, name_en: Wix.com, listing: NASDAQ, ticker: WIX, sector: tech_us, drivers_extra: [smb_ecommerce, ai_website_builders], aliases: [וויקס]}
-- {name_he: Fivver, name_en: Fiverr, listing: NYSE, ticker: FVRR, sector: tech_us, drivers_extra: [gig_economy, ai_disruption], aliases: [פייבר, Fiverr]}
-- {name_he: קורנית דיגיטל US, name_en: Kornit Digital, listing: NASDAQ, ticker: KRNT, sector: tech_us, drivers_extra: [digital_textile_printing, apparel_demand], aliases: [קורנית]}
-- {name_he: סולאר אדג' US, name_en: SolarEdge, listing: NASDAQ, ticker: SEDG, sector: tech_us, drivers_extra: [solar_demand_eu_us, us_tariffs_ira, inventory_cycle], aliases: [סולאראדג']}
-- {name_he: סרגון US, name_en: Ceragon Networks, listing: NASDAQ, ticker: CRNT, sector: tech_us, drivers_extra: [wireless_backhaul, india_capex], aliases: [סרגון]}
-- {name_he: מאינד US, name_en: MIND C.T.I, listing: NASDAQ, ticker: MNDO, sector: tech_us, drivers_extra: [billing_software, dividend_yield], aliases: [מאינד]}
-- {name_he: אבן קיסר US, name_en: Caesarstone, listing: NASDAQ, ticker: CSTE, sector: tech_us, drivers_extra: [us_housing_renovation, quartz, silica_litigation], aliases: [אבן קיסר], note: מסווגת טק רק בגלל רישום בארה"ב — מהותית מוצרי בנייה}
-
-  # --- אחזקות ---
-- {name_he: אמפא, name_en: Ampa, listing: TASE, tase_id: 1225200, sector: holdings_credit, maya_company_id: 2471}
-- {name_he: קרדן ישראל, name_en: Kardan Israel, listing: TASE, tase_id: 1210152, sector: holdings_credit, maya_company_id: 121}
-- {name_he: גאון קבוצה, name_en: Gaon Group, listing: TASE, tase_id: 454017, sector: holdings_credit, drivers_extra: [water_infra, plastics_trade], maya_company_id: 454}
-
-# ---------------------------------------------------------------------------
-# מוחרגות — הופיעו ברשימה המקורית, אושר ע"י יואב (03/08/2026) שאינן רלוונטיות.
-# לא נכללות במיפוי. להחזרה: להעביר חזרה ל-companies עם סיווג.
-# ---------------------------------------------------------------------------
-excluded:
-- וויי בוקס
-- צילו-בלו
-- אייאיאס
-- "יו.אמ.איץ'"
-- רנט איט
-- אבו מגורים
-- דלק נכסים
-- אפי קפיטל
-- 'שדה נדל"ן'
-- חד
-- סופרין
-- רם און
+- name_he: פאלו אלטו
+  listing: TASE
+  tase_id: 1236736
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 2538
+- name_he: טבע
+  listing: TASE
+  tase_id: 629014
+  sector: pharma
+  tase_sector: ביומד-פארמה
+  maya_company_id: 629
+- name_he: לאומי
+  listing: TASE
+  tase_id: 604611
+  sector: banks
+  tase_sector: בנקים
+  maya_company_id: 604
+- name_he: אלביט מערכות
+  listing: TASE
+  tase_id: 1081124
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 1040
+- name_he: פועלים
+  listing: TASE
+  tase_id: 662577
+  sector: banks
+  tase_sector: בנקים
+  maya_company_id: 662
+- name_he: טאואר
+  listing: TASE
+  tase_id: 1082379
+  sector: semiconductors
+  tase_sector: טכנולוגיה-מוליכים למחצה
+  maya_company_id: 2028
+- name_he: מזרחי טפחות
+  listing: TASE
+  tase_id: 695437
+  sector: banks
+  tase_sector: בנקים
+  maya_company_id: 695
+- name_he: עזריאלי קבוצה
+  name_en: Azrieli Group
+  listing: TASE
+  tase_id: 1119478
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  drivers_extra:
+  - data_centers
+  - senior_housing
+  maya_company_id: 1420
+- name_he: הפניקס
+  listing: TASE
+  tase_id: 767012
+  sector: insurance
+  tase_sector: ביטוח
+  maya_company_id: 767
+- name_he: דיסקונט א
+  listing: TASE
+  tase_id: 691212
+  sector: banks
+  tase_sector: בנקים
+  maya_company_id: 691
+- name_he: הראל השקעות
+  listing: TASE
+  tase_id: 585018
+  sector: insurance
+  tase_sector: ביטוח
+  maya_company_id: 585
+- name_he: אנלייט אנרגיה
+  listing: TASE
+  tase_id: 720011
+  sector: renewables
+  tase_sector: טכנולוגיה-אנרגיה מתחדשת
+  maya_company_id: 720
+- name_he: נובה
+  listing: TASE
+  tase_id: 1084557
+  sector: semiconductors
+  tase_sector: טכנולוגיה-מוליכים למחצה
+  maya_company_id: 2177
+- name_he: מנורה מב החז
+  listing: TASE
+  tase_id: 566018
+  sector: insurance
+  tase_sector: ביטוח
+  maya_company_id: 566
+- name_he: או פי סי אנרגיה
+  listing: TASE
+  tase_id: 1141571
+  sector: energy_utilities
+  tase_sector: אנרגיה וחיפושי נפט וגז-אנרגיה
+  maya_company_id: 1682
+  aliases:
+  - או.פי.סי
+  - או.פי.סי אנרגיה בע"מ
+- name_he: בינלאומי
+  listing: TASE
+  tase_id: 593038
+  sector: banks
+  tase_sector: בנקים
+  maya_company_id: 593
+- name_he: איי.סי.אל
+  listing: TASE
+  tase_id: 281014
+  sector: industrials_plastics
+  tase_sector: תעשייה-כימיה, גומי ופלסטיק
+  maya_company_id: 281
+- name_he: בזק
+  listing: TASE
+  tase_id: 230011
+  sector: telecom_media
+  tase_sector: מסחר ושרותים-תקשורת ומדיה
+  maya_company_id: 230
+- name_he: כלל עסקי ביטוח
+  listing: TASE
+  tase_id: 224014
+  sector: insurance
+  tase_sector: ביטוח
+  maya_company_id: 224
+- name_he: מגדל ביטוח
+  listing: TASE
+  tase_id: 1081165
+  sector: insurance
+  tase_sector: ביטוח
+  maya_company_id: 1041
+- name_he: קמטק
+  listing: TASE
+  tase_id: 1095264
+  sector: semiconductors
+  tase_sector: טכנולוגיה-מוליכים למחצה
+  maya_company_id: 2174
+- name_he: מליסרון
+  listing: TASE
+  tase_id: 323014
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 323
+- name_he: ניו-מד אנרג יהש
+  listing: TASE
+  tase_id: 475020
+  sector: oil_gas_ep
+  tase_sector: אנרגיה וחיפושי נפט וגז-חיפושי נפט וגז
+  maya_company_id: 475
+- name_he: נקסט ויז'ן
+  listing: TASE
+  tase_id: 1176593
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 1916
+- name_he: אורמת טכנו
+  listing: TASE
+  tase_id: 1134402
+  sector: renewables
+  tase_sector: טכנולוגיה-אנרגיה מתחדשת
+  maya_company_id: 2250
+- name_he: ביג
+  listing: TASE
+  tase_id: 1097260
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  generic_name: true
+  maya_company_id: 1327
+- name_he: נייס
+  listing: TASE
+  tase_id: 273011
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 273
+- name_he: מגה אור
+  listing: TASE
+  tase_id: 1104488
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 1450
+- name_he: נאוויטס פטר יהש
+  listing: TASE
+  tase_id: 1141969
+  sector: oil_gas_ep
+  tase_sector: אנרגיה וחיפושי נפט וגז-חיפושי נפט וגז
+  maya_company_id: 1688
+- name_he: דלק קבוצה
+  listing: TASE
+  tase_id: 1084128
+  sector: oil_gas_ep
+  tase_sector: אנרגיה וחיפושי נפט וגז-חיפושי נפט וגז
+  maya_company_id: 1095
+- name_he: דוראל אנרגיה
+  listing: TASE
+  tase_id: 1166768
+  sector: renewables
+  tase_sector: טכנולוגיה-אנרגיה מתחדשת
+  maya_company_id: 1801
+- name_he: שפיר הנדסה
+  name_en: Shapir Engineering
+  listing: TASE
+  tase_id: 1133875
+  sector: construction_infra
+  tase_sector: תעשייה-מתכת ומוצרי בניה
+  drivers_extra:
+  - cement_quarries
+  - ppp_concessions
+  maya_company_id: 1633
+- name_he: שטראוס
+  listing: TASE
+  tase_id: 746016
+  sector: food_agri
+  tase_sector: תעשייה-מזון
+  maya_company_id: 746
+- name_he: אנרג'יקס
+  listing: TASE
+  tase_id: 1123355
+  sector: renewables
+  tase_sector: טכנולוגיה-אנרגיה מתחדשת
+  maya_company_id: 1581
+- name_he: הבורסה לניע בתא
+  listing: TASE
+  tase_id: 1159029
+  sector: financial_services
+  tase_sector: שרותים פיננסים
+  maya_company_id: 1778
+- name_he: שופרסל
+  listing: TASE
+  tase_id: 777037
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 777
+- name_he: פיבי
+  listing: TASE
+  tase_id: 763011
+  sector: banks
+  tase_sector: בנקים
+  maya_company_id: 763
+- name_he: פתאל החזקות
+  listing: TASE
+  tase_id: 1143429
+  sector: hospitality
+  tase_sector: מסחר ושרותים-מלונאות ותיירות
+  maya_company_id: 1621
+- name_he: קנון
+  listing: TASE
+  tase_id: 1134139
+  sector: energy_utilities
+  tase_sector: אנרגיה וחיפושי נפט וגז-אנרגיה
+  maya_company_id: 1635
+- name_he: אל על
+  listing: TASE
+  tase_id: 1087824
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1152
+- name_he: שיכון ובינוי
+  name_en: Shikun & Binui
+  listing: TASE
+  tase_id: 1081942
+  sector: construction_infra
+  tase_sector: נדלן ובנייה-בנייה
+  drivers_extra:
+  - intl_concessions
+  - energy_projects
+  maya_company_id: 1068
+- name_he: אמות
+  listing: TASE
+  tase_id: 1097278
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  generic_name: true
+  maya_company_id: 1328
+- name_he: מיטב השקעות
+  listing: TASE
+  tase_id: 1081843
+  sector: financial_services
+  tase_sector: שרותים פיננסים
+  maya_company_id: 1064
+- name_he: פז אנרגיה
+  listing: TASE
+  tase_id: 1100007
+  sector: energy_utilities
+  tase_sector: אנרגיה וחיפושי נפט וגז-אנרגיה
+  maya_company_id: 1363
+- name_he: מבנה
+  listing: TASE
+  tase_id: 226019
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 226
+- name_he: מטריקס
+  listing: TASE
+  tase_id: 445015
+  sector: it_services
+  tase_sector: טכנולוגיה-שרותי מידע
+  maya_company_id: 445
+- name_he: דמרי
+  name_en: Y.H. Dimri
+  listing: TASE
+  tase_id: 1090315
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  aliases:
+  - י.ח. דמרי
+  maya_company_id: 1193
+- name_he: אלקטרה
+  listing: TASE
+  tase_id: 739037
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  maya_company_id: 739
+- name_he: גב ים
+  listing: TASE
+  tase_id: 759019
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 759
+- name_he: ורידיס
+  listing: TASE
+  tase_id: 1176387
+  sector: cleantech
+  tase_sector: טכנולוגיה-קלינטק
+  maya_company_id: 1907
+- name_he: אפי נכסים
+  listing: TASE
+  tase_id: 1091354
+  sector: income_intl
+  tase_sector: נדלן ובנייה-נדלן מניב בחו"ל
+  maya_company_id: 1172
+- name_he: ישרוטל
+  listing: TASE
+  tase_id: 1080985
+  sector: hospitality
+  tase_sector: מסחר ושרותים-מלונאות ותיירות
+  maya_company_id: 1032
+- name_he: בית שמש
+  listing: TASE
+  tase_id: 1081561
+  sector: building_products
+  tase_sector: תעשייה-מתכת ומוצרי בניה
+  maya_company_id: 1054
+- name_he: אלוני חץ
+  listing: TASE
+  tase_id: 390013
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 390
+- name_he: משק אנרגיה
+  listing: TASE
+  tase_id: 1166974
+  sector: energy_utilities
+  tase_sector: אנרגיה וחיפושי נפט וגז-אנרגיה
+  maya_company_id: 1803
+- name_he: פרטנר
+  listing: TASE
+  tase_id: 1083484
+  sector: telecom_media
+  tase_sector: מסחר ושרותים-תקשורת ומדיה
+  maya_company_id: 2095
+- name_he: נופר אנרג'י
+  listing: TASE
+  tase_id: 1170877
+  sector: renewables
+  tase_sector: טכנולוגיה-אנרגיה מתחדשת
+  maya_company_id: 1831
+- name_he: אשטרום קבוצה
+  name_en: Ashtrom Group
+  listing: TASE
+  tase_id: 1132315
+  sector: construction_infra
+  tase_sector: נדלן ובנייה-בנייה
+  drivers_extra:
+  - income_re
+  - industry
+  maya_company_id: 1618
+- name_he: בזן
+  listing: TASE
+  tase_id: 2590248
+  sector: energy_utilities
+  tase_sector: אנרגיה וחיפושי נפט וגז-אנרגיה
+  maya_company_id: 259
+  aliases:
+  - בתי זיקוק
+  - בתי זקוק לנפט בע"מ
+  - בז"ן
+- name_he: חברה לישראל
+  listing: TASE
+  tase_id: 576017
+  sector: industrials_plastics
+  tase_sector: תעשייה-כימיה, גומי ופלסטיק
+  maya_company_id: 576
+- name_he: תורפז
+  listing: TASE
+  tase_id: 1175611
+  sector: food_agri
+  tase_sector: תעשייה-מזון
+  maya_company_id: 1901
+- name_he: סלקום
+  listing: TASE
+  tase_id: 1101534
+  sector: telecom_media
+  tase_sector: מסחר ושרותים-תקשורת ומדיה
+  maya_company_id: 2066
+- name_he: איביאי בית השק
+  listing: TASE
+  tase_id: 175018
+  sector: financial_services
+  tase_sector: שרותים פיננסים
+  maya_company_id: 175
+- name_he: נאייקס
+  listing: TASE
+  tase_id: 1175116
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 1894
+- name_he: אנרג'יאן
+  listing: TASE
+  tase_id: 1155290
+  sector: oil_gas_ep
+  tase_sector: אנרגיה וחיפושי נפט וגז-חיפושי נפט וגז
+  maya_company_id: 1762
+- name_he: ג'נריישן קפיטל
+  listing: TASE
+  tase_id: 1156926
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  maya_company_id: 1769
+- name_he: ארפורט סיטי
+  listing: TASE
+  tase_id: 1095835
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 1300
+  aliases:
+  - איירפורט סיטי
+  - איירפורט סיטי בע"מ
+- name_he: פורמולה מערכות
+  listing: TASE
+  tase_id: 256016
+  sector: it_services
+  tase_sector: טכנולוגיה-שרותי מידע
+  maya_company_id: 256
+- name_he: חילן
+  listing: TASE
+  tase_id: 1084698
+  sector: it_services
+  tase_sector: טכנולוגיה-שרותי מידע
+  maya_company_id: 1110
+- name_he: ישראמקו יהש
+  listing: TASE
+  tase_id: 232017
+  sector: oil_gas_ep
+  tase_sector: אנרגיה וחיפושי נפט וגז-חיפושי נפט וגז
+  maya_company_id: 232
+- name_he: מקס סטוק
+  listing: TASE
+  tase_id: 1168558
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 1815
+- name_he: יוחננוף
+  listing: TASE
+  tase_id: 1161264
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 1786
+- name_he: רימון
+  name_en: Rimon
+  listing: TASE
+  tase_id: 1178722
+  sector: construction_infra
+  tase_sector: נדלן ובנייה-בנייה
+  generic_name: true
+  maya_company_id: 1928
+- name_he: רציו יהש
+  listing: TASE
+  tase_id: 394015
+  sector: oil_gas_ep
+  tase_sector: אנרגיה וחיפושי נפט וגז-חיפושי נפט וגז
+  maya_company_id: 394
+- name_he: וואן טכנולוגיות
+  listing: TASE
+  tase_id: 161018
+  sector: it_services
+  tase_sector: טכנולוגיה-שרותי מידע
+  maya_company_id: 161
+- name_he: רמי לוי
+  listing: TASE
+  tase_id: 1104249
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 1445
+- name_he: אקונרג'י
+  listing: TASE
+  tase_id: 1178334
+  sector: renewables
+  tase_sector: טכנולוגיה-אנרגיה מתחדשת
+  maya_company_id: 1891
+- name_he: לפידות קפיטל
+  listing: TASE
+  tase_id: 642017
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  maya_company_id: 642
+- name_he: דלתא גליל
+  listing: TASE
+  tase_id: 627034
+  sector: apparel
+  tase_sector: תעשייה-אופנה והלבשה
+  maya_company_id: 627
+- name_he: ישראל קנדה
+  listing: TASE
+  tase_id: 434019
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 434
+- name_he: אאורה
+  name_en: Aura
+  listing: TASE
+  tase_id: 373019
+  sector: urban_renewal
+  tase_sector: נדלן ובנייה-בנייה
+  aliases:
+  - אאורה השקעות
+  maya_company_id: 373
+- name_he: איילון
+  listing: TASE
+  tase_id: 209015
+  sector: insurance
+  tase_sector: ביטוח
+  maya_company_id: 209
+- name_he: ריט 1
+  listing: TASE
+  tase_id: 1098920
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 1357
+- name_he: סנו
+  listing: TASE
+  tase_id: 813014
+  sector: industrials_plastics
+  tase_sector: תעשייה-כימיה, גומי ופלסטיק
+  maya_company_id: 813
+- name_he: פוקס
+  listing: TASE
+  tase_id: 1087022
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  generic_name: true
+  maya_company_id: 1140
+- name_he: שוב אנרגיה
+  listing: TASE
+  tase_id: 1188242
+  sector: energy_utilities
+  tase_sector: אנרגיה וחיפושי נפט וגז-אנרגיה
+  maya_company_id: 1930
+- name_he: קיסטון אינפרא
+  listing: TASE
+  tase_id: 1175934
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  maya_company_id: 1904
+- name_he: ישרס
+  listing: TASE
+  tase_id: 613034
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 613
+- name_he: אייאיאס
+  listing: TASE
+  tase_id: 431015
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 431
+- name_he: איידיאיי ביטוח
+  listing: TASE
+  tase_id: 1129501
+  sector: insurance
+  tase_sector: ביטוח
+  maya_company_id: 1608
+- name_he: סקופ
+  listing: TASE
+  tase_id: 288019
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  generic_name: true
+  maya_company_id: 288
+- name_he: אקויטל
+  listing: TASE
+  tase_id: 755017
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  maya_company_id: 755
+- name_he: יוניברסל מוטורס
+  listing: TASE
+  tase_id: 1144773
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 2072
+- name_he: רבוע נדלן
+  listing: TASE
+  tase_id: 1098565
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 1349
+- name_he: ישראכרט
+  listing: TASE
+  tase_id: 1157403
+  sector: financial_services
+  tase_sector: שרותים פיננסים
+  maya_company_id: 1773
+- name_he: מבטח שמיר
+  listing: TASE
+  tase_id: 127019
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  maya_company_id: 127
+- name_he: אינרום
+  name_en: Inrom Construction
+  listing: TASE
+  tase_id: 1132356
+  sector: building_products
+  tase_sector: תעשייה-מתכת ומוצרי בניה
+  maya_company_id: 1616
+- name_he: דניה סיבוס
+  name_en: Danya Cebus
+  listing: TASE
+  tase_id: 1173137
+  sector: construction_infra
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 1096
+- name_he: סאמיט
+  name_en: Summit
+  listing: TASE
+  tase_id: 1081686
+  sector: income_intl
+  tase_sector: נדלן ובנייה-נדלן מניב בחו"ל
+  drivers_extra:
+  - germany_re
+  - us_re
+  maya_company_id: 1060
+- name_he: פריורטק
+  listing: TASE
+  tase_id: 328013
+  sector: semiconductors
+  tase_sector: טכנולוגיה-מוליכים למחצה
+  maya_company_id: 328
+- name_he: אזורים
+  listing: TASE
+  tase_id: 715011
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 715
+- name_he: טלסיס
+  listing: TASE
+  tase_id: 354019
+  sector: electronics_optics
+  tase_sector: טכנולוגיה-אלקטרוניקה ואופטיקה
+  maya_company_id: 354
+- name_he: אלקו
+  listing: TASE
+  tase_id: 694034
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  maya_company_id: 694
+- name_he: אפקון החזקות
+  listing: TASE
+  tase_id: 578013
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  maya_company_id: 578
+- name_he: להב
+  listing: TASE
+  tase_id: 136010
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  generic_name: true
+  maya_company_id: 136
+- name_he: מור השקעות
+  listing: TASE
+  tase_id: 1141464
+  sector: financial_services
+  tase_sector: שרותים פיננסים
+  maya_company_id: 1692
+- name_he: אפריקה מגורים
+  name_en: Africa Residences
+  listing: TASE
+  tase_id: 1097948
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 1338
+- name_he: אופקו הלת'
+  listing: TASE
+  tase_id: 1129543
+  sector: life_science_holdings
+  tase_sector: ביומד-השקעות במדעי החיים
+  maya_company_id: 1610
+- name_he: ארגו פרופרטיז
+  name_en: Argo Properties
+  listing: TASE
+  tase_id: 1175371
+  sector: income_intl
+  tase_sector: נדלן ובנייה-נדלן מניב בחו"ל
+  drivers_extra:
+  - germany_resi
+  maya_company_id: 1884
+- name_he: וילאר
+  name_en: Villar
+  listing: TASE
+  tase_id: 416016
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 416
+- name_he: דור אלון
+  listing: TASE
+  tase_id: 1093202
+  sector: energy_utilities
+  tase_sector: אנרגיה וחיפושי נפט וגז-אנרגיה
+  maya_company_id: 1072
+- name_he: עמרם
+  listing: TASE
+  tase_id: 1188200
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  generic_name: true
+  maya_company_id: 2385
+- name_he: אמפא
+  name_en: Ampa
+  listing: TASE
+  tase_id: 1225200
+  sector: holdings_credit
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 2471
+- name_he: רמי לוי נדל"ן
+  listing: TASE
+  tase_id: 1235001
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 2508
+- name_he: פרשקובסקי
+  name_en: Prashkovsky
+  listing: TASE
+  tase_id: 1102128
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 1330
+- name_he: דלתא מותגים
+  listing: TASE
+  tase_id: 1173699
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 1858
+- name_he: קרסו מוטורס
+  listing: TASE
+  tase_id: 1123850
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 1585
+- name_he: תמר פטרוליום
+  listing: TASE
+  tase_id: 1141357
+  sector: oil_gas_ep
+  tase_sector: אנרגיה וחיפושי נפט וגז-חיפושי נפט וגז
+  maya_company_id: 1689
+- name_he: אר פי אופטיקל
+  listing: TASE
+  tase_id: 1222462
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 2479
+- name_he: דנאל
+  listing: TASE
+  tase_id: 314013
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 314
+- name_he: מספנות ישראל
+  listing: TASE
+  tase_id: 1168533
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  maya_company_id: 1810
+- name_he: נטו מלינדה
+  listing: TASE
+  tase_id: 1105097
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 1463
+- name_he: אקרו
+  listing: TASE
+  tase_id: 1184902
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  generic_name: true
+  maya_company_id: 2360
+- name_he: קבוצת אקרשטיין
+  name_en: Ackerstein Group
+  listing: TASE
+  tase_id: 1176205
+  sector: building_products
+  tase_sector: תעשייה-מתכת ומוצרי בניה
+  drivers_extra:
+  - income_re
+  - infra_products
+  maya_company_id: 1896
+- name_he: ישרס אחזקות
+  name_en: Isras
+  listing: TASE
+  tase_id: 1202977
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 2435
+- name_he: אורון קבוצה
+  name_en: Oron Group
+  listing: TASE
+  tase_id: 1135706
+  sector: construction_infra
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 1644
+- name_he: עמל הולדינגס
+  listing: TASE
+  tase_id: 1232008
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 2516
+- name_he: נפטא
+  listing: TASE
+  tase_id: 643015
+  sector: oil_gas_ep
+  tase_sector: אנרגיה וחיפושי נפט וגז-חיפושי נפט וגז
+  maya_company_id: 643
+- name_he: ארי נדלן
+  listing: TASE
+  tase_id: 366013
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 366
+- name_he: גילת
+  listing: TASE
+  tase_id: 1082510
+  sector: comms_equipment
+  tase_sector: טכנולוגיה-ציוד תקשורת
+  generic_name: true
+  maya_company_id: 2030
+- name_he: סלע נדלן
+  listing: TASE
+  tase_id: 1109644
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 1514
+- name_he: סולאיר
+  listing: TASE
+  tase_id: 1172287
+  sector: renewables
+  tase_sector: טכנולוגיה-אנרגיה מתחדשת
+  maya_company_id: 1848
+- name_he: בלדי
+  listing: TASE
+  tase_id: 1212539
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  generic_name: true
+  maya_company_id: 2450
+- name_he: ארית תעשיות
+  listing: TASE
+  tase_id: 587014
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 587
+- name_he: ווישור גלובלטק
+  listing: TASE
+  tase_id: 1173228
+  sector: insurance
+  tase_sector: ביטוח
+  maya_company_id: 1865
+- name_he: דוניץ
+  listing: TASE
+  tase_id: 400010
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 400
+- name_he: נכסים ובנין
+  name_en: Property & Building
+  listing: TASE
+  tase_id: 699017
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 699
+- name_he: מגדלי תיכון
+  name_en: Mediterranean Towers
+  listing: TASE
+  tase_id: 1131523
+  sector: senior_housing
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  aliases:
+  - מגדלי הים התיכון
+  maya_company_id: 1614
+- name_he: עומר הנדסה
+  listing: TASE
+  tase_id: 1233493
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 2522
+- name_he: מור גמל פנסיה
+  listing: TASE
+  tase_id: 1184381
+  sector: financial_services
+  tase_sector: שרותים פיננסים
+  maya_company_id: 2358
+- name_he: ג'י סיטי
+  name_en: G City
+  listing: TASE
+  tase_id: 126011
+  sector: income_intl
+  tase_sector: נדלן ובנייה-נדלן מניב בחו"ל
+  aliases:
+  - גזית גלוב
+  - Gazit Globe
+  maya_company_id: 126
+- name_he: לוזון רונסון
+  listing: TASE
+  tase_id: 1202597
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 2429
+- name_he: מימון ישיר
+  listing: TASE
+  tase_id: 1168186
+  sector: nonbank_credit
+  tase_sector: שרותים פיננסים-אשראי חוץ בנקאי
+  maya_company_id: 1675
+- name_he: לוזון קבוצה
+  listing: TASE
+  tase_id: 473017
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 473
+- name_he: אלקטרה נדלן
+  name_en: Electra Real Estate
+  listing: TASE
+  tase_id: 1094044
+  sector: income_intl
+  tase_sector: נדלן ובנייה-נדלן מניב בחו"ל
+  drivers_extra:
+  - us_multifamily
+  - fee_business
+  maya_company_id: 1264
+- name_he: קווליטאו
+  listing: TASE
+  tase_id: 1083955
+  sector: semiconductors
+  tase_sector: טכנולוגיה-מוליכים למחצה
+  maya_company_id: 1093
+- name_he: זפירוס
+  listing: TASE
+  tase_id: 1194695
+  sector: renewables
+  tase_sector: טכנולוגיה-אנרגיה מתחדשת
+  maya_company_id: 2413
+- name_he: תדיראן גרופ
+  listing: TASE
+  tase_id: 258012
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 258
+- name_he: בריינסוויי
+  listing: TASE
+  tase_id: 1100718
+  sector: medical_devices
+  tase_sector: ביומד-מכשור רפואי
+  maya_company_id: 1386
+- name_he: אנליסט
+  listing: TASE
+  tase_id: 1080613
+  sector: financial_services
+  tase_sector: שרותים פיננסים
+  maya_company_id: 1008
+- name_he: קרסו נדלן
+  listing: TASE
+  tase_id: 1187962
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 2384
+- name_he: מלם-תים אחזקות
+  listing: TASE
+  tase_id: 731018
+  sector: it_services
+  tase_sector: טכנולוגיה-שרותי מידע
+  maya_company_id: 731
+- name_he: לוינשטין הנדסה
+  listing: TASE
+  tase_id: 573014
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 573
+- name_he: פריים אנרג'י
+  listing: TASE
+  tase_id: 1174457
+  sector: renewables
+  tase_sector: טכנולוגיה-אנרגיה מתחדשת
+  maya_company_id: 1871
+- name_he: הכשרת הישוב
+  listing: TASE
+  tase_id: 612010
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 612
+- name_he: עשות
+  name_en: Ashot Ashkelon
+  listing: TASE
+  tase_id: 312017
+  sector: defense_industry
+  tase_sector: תעשייה-מתכת ומוצרי בניה
+  generic_name: true
+  drivers_extra:
+  - imod_orders
+  - gear_components
+  maya_company_id: 312
+- name_he: מניבים ריט
+  listing: TASE
+  tase_id: 1140573
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 1679
+- name_he: הייפר גלובל
+  listing: TASE
+  tase_id: 1184985
+  sector: it_services
+  tase_sector: טכנולוגיה-שרותי מידע
+  maya_company_id: 2369
+- name_he: בזא
+  listing: TASE
+  tase_id: 1198910
+  sector: energy_utilities
+  tase_sector: אנרגיה וחיפושי נפט וגז-אנרגיה
+  maya_company_id: 1361
+  aliases:
+  - בית זיקוק אשדוד
+  - בית זיקוק אשדוד בע"מ
+  - בז"א
+- name_he: קמהדע
+  listing: TASE
+  tase_id: 1094119
+  sector: biotech
+  tase_sector: ביומד-ביוטכנולוגיה
+  maya_company_id: 1267
+- name_he: תאת טכנו
+  listing: TASE
+  tase_id: 1082726
+  sector: electrical_equipment
+  tase_sector: תעשייה-חשמל
+  maya_company_id: 2110
+- name_he: איסתא
+  listing: TASE
+  tase_id: 1081074
+  sector: hospitality
+  tase_sector: מסחר ושרותים-מלונאות ותיירות
+  maya_company_id: 1036
+- name_he: פמס
+  listing: TASE
+  tase_id: 315010
+  sector: apparel
+  tase_sector: תעשייה-אופנה והלבשה
+  generic_name: true
+  maya_company_id: 315
+- name_he: פלסאון תעשיות
+  name_en: Plasson Industries
+  listing: TASE
+  tase_id: 1081603
+  sector: industrials_plastics
+  tase_sector: תעשייה-כימיה, גומי ופלסטיק
+  drivers_extra:
+  - water_fittings
+  - poultry_systems
+  - avian_flu
+  maya_company_id: 1057
+- name_he: ירושלים
+  listing: TASE
+  tase_id: 726018
+  sector: banks
+  tase_sector: בנקים
+  generic_name: true
+  maya_company_id: 726
+- name_he: דלק רכב
+  listing: TASE
+  tase_id: 829010
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 829
+- name_he: נאוי
+  listing: TASE
+  tase_id: 208017
+  sector: nonbank_credit
+  tase_sector: שרותים פיננסים-אשראי חוץ בנקאי
+  generic_name: true
+  maya_company_id: 208
+- name_he: אלקטרה צריכה
+  listing: TASE
+  tase_id: 5010129
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 501
+- name_he: מניף
+  listing: TASE
+  tase_id: 1170893
+  sector: nonbank_credit
+  tase_sector: שרותים פיננסים-אשראי חוץ בנקאי
+  generic_name: true
+  maya_company_id: 1828
+- name_he: קסטרו
+  listing: TASE
+  tase_id: 280016
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 280
+- name_he: חג'ג'
+  listing: TASE
+  tase_id: 823013
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 823
+- name_he: דיפלומט אחזקות
+  listing: TASE
+  tase_id: 1173491
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 1867
+- name_he: טופ גאם
+  listing: TASE
+  tase_id: 1179142
+  sector: foodtech
+  tase_sector: טכנולוגיה-פודטק
+  maya_company_id: 1943
+- name_he: מחלבות גד
+  name_en: Gad Dairies
+  listing: TASE
+  tase_id: 1228808
+  sector: food_agri
+  tase_sector: תעשייה-מזון
+  drivers_extra:
+  - raw_milk_price
+  - dairy_regulation
+  maya_company_id: 2509
+- name_he: מגוריט
+  name_en: Megureit
+  listing: TASE
+  tase_id: 1139195
+  sector: rental_reit
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 1668
+- name_he: סופווייב
+  listing: TASE
+  tase_id: 1175439
+  sector: medical_devices
+  tase_sector: ביומד-מכשור רפואי
+  maya_company_id: 1886
+- name_he: טראלייט
+  listing: TASE
+  tase_id: 1180173
+  sector: renewables
+  tase_sector: טכנולוגיה-אנרגיה מתחדשת
+  maya_company_id: 1982
+- name_he: אלטשולר שחם פנ
+  listing: TASE
+  tase_id: 1184936
+  sector: financial_services
+  tase_sector: שרותים פיננסים
+  maya_company_id: 2367
+- name_he: ויליפוד אינטרנש
+  listing: TASE
+  tase_id: 1082858
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 2123
+- name_he: ליברה
+  listing: TASE
+  tase_id: 1176981
+  sector: insurance
+  tase_sector: ביטוח
+  maya_company_id: 1926
+- name_he: מיטב טרייד
+  listing: TASE
+  tase_id: 1203181
+  sector: financial_services
+  tase_sector: שרותים פיננסים
+  maya_company_id: 2428
+- name_he: ארד
+  listing: TASE
+  tase_id: 1091651
+  sector: electronics_optics
+  tase_sector: טכנולוגיה-אלקטרוניקה ואופטיקה
+  generic_name: true
+  maya_company_id: 1219
+- name_he: טיב טעם
+  listing: TASE
+  tase_id: 103010
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 103
+- name_he: פלרם
+  name_en: Palram Industries
+  listing: TASE
+  tase_id: 644013
+  sector: industrials_plastics
+  tase_sector: תעשייה-כימיה, גומי ופלסטיק
+  drivers_extra:
+  - polycarbonate
+  - pvc
+  - us_eu_construction
+  maya_company_id: 644
+- name_he: פריון נטוורק
+  listing: TASE
+  tase_id: 1095819
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 2240
+- name_he: רפק
+  listing: TASE
+  tase_id: 769026
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  generic_name: true
+  maya_company_id: 769
+- name_he: אלוט
+  listing: TASE
+  tase_id: 1099654
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 2252
+- name_he: דיסקונט השקעות
+  listing: TASE
+  tase_id: 639013
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 639
+- name_he: מיחשוב ישר קב
+  listing: TASE
+  tase_id: 507012
+  sector: it_services
+  tase_sector: טכנולוגיה-שרותי מידע
+  maya_company_id: 507
+- name_he: חג'ג' אירופה
+  name_en: Hagag Europe
+  listing: TASE
+  tase_id: 1143635
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  drivers_extra:
+  - europe_resi
+  maya_company_id: 1722
+- name_he: כהן פיתוח
+  listing: TASE
+  tase_id: 810010
+  sector: oil_gas_ep
+  tase_sector: אנרגיה וחיפושי נפט וגז-חיפושי נפט וגז
+  maya_company_id: 810
+- name_he: חירון
+  listing: TASE
+  tase_id: 150011
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  generic_name: true
+  maya_company_id: 150
+- name_he: דלק נכסים
+  listing: TASE
+  tase_id: 1196211
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 2387
+- name_he: סוגת
+  listing: TASE
+  tase_id: 1233014
+  sector: food_agri
+  tase_sector: תעשייה-מזון
+  generic_name: true
+  maya_company_id: 308
+- name_he: רוטשטיין
+  name_en: Rotshtein
+  listing: TASE
+  tase_id: 539015
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 539
+- name_he: קרור
+  listing: TASE
+  tase_id: 621011
+  sector: food_agri
+  tase_sector: תעשייה-מזון
+  generic_name: true
+  maya_company_id: 621
+- name_he: אורבניקה
+  listing: TASE
+  tase_id: 1220755
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 2381
+- name_he: סמארט שוטר
+  listing: TASE
+  tase_id: 1237742
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 2536
+- name_he: בית בכפר
+  name_en: Beit Bakfar
+  listing: TASE
+  tase_id: 1183656
+  sector: senior_housing
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 1802
+- name_he: מכפל טכנולוגיות
+  listing: TASE
+  tase_id: 1229335
+  sector: it_services
+  tase_sector: טכנולוגיה-שרותי מידע
+  maya_company_id: 2511
+  aliases:
+  - מיכפל טכנולוגיות
+  - מיכפל טכנולוגיות בע"מ
+- name_he: טיאסג'י
+  listing: TASE
+  tase_id: 1209477
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 2444
+- name_he: מהדרין
+  name_en: Mehadrin
+  listing: TASE
+  tase_id: 686014
+  sector: food_agri
+  tase_sector: תעשייה-מזון
+  generic_name: true
+  drivers_extra:
+  - citrus_prices
+  - water_quotas
+  - fx_eur_ils
+  maya_company_id: 686
+- name_he: ג'י וואן
+  listing: TASE
+  tase_id: 1156280
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1765
+- name_he: ישראל קנדה מלונ
+  listing: TASE
+  tase_id: 1103852
+  sector: hospitality
+  tase_sector: מסחר ושרותים-מלונאות ותיירות
+  maya_company_id: 1435
+- name_he: פולירם
+  listing: TASE
+  tase_id: 1170216
+  sector: industrials_plastics
+  tase_sector: תעשייה-כימיה, גומי ופלסטיק
+  maya_company_id: 1822
+- name_he: אלמור חשמל
+  listing: TASE
+  tase_id: 1142454
+  sector: electrical_equipment
+  tase_sector: תעשייה-חשמל
+  maya_company_id: 1704
+- name_he: אטראו שוקי הון
+  listing: TASE
+  tase_id: 1096106
+  sector: financial_services
+  tase_sector: שרותים פיננסים
+  maya_company_id: 1307
+- name_he: טרמינל איקס
+  listing: TASE
+  tase_id: 1178714
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 1948
+- name_he: קרדן נדלן
+  listing: TASE
+  tase_id: 1118447
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 1083
+- name_he: פאי סיאם
+  listing: TASE
+  tase_id: 1186527
+  sector: hospitality
+  tase_sector: מסחר ושרותים-מלונאות ותיירות
+  maya_company_id: 2344
+- name_he: שירותי בנק אוטו
+  listing: TASE
+  tase_id: 1158161
+  sector: financial_services
+  tase_sector: שרותים פיננסים
+  maya_company_id: 1774
+- name_he: גאון קבוצה
+  name_en: Gaon Group
+  listing: TASE
+  tase_id: 454017
+  sector: holdings_credit
+  tase_sector: תעשייה-מתכת ומוצרי בניה
+  drivers_extra:
+  - water_infra
+  - plastics_trade
+  maya_company_id: 454
+- name_he: פיסיבי טכנ
+  listing: TASE
+  tase_id: 1091685
+  sector: electronics_optics
+  tase_sector: טכנולוגיה-אלקטרוניקה ואופטיקה
+  maya_company_id: 1221
+- name_he: צור
+  listing: TASE
+  tase_id: 730010
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  generic_name: true
+  maya_company_id: 730
+- name_he: ריטיילורס
+  listing: TASE
+  tase_id: 1175488
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 1908
+- name_he: מגידו
+  name_en: Megiddo
+  listing: TASE
+  tase_id: 1216605
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  generic_name: true
+  maya_company_id: 2458
+- name_he: אלומיי
+  listing: TASE
+  tase_id: 1082635
+  sector: renewables
+  tase_sector: טכנולוגיה-אנרגיה מתחדשת
+  maya_company_id: 2101
+- name_he: רני צים
+  listing: TASE
+  tase_id: 1143619
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 1588
+- name_he: יצוא
+  listing: TASE
+  tase_id: 704015
+  sector: banks
+  tase_sector: בנקים
+  generic_name: true
+  maya_company_id: 704
+- name_he: קרדן ישראל
+  name_en: Kardan Israel
+  listing: TASE
+  tase_id: 1210152
+  sector: holdings_credit
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 121
+- name_he: גולד
+  listing: TASE
+  tase_id: 149013
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  generic_name: true
+  maya_company_id: 149
+- name_he: אלדן תחבורה
+  listing: TASE
+  tase_id: 1134881
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1636
+- name_he: קומפיוגן
+  listing: TASE
+  tase_id: 1085208
+  sector: biotech
+  tase_sector: ביומד-ביוטכנולוגיה
+  maya_company_id: 2188
+- name_he: וילי פוד
+  listing: TASE
+  tase_id: 371013
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 371
+- name_he: פטרוכימיים
+  listing: TASE
+  tase_id: 756015
+  sector: energy_utilities
+  tase_sector: אנרגיה וחיפושי נפט וגז-אנרגיה
+  maya_company_id: 756
+- name_he: הכשרה התחדשות
+  listing: TASE
+  tase_id: 1121474
+  sector: urban_renewal
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 1561
+- name_he: אודיוקודס
+  listing: TASE
+  tase_id: 1082965
+  sector: comms_equipment
+  tase_sector: טכנולוגיה-ציוד תקשורת
+  maya_company_id: 2134
+- name_he: יעקב פיננסים
+  listing: TASE
+  tase_id: 1185057
+  sector: nonbank_credit
+  tase_sector: שרותים פיננסים-אשראי חוץ בנקאי
+  maya_company_id: 2364
+- name_he: אסאר אקורד
+  listing: TASE
+  tase_id: 422014
+  sector: nonbank_credit
+  tase_sector: שרותים פיננסים-אשראי חוץ בנקאי
+  maya_company_id: 422
+  aliases:
+  - אקורד
+  - אס.אר. אקורד בע"מ
+- name_he: בוני תיכון
+  name_en: Bonei Hatichon
+  listing: TASE
+  tase_id: 531012
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  aliases:
+  - בוני התיכון
+  maya_company_id: 531
+- name_he: אדגר
+  listing: TASE
+  tase_id: 1820083
+  sector: income_intl
+  tase_sector: נדלן ובנייה-נדלן מניב בחו"ל
+  maya_company_id: 182
+- name_he: זנלכל
+  name_en: Zanlakol
+  listing: TASE
+  tase_id: 130013
+  sector: food_agri
+  tase_sector: תעשייה-מזון
+  drivers_extra:
+  - canned_food
+  - tin_packaging
+  maya_company_id: 130
+- name_he: ויתניה
+  listing: TASE
+  tase_id: 1109966
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  generic_name: true
+  maya_company_id: 1515
+- name_he: נטו אחזקות
+  name_en: Neto Holdings
+  listing: TASE
+  tase_id: 168013
+  sector: food_agri
+  tase_sector: תעשייה-מזון
+  drivers_extra:
+  - food_import
+  - meat_poultry
+  - shipping_freight
+  maya_company_id: 168
+- name_he: מר
+  listing: TASE
+  tase_id: 338012
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  generic_name: true
+  maya_company_id: 338
+  aliases:
+  - ח.מר תעשיות
+  - ח.מר תעשיות בע"מ
+  - מר תעשיות
+- name_he: מכלול מימון
+  listing: TASE
+  tase_id: 1179753
+  sector: nonbank_credit
+  tase_sector: שרותים פיננסים-אשראי חוץ בנקאי
+  maya_company_id: 1944
+- name_he: כפרית
+  listing: TASE
+  tase_id: 522011
+  sector: industrials_plastics
+  tase_sector: תעשייה-כימיה, גומי ופלסטיק
+  maya_company_id: 522
+- name_he: בכורי שדה
+  listing: TASE
+  tase_id: 1172618
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 1790
+  aliases:
+  - ביכורי השדה
+  - קבוצת ביכורי השדה בע"מ
+- name_he: אימאג'סט
+  listing: TASE
+  tase_id: 1183813
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 2357
+- name_he: ויקטורי
+  listing: TASE
+  tase_id: 1123777
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 1583
+- name_he: ליניאג תרפיוטיק
+  listing: TASE
+  tase_id: 1136365
+  sector: biotech
+  tase_sector: ביומד-ביוטכנולוגיה
+  maya_company_id: 1651
+- name_he: מנדלסוןתשת
+  listing: TASE
+  tase_id: 1129444
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 1247
+  aliases:
+  - מנדלסון
+  - מנדלסון תשתיות ותעשיות
+- name_he: ריט אזורים ליוי
+  name_en: Azorim Living REIT
+  listing: TASE
+  tase_id: 1162775
+  sector: rental_reit
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  aliases:
+  - אזורים ליווינג
+  maya_company_id: 1794
+- name_he: הולמס פלייס
+  listing: TASE
+  tase_id: 1142587
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1706
+- name_he: אלקטריאון
+  listing: TASE
+  tase_id: 368019
+  sector: cleantech
+  tase_sector: טכנולוגיה-קלינטק
+  maya_company_id: 368
+- name_he: עלבד
+  name_en: Albaad
+  listing: TASE
+  tase_id: 625012
+  sector: nonwovens
+  tase_sector: תעשייה-עץ, נייר ודפוס
+  drivers_extra:
+  - wet_wipes
+  - europe_demand
+  maya_company_id: 625
+- name_he: שניב
+  listing: TASE
+  tase_id: 1080837
+  sector: paper_wood
+  tase_sector: תעשייה-עץ, נייר ודפוס
+  maya_company_id: 1025
+- name_he: אורמד פארמ
+  listing: TASE
+  tase_id: 1141324
+  sector: biotech
+  tase_sector: ביומד-ביוטכנולוגיה
+  maya_company_id: 1691
+- name_he: סונול נדלן
+  listing: TASE
+  tase_id: 1226877
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 2393
+- name_he: ברן
+  listing: TASE
+  tase_id: 286013
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  generic_name: true
+  maya_company_id: 286
+- name_he: בלאקאדג'
+  listing: TASE
+  tase_id: 1172337
+  sector: nonbank_credit
+  tase_sector: שרותים פיננסים-אשראי חוץ בנקאי
+  maya_company_id: 1853
+- name_he: אילקס מדיקל
+  listing: TASE
+  tase_id: 1080753
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 1019
+- name_he: רב בריח
+  listing: TASE
+  tase_id: 1179993
+  sector: building_products
+  tase_sector: תעשייה-מתכת ומוצרי בניה
+  maya_company_id: 1949
+- name_he: אמיליה פיתוח
+  listing: TASE
+  tase_id: 589010
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  maya_company_id: 589
+- name_he: תיגבור קבוצה
+  listing: TASE
+  tase_id: 1105022
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1460
+- name_he: שמן נדלן
+  name_en: Shemen Real Estate
+  listing: TASE
+  tase_id: 634030
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 634
+- name_he: אלעד תוכנה
+  listing: TASE
+  tase_id: 1217702
+  sector: it_services
+  tase_sector: טכנולוגיה-שרותי מידע
+  maya_company_id: 2463
+- name_he: אפי קפיטל
+  listing: TASE
+  tase_id: 1181437
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 1979
+- name_he: צרפתי
+  name_en: Tzarfati
+  listing: TASE
+  tase_id: 425017
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  aliases:
+  - צרפתי שמעון
+  generic_name: true
+  maya_company_id: 425
+- name_he: חמת
+  name_en: Hamat
+  listing: TASE
+  tase_id: 384016
+  sector: building_products
+  tase_sector: תעשייה-מתכת ומוצרי בניה
+  generic_name: true
+  drivers_extra:
+  - sanitary_ware
+  maya_company_id: 384
+- name_he: רותם שני
+  name_en: Rotem Shani
+  listing: TASE
+  tase_id: 1171529
+  sector: urban_renewal
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 1797
+- name_he: עמיר שיווק
+  listing: TASE
+  tase_id: 1092204
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 1232
+- name_he: נורסטאר
+  name_en: Norstar
+  listing: TASE
+  tase_id: 723007
+  sector: income_intl
+  tase_sector: נדלן ובנייה-נדלן מניב בחו"ל
+  drivers_extra:
+  - gcity_holding_discount
+  maya_company_id: 723
+- name_he: אברא
+  listing: TASE
+  tase_id: 1101666
+  sector: it_services
+  tase_sector: טכנולוגיה-שרותי מידע
+  generic_name: true
+  maya_company_id: 1397
+- name_he: סופרגז פאוור
+  listing: TASE
+  tase_id: 1166917
+  sector: energy_utilities
+  tase_sector: אנרגיה וחיפושי נפט וגז-אנרגיה
+  maya_company_id: 1804
+- name_he: אוריין
+  listing: TASE
+  tase_id: 1103506
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1425
+- name_he: אי.טי.ג'י.איי
+  listing: TASE
+  tase_id: 1176114
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1912
+- name_he: דורסל
+  listing: TASE
+  tase_id: 1190628
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  generic_name: true
+  maya_company_id: 2397
+- name_he: אלמוגים
+  name_en: Almogim
+  listing: TASE
+  tase_id: 1136829
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  generic_name: true
+  maya_company_id: 1553
+- name_he: חד
+  listing: TASE
+  tase_id: 351015
+  sector: building_products
+  tase_sector: תעשייה-מתכת ומוצרי בניה
+  generic_name: true
+  maya_company_id: 351
+- name_he: פייטון
+  listing: TASE
+  tase_id: 412015
+  sector: electronics_optics
+  tase_sector: טכנולוגיה-אלקטרוניקה ואופטיקה
+  maya_company_id: 412
+- name_he: סאנפלאואר
+  listing: TASE
+  tase_id: 1098755
+  sector: renewables
+  tase_sector: טכנולוגיה-אנרגיה מתחדשת
+  maya_company_id: 1062
+- name_he: בוליגו
+  name_en: Buligo Capital
+  listing: TASE
+  tase_id: 1180595
+  sector: income_intl
+  tase_sector: נדלן ובנייה-נדלן מניב בחו"ל
+  drivers_extra:
+  - us_re_funds
+  maya_company_id: 1980
+- name_he: פינרג'י
+  listing: TASE
+  tase_id: 1172360
+  sector: cleantech
+  tase_sector: טכנולוגיה-קלינטק
+  maya_company_id: 1843
+- name_he: אייקון גרופ
+  listing: TASE
+  tase_id: 1182484
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 1993
+- name_he: אקסל
+  listing: TASE
+  tase_id: 770016
+  sector: it_services
+  tase_sector: טכנולוגיה-שרותי מידע
+  generic_name: true
+  maya_company_id: 770
+- name_he: שובל
+  name_en: Shoval
+  listing: TASE
+  tase_id: 1207968
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  generic_name: true
+  maya_company_id: 2441
+- name_he: נובולוג
+  listing: TASE
+  tase_id: 1140151
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1677
+- name_he: קנדה גלובל
+  name_en: Canada Global
+  listing: TASE
+  tase_id: 106013
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-נדלן מניב בחו"ל
+  drivers_extra:
+  - luxury_tlv
+  maya_company_id: 106
+- name_he: קליל
+  name_en: Klil Industries
+  listing: TASE
+  tase_id: 797035
+  sector: building_products
+  tase_sector: תעשייה-מתכת ומוצרי בניה
+  generic_name: true
+  drivers_extra:
+  - aluminum_lme
+  maya_company_id: 797
+- name_he: גולף
+  listing: TASE
+  tase_id: 1096148
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  generic_name: true
+  maya_company_id: 1310
+- name_he: ישראייר גרופ
+  listing: TASE
+  tase_id: 1187194
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1238
+- name_he: רנט איט
+  listing: TASE
+  tase_id: 1199645
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 2423
+- name_he: אספן גרופ
+  name_en: Aspen Group
+  listing: TASE
+  tase_id: 313015
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בחו"ל
+  drivers_extra:
+  - europe_assets
+  maya_company_id: 313
+- name_he: תומר אנרגיה
+  listing: TASE
+  tase_id: 1129493
+  sector: oil_gas_ep
+  tase_sector: אנרגיה וחיפושי נפט וגז-חיפושי נפט וגז
+  maya_company_id: 1609
+- name_he: טורבוג'ן
+  listing: TASE
+  tase_id: 1181742
+  sector: cleantech
+  tase_sector: טכנולוגיה-קלינטק
+  maya_company_id: 1936
+- name_he: גפן מגורים
+  listing: TASE
+  tase_id: 1118116
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 1532
+- name_he: עלמא יסודות
+  listing: TASE
+  tase_id: 1173145
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  maya_company_id: 1857
+- name_he: מלרן
+  listing: TASE
+  tase_id: 1170950
+  sector: nonbank_credit
+  tase_sector: שרותים פיננסים-אשראי חוץ בנקאי
+  maya_company_id: 1787
+- name_he: גן שמואל
+  listing: TASE
+  tase_id: 532010
+  sector: food_agri
+  tase_sector: תעשייה-מזון
+  maya_company_id: 532
+- name_he: איביאי חיתום
+  listing: TASE
+  tase_id: 1084482
+  sector: financial_services
+  tase_sector: שרותים פיננסים
+  maya_company_id: 1106
+- name_he: סאני תקשורת
+  listing: TASE
+  tase_id: 1082353
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 2009
+- name_he: דיאסאייטי
+  listing: TASE
+  tase_id: 1238013
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 2528
+  aliases:
+  - די.אס.איי.טי
+  - די.אס.איי.טי פתרונות בע"מ
+  - דיסאייטי
+- name_he: אוברסיז
+  listing: TASE
+  tase_id: 1139617
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1671
+- name_he: אופל בלאנס
+  listing: TASE
+  tase_id: 1094986
+  sector: nonbank_credit
+  tase_sector: שרותים פיננסים-אשראי חוץ בנקאי
+  maya_company_id: 1287
+- name_he: אלומה תשתיות
+  listing: TASE
+  tase_id: 1181643
+  sector: holdings_credit
+  tase_sector: השקעה ואחזקות
+  maya_company_id: 1978
+- name_he: רימוני
+  name_en: Rimoni Industries
+  listing: TASE
+  tase_id: 1080456
+  sector: industrials_plastics
+  tase_sector: תעשייה-כימיה, גומי ופלסטיק
+  drivers_extra:
+  - injection_molds
+  - medical_devices
+  maya_company_id: 76
+- name_he: כרמל קורפ
+  listing: TASE
+  tase_id: 1147685
+  sector: food_agri
+  tase_sector: תעשייה-מזון
+  maya_company_id: 1748
+- name_he: בית וגג
+  name_en: Bayit VeGag
+  listing: TASE
+  tase_id: 1185362
+  sector: urban_renewal
+  tase_sector: נדלן ובנייה-בנייה
+  generic_name: true
+  maya_company_id: 2371
+- name_he: רגא שרותים
+  listing: TASE
+  tase_id: 1226885
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 2489
+  aliases:
+  - ר.ג.א. שרותים ונקיון
+  - רגא שרותים ונקיון
+- name_he: נתנאל גרופ
+  name_en: Netanel Group
+  listing: TASE
+  tase_id: 421016
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 421
+- name_he: יוניטרוניקס
+  listing: TASE
+  tase_id: 1083831
+  sector: electronics_optics
+  tase_sector: טכנולוגיה-אלקטרוניקה ואופטיקה
+  maya_company_id: 2170
+- name_he: כנפיים
+  listing: TASE
+  tase_id: 543017
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  generic_name: true
+  maya_company_id: 543
+- name_he: וויי בוקס
+  listing: TASE
+  tase_id: 486027
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 486
+- name_he: שוהם ביזנס
+  listing: TASE
+  tase_id: 1082007
+  sector: nonbank_credit
+  tase_sector: שרותים פיננסים-אשראי חוץ בנקאי
+  maya_company_id: 1071
+- name_he: מיטרוניקס
+  listing: TASE
+  tase_id: 1091065
+  sector: robotics
+  tase_sector: טכנולוגיה-רובוטיקה ותלת מימד
+  maya_company_id: 1212
+- name_he: אביב בניה
+  name_en: Aviv Bniya
+  listing: TASE
+  tase_id: 444018
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  generic_name: true
+  maya_company_id: 444
+- name_he: פוליגון
+  listing: TASE
+  tase_id: 745018
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  generic_name: true
+  maya_company_id: 745
+- name_he: אבגול
+  name_en: Avgol
+  listing: TASE
+  tase_id: 1100957
+  sector: nonwovens
+  tase_sector: תעשייה-עץ, נייר ודפוס
+  drivers_extra:
+  - polypropylene
+  maya_company_id: 1390
+- name_he: אב-גד
+  name_en: Av-Gad
+  listing: TASE
+  tase_id: 1171818
+  sector: urban_renewal
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 1829
+- name_he: מצלאוי
+  listing: TASE
+  tase_id: 1106749
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 1484
+- name_he: מדיפאואר
+  listing: TASE
+  tase_id: 1139955
+  sector: income_intl
+  tase_sector: נדלן ובנייה-נדלן מניב בחו"ל
+  maya_company_id: 1433
+- name_he: גילת טלקום
+  listing: TASE
+  tase_id: 1080597
+  sector: telecom_media
+  tase_sector: מסחר ושרותים-תקשורת ומדיה
+  maya_company_id: 1006
+- name_he: ארבה רובוטיקס
+  listing: TASE
+  tase_id: 1179662
+  sector: semiconductors
+  tase_sector: טכנולוגיה-מוליכים למחצה
+  maya_company_id: 1975
+- name_he: פיקס סולושנז
+  listing: TASE
+  tase_id: 382010
+  sector: it_services
+  tase_sector: טכנולוגיה-שרותי מידע
+  maya_company_id: 382
+- name_he: גלובל כנפיים
+  listing: TASE
+  tase_id: 1141316
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1559
+- name_he: שנפ
+  listing: TASE
+  tase_id: 1103571
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  generic_name: true
+  maya_company_id: 1427
+- name_he: שדה נדל"ן
+  listing: TASE
+  tase_id: 341016
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 341
+- name_he: קווינקו
+  listing: TASE
+  tase_id: 386011
+  sector: hospitality
+  tase_sector: מסחר ושרותים-מלונאות ותיירות
+  maya_company_id: 386
+- name_he: גולן תעשיות
+  listing: TASE
+  tase_id: 1091933
+  sector: industrials_plastics
+  tase_sector: תעשייה-כימיה, גומי ופלסטיק
+  generic_name: true
+  maya_company_id: 1226
+- name_he: עמיעד
+  listing: TASE
+  tase_id: 1094390
+  sector: industrials_plastics
+  tase_sector: תעשייה-כימיה, גומי ופלסטיק
+  generic_name: true
+  maya_company_id: 2234
+- name_he: צילו-בלו
+  listing: TASE
+  tase_id: 1102532
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 1331
+- name_he: לוזון אשראי
+  listing: TASE
+  tase_id: 666016
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 666
+- name_he: טופ גרופ
+  listing: TASE
+  tase_id: 1083377
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 1081
+- name_he: רייזור
+  listing: TASE
+  tase_id: 1172527
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 1849
+- name_he: רבד
+  name_en: Ravad
+  listing: TASE
+  tase_id: 526012
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  generic_name: true
+  maya_company_id: 526
+- name_he: טכנ גילוי אש גז
+  listing: TASE
+  tase_id: 1165307
+  sector: electronics_optics
+  tase_sector: טכנולוגיה-אלקטרוניקה ואופטיקה
+  maya_company_id: 1796
+- name_he: פיימנט
+  listing: TASE
+  tase_id: 1180876
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 1977
+- name_he: ג'ין טכנולוגיות
+  listing: TASE
+  tase_id: 1099787
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 1370
+- name_he: באטמ
+  listing: TASE
+  tase_id: 1158823
+  sector: tech_holdings
+  tase_sector: טכנולוגיה-השקעות בהיי טק
+  maya_company_id: 2135
+- name_he: אינטרקיור
+  listing: TASE
+  tase_id: 1106376
+  sector: cannabis
+  tase_sector: ביומד-קנאביס
+  maya_company_id: 1480
+- name_he: סולרום החז
+  listing: TASE
+  tase_id: 1177518
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 1924
+- name_he: מולטי ריטייל
+  listing: TASE
+  tase_id: 1171669
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 1738
+- name_he: נקסטקום
+  listing: TASE
+  tase_id: 1095785
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1298
+- name_he: פרימוטק
+  listing: TASE
+  tase_id: 1175496
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 1872
+- name_he: אלרון
+  listing: TASE
+  tase_id: 749077
+  sector: tech_holdings
+  tase_sector: טכנולוגיה-השקעות בהיי טק
+  maya_company_id: 749
+- name_he: עין שלישית
+  listing: TASE
+  tase_id: 397018
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 397
+- name_he: אירודרום קבוצה
+  listing: TASE
+  tase_id: 363010
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 363
+- name_he: ברימאג
+  listing: TASE
+  tase_id: 1094283
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 1269
+- name_he: ראלקו
+  listing: TASE
+  tase_id: 393017
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 393
+- name_he: אסטיגי
+  listing: TASE
+  tase_id: 550012
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 550
+- name_he: אינטר תעשיות
+  listing: TASE
+  tase_id: 1080928
+  sector: electrical_equipment
+  tase_sector: תעשייה-חשמל
+  maya_company_id: 1028
+- name_he: לסיכו
+  name_en: Lesico
+  listing: TASE
+  tase_id: 1140946
+  sector: construction_infra
+  tase_sector: נדלן ובנייה-בנייה
+  generic_name: true
+  drivers_extra:
+  - water_infra
+  maya_company_id: 1680
+- name_he: אודיסייט
+  listing: TASE
+  tase_id: 1239185
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 2543
+- name_he: תפרון
+  listing: TASE
+  tase_id: 1082585
+  sector: apparel
+  tase_sector: תעשייה-אופנה והלבשה
+  maya_company_id: 2076
+- name_he: סיאי
+  listing: TASE
+  tase_id: 442012
+  sector: electronics_optics
+  tase_sector: טכנולוגיה-אלקטרוניקה ואופטיקה
+  maya_company_id: 442
+- name_he: רם און
+  listing: TASE
+  tase_id: 1090943
+  sector: industrials_plastics
+  tase_sector: תעשייה-כימיה, גומי ופלסטיק
+  maya_company_id: 1209
+- name_he: ארן
+  listing: TASE
+  tase_id: 1085265
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  generic_name: true
+  maya_company_id: 1122
+- name_he: ליבנטל
+  listing: TASE
+  tase_id: 584011
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 584
+- name_he: ברקת
+  listing: TASE
+  tase_id: 1178276
+  sector: nonbank_credit
+  tase_sector: שרותים פיננסים-אשראי חוץ בנקאי
+  generic_name: true
+  maya_company_id: 1940
+- name_he: פרופדו
+  listing: TASE
+  tase_id: 1188622
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 2389
+- name_he: בית הזהב
+  name_en: Beit Hazahav
+  listing: TASE
+  tase_id: 235010
+  sector: senior_housing
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  generic_name: true
+  maya_company_id: 235
+- name_he: טי.ג'י.איי
+  listing: TASE
+  tase_id: 1090141
+  sector: building_products
+  tase_sector: תעשייה-מתכת ומוצרי בניה
+  maya_company_id: 1185
+- name_he: ספאנטק
+  name_en: Spuntech
+  listing: TASE
+  tase_id: 1090117
+  sector: nonwovens
+  tase_sector: תעשייה-עץ, נייר ודפוס
+  drivers_extra:
+  - spunlace
+  - us_plant
+  maya_company_id: 1182
+- name_he: שגריר
+  listing: TASE
+  tase_id: 1138379
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  generic_name: true
+  maya_company_id: 1664
+- name_he: ברנד
+  listing: TASE
+  tase_id: 536011
+  sector: building_products
+  tase_sector: תעשייה-מתכת ומוצרי בניה
+  generic_name: true
+  maya_company_id: 536
+- name_he: אנשי העיר
+  name_en: Anshei Hair
+  listing: TASE
+  tase_id: 1198266
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  generic_name: true
+  maya_company_id: 2417
+- name_he: לוינסקי עופר
+  listing: TASE
+  tase_id: 200014
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 200
+- name_he: אייראנג'י טק
+  listing: TASE
+  tase_id: 1105907
+  sector: renewables
+  tase_sector: טכנולוגיה-אנרגיה מתחדשת
+  maya_company_id: 1473
+- name_he: שרין טכנו
+  listing: TASE
+  tase_id: 1092725
+  sector: electronics_optics
+  tase_sector: טכנולוגיה-אלקטרוניקה ואופטיקה
+  maya_company_id: 2226
+- name_he: מודיעין יהש
+  listing: TASE
+  tase_id: 345017
+  sector: oil_gas_ep
+  tase_sector: אנרגיה וחיפושי נפט וגז-חיפושי נפט וגז
+  maya_company_id: 345
+- name_he: אפולו פאוור
+  listing: TASE
+  tase_id: 1082114
+  sector: cleantech
+  tase_sector: טכנולוגיה-קלינטק
+  maya_company_id: 1074
+- name_he: אימקו
+  listing: TASE
+  tase_id: 282012
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 282
+- name_he: רבל
+  name_en: Raval
+  listing: TASE
+  tase_id: 1103878
+  sector: auto_components
+  tase_sector: תעשייה-כימיה, גומי ופלסטיק
+  drivers_extra:
+  - fuel_system_valves
+  - ev_transition_risk
+  maya_company_id: 1436
+- name_he: גלוברנדס
+  listing: TASE
+  tase_id: 1147487
+  sector: trade_distribution
+  tase_sector: מסחר ושרותים-מסחר
+  maya_company_id: 1741
+- name_he: רקח
+  listing: TASE
+  tase_id: 1081009
+  sector: pharma
+  tase_sector: ביומד-פארמה
+  maya_company_id: 1033
+- name_he: מישורים
+  listing: TASE
+  tase_id: 1105196
+  sector: income_intl
+  tase_sector: נדלן ובנייה-נדלן מניב בחו"ל
+  generic_name: true
+  maya_company_id: 1467
+- name_he: אנגל שלמה
+  listing: TASE
+  tase_id: 180018
+  sector: food_agri
+  tase_sector: תעשייה-מזון
+  maya_company_id: 180
+- name_he: לודן
+  listing: TASE
+  tase_id: 1081439
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1050
+- name_he: תיא השקעות
+  listing: TASE
+  tase_id: 796011
+  sector: telecom_media
+  tase_sector: מסחר ושרותים-תקשורת ומדיה
+  maya_company_id: 796
+- name_he: פרידנזון
+  listing: TASE
+  tase_id: 1102219
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  maya_company_id: 1403
+- name_he: חלל תקשורת
+  listing: TASE
+  tase_id: 1092345
+  sector: telecom_media
+  tase_sector: מסחר ושרותים-תקשורת ומדיה
+  maya_company_id: 1132
+- name_he: אראסאל
+  listing: TASE
+  tase_id: 299016
+  sector: defense_industry
+  tase_sector: טכנולוגיה-ביטחוניות
+  maya_company_id: 299
+- name_he: מיה דיינמיקס
+  listing: TASE
+  tase_id: 494013
+  sector: electronics_optics
+  tase_sector: טכנולוגיה-אלקטרוניקה ואופטיקה
+  maya_company_id: 494
+- name_he: בירמן
+  name_en: Birman
+  listing: TASE
+  tase_id: 530014
+  sector: building_products
+  tase_sector: תעשייה-עץ, נייר ודפוס
+  drivers_extra:
+  - wood_trade
+  - import_costs
+  maya_company_id: 530
+- name_he: יוטרון
+  listing: TASE
+  tase_id: 1157114
+  sector: robotics
+  tase_sector: טכנולוגיה-רובוטיקה ותלת מימד
+  maya_company_id: 1771
+- name_he: אוריון
+  listing: TASE
+  tase_id: 1232750
+  sector: income_intl
+  tase_sector: נדלן ובנייה-נדלן מניב בחו"ל
+  generic_name: true
+  maya_company_id: 2518
+- name_he: טונדו סמארט
+  listing: TASE
+  tase_id: 1180686
+  sector: electronics_optics
+  tase_sector: טכנולוגיה-אלקטרוניקה ואופטיקה
+  maya_company_id: 1945
+- name_he: סופרין
+  listing: TASE
+  tase_id: 1181569
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  generic_name: true
+  maya_company_id: 1974
+- name_he: נתנאל מניבים
+  listing: TASE
+  tase_id: 1194513
+  sector: income_il
+  tase_sector: נדלן ובנייה-נדלן מניב בישראל
+  maya_company_id: 2412
+- name_he: סינאל
+  listing: TASE
+  tase_id: 1084953
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 1115
+- name_he: שיח מדיקל
+  listing: TASE
+  tase_id: 249011
+  sector: cannabis
+  tase_sector: ביומד-קנאביס
+  maya_company_id: 249
+- name_he: אמנת
+  listing: TASE
+  tase_id: 654012
+  sector: business_services
+  tase_sector: מסחר ושרותים-שרותים
+  generic_name: true
+  maya_company_id: 654
+- name_he: גניגר
+  listing: TASE
+  tase_id: 1095892
+  sector: industrials_plastics
+  tase_sector: תעשייה-כימיה, גומי ופלסטיק
+  maya_company_id: 1301
+- name_he: המשביר 365
+  listing: TASE
+  tase_id: 1104959
+  sector: food_retail
+  tase_sector: מסחר ושרותים-רשתות שיווק
+  maya_company_id: 1459
+- name_he: אפיטומי מדיקל
+  listing: TASE
+  tase_id: 1182591
+  sector: medical_devices
+  tase_sector: ביומד-מכשור רפואי
+  maya_company_id: 1998
+- name_he: ניסן
+  listing: TASE
+  tase_id: 660019
+  sector: paper_wood
+  tase_sector: תעשייה-עץ, נייר ודפוס
+  generic_name: true
+  maya_company_id: 660
+- name_he: מטריסלף
+  listing: TASE
+  tase_id: 1176791
+  sector: biotech
+  tase_sector: ביומד-ביוטכנולוגיה
+  maya_company_id: 1902
+- name_he: בלנדר
+  listing: TASE
+  tase_id: 1172097
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 1846
+- name_he: הזדמנות יהש
+  listing: TASE
+  tase_id: 1119924
+  sector: oil_gas_ep
+  tase_sector: אנרגיה וחיפושי נפט וגז-חיפושי נפט וגז
+  maya_company_id: 1551
+- name_he: מותג עירוני
+  listing: TASE
+  tase_id: 1223858
+  sector: resi_dev_il
+  tase_sector: נדלן ובנייה-בנייה
+  maya_company_id: 2486
+- name_he: אלספק
+  listing: TASE
+  tase_id: 1090364
+  sector: electrical_equipment
+  tase_sector: תעשייה-חשמל
+  maya_company_id: 1194
+- name_he: פלסאנמור
+  listing: TASE
+  tase_id: 1176700
+  sector: medical_devices
+  tase_sector: ביומד-מכשור רפואי
+  maya_company_id: 1895
+- name_he: פלורי
+  listing: TASE
+  tase_id: 1121730
+  sector: biotech
+  tase_sector: ביומד-ביוטכנולוגיה
+  maya_company_id: 1569
+- name_he: לודן-טק
+  listing: TASE
+  tase_id: 1226992
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 2491
+- name_he: סקודיקס
+  listing: TASE
+  tase_id: 1178490
+  sector: electronics_optics
+  tase_sector: טכנולוגיה-אלקטרוניקה ואופטיקה
+  maya_company_id: 1887
+- name_he: פוטומיין
+  listing: TASE
+  tase_id: 1173855
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 1873
+- name_he: אלארום
+  listing: TASE
+  tase_id: 1083856
+  sector: software_internet
+  tase_sector: טכנולוגיה-תוכנה ואינטרנט
+  maya_company_id: 1091
+- name_he: פרקומט
+  listing: TASE
+  tase_id: 1187640
+  sector: robotics
+  tase_sector: טכנולוגיה-רובוטיקה ותלת מימד
+  maya_company_id: 2391
+- name_he: אבוג'ן
+  listing: TASE
+  tase_id: 1105055
+  sector: biotech
+  tase_sector: ביומד-ביוטכנולוגיה
+  maya_company_id: 1461
