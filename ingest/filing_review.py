@@ -32,7 +32,7 @@ harden()
 import anthropic  # noqa: E402
 from curl_cffi import requests as creq  # noqa: E402
 
-from _filings import is_financial, reviewable  # noqa: E402
+from _filings import is_financial, pregenerate  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 FILINGS = ROOT / "output" / "filings"
@@ -126,7 +126,7 @@ def candidates(rows: list[dict], since: str | None = None) -> list[dict]:
     """
     out = []
     for r in rows:
-        if not reviewable(r):
+        if not pregenerate(r):
             continue
         if since and (r.get("d") or "") < since:
             continue
