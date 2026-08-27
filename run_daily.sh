@@ -22,10 +22,34 @@ edition_from_hour() {
   esac
 }
 
-EDITION="${BRIEF_EDITION:-$(edition_from_hour "$(date +%H)")}"
+# **חלון השעות שייך לתזמון בלבד.** הוא נועד למקרה אחד: כל מהדורה
+# מתוזמנת לשתי שעות UTC בגלל שעון הקיץ, והשנייה צריכה לצאת בשקט.
+# אבל הוא חל גם על הרצה מכוונת — ו-13 מתוך 24 שעות אינן בחלון,
+# כלומר בקשה מפורשת להריץ ברייף נכשלה בשקט ב-54% מהיום. נמדד:
+# ריצה #104 ב-20:23 יצאה בלי להפיק דבר.
+#
+# בהרצה מכוונת נבחרת המהדורה שחלונה חלף לאחרונה: זו התשובה הנכונה
+# ל"הרץ עכשיו" בכל שעה שהיא.
+edition_nearest() {
+  case "$1" in
+    0[5-9]|1[0-2]) echo morning ;;
+    1[3-9])        echo close ;;
+    *)             echo night ;;
+  esac
+}
+
+EDITION="${BRIEF_EDITION:-}"
+if [ -z "$EDITION" ]; then
+  if [ -n "${BRIEF_FORCE:-}" ]; then
+    EDITION="$(edition_nearest "$(date +%H)")"
+    echo "הרצה מכוונת ב-$(date +%H:%M) — נבחרה מהדורת $EDITION."
+  else
+    EDITION="$(edition_from_hour "$(date +%H)")"
+  fi
+fi
 if [ "$EDITION" = "skip" ]; then
   echo "השעה $(date +%H:%M) אינה שעת מהדורה — יוצאים בלי להפיק ברייף."
-  echo "::warning title=לא הופק ברייף::השעה $(date +%H:%M) אינה בחלון של אף מהדורה. אם ההרצה הייתה מכוונת, ציין edition בקובץ הטריגר."
+  echo "::warning title=לא הופק ברייף::השעה $(date +%H:%M) אינה בחלון של אף מהדורה, וזו ריצה מתוזמנת. בהרצה מכוונת נבחרת המהדורה הקרובה."
   exit 0
 fi
 
