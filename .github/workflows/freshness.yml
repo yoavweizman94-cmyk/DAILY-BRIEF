@@ -1,0 +1,42 @@
+name: Freshness
+
+# משמר טריות: האם כל זרם נתונים התעדכן בזמן שהוא אמור.
+#
+# **למה זה קיים.** במשך יומיים יואב גילה בעצמו שדברים תקועים — ברייף של
+# אתמול, עסקאות שלא זזו, תמלולים חסרים — ובכל פעם הריצות שהיו אמורות
+# לייצר אותם היו ירוקות. ריצה מוצלחת אינה מבטיחה תוצר מעודכן: היא
+# יכולה לצאת מוקדם, לדחוף לריפו התוכן בלי לפרוס, או להיכשל במקור בודד
+# ולהמשיך. שלושת המקרים קרו כאן.
+#
+# הבדיקה היא על **התוצר** ולא על הריצה, ולכן היא תופסת גם כשל שאיש לא
+# חשב עליו מראש. היא זולה — שכפול ריפו התוכן וקריאת קבצים, בלי API.
+on:
+  schedule:
+    - cron: "0 8,14,20 * * *"    # 11:00 · 17:00 · 23:00 שעון ישראל
+  push:
+    paths:
+      - ".trigger/freshness.json"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      # קובעת ואינה מדפיסה: זרם שחרג מהסף מפיל את הריצה, כדי שהיא
+      # תופיע אדומה ברשימת ה-Actions ולא תיבלע כעוד ריצה ירוקה.
+      - name: Check freshness
+        run: python scripts/freshness.py
