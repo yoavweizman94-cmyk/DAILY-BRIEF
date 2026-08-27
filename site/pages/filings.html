@@ -44,9 +44,8 @@
   // מזהי הדוחות שיש להם סקירה מוכנה. נטען פעם אחת; כשהקובץ חסר
   // הכפתור פשוט לא מוצג, והעמוד ממשיך לעבוד בדיוק כמו קודם.
   // `reviewed` — סקירות שכבר נבנו ומוגשות כקובץ סטטי (חינם).
-  // `canReview` — כל דיווח שמותר לייצר עליו סקירה לפי דרישה (עולה כסף).
-  // מאז 27/08/2026 זה **כל** דיווח שיש לו קובץ, ולא רק דוח כספי של
-  // חברת כיסוי. מבנה הסקירה נבחר בשרת לפי סוג הדיווח.
+  // `canReview` — כל דוח שמותר לייצר עליו סקירה לפי דרישה (עולה כסף).
+  // מאז 27/08/2026 זה **כל דוח כספי בבורסה**, ולא רק של חברת כיסוי.
   var reviewed = {}, canReview = {}, openReview = null;
 
   function say(t, cls) { msg.className = "msg " + (cls || ""); msg.textContent = t || ""; }
@@ -268,7 +267,7 @@
           return r.text();
         });
     } else {
-      box.innerHTML = '<div class="rv-load">מייצר סקירה מהמסמך המלא. ' +
+      box.innerHTML = '<div class="rv-load">מייצר סקירה מהדוח המלא. ' +
         'זה לוקח כדקה — אפשר להשאיר פתוח.</div>';
       got = fetch("api/review/" + id, { cache: "no-cache" })
         .then(function (r) {
@@ -290,7 +289,7 @@
           "</strong> · " + heDate(e.d) + '<button type="button" class="rv-x" ' +
           'aria-label="סגור">×</button></div>' +
           '<div class="rv-body">' + html + "</div>" +
-          '<p class="rv-note">סקירה שנכתבה מגוף המסמך בלבד. אינה ייעוץ ואינה ' +
+          '<p class="rv-note">סקירה שנכתבה מגוף הדוח בלבד. אינה ייעוץ ואינה ' +
           'המלצה. במקרה של פער מול הדוח — הדוח קובע.</p>';
         var x = box.querySelector(".rv-x");
         if (x) x.onclick = function () { toggleReview(btn); };

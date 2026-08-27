@@ -814,7 +814,7 @@ def main() -> int:
         # חברת כיסוי יכול להוציא כסף — הדפדפן שולח מזהה, לא נתיב.
         try:
             sys.path.insert(0, str(ROOT / "ingest"))
-            from _filings import is_financial, reviewable
+            from _filings import reviewable
             pdfmap = {}
             for f in sorted((ROOT / "output" / "filings").glob("[0-9][0-9][0-9][0-9].jsonl")):
                 for line in f.read_text(encoding="utf-8").splitlines():
@@ -824,10 +824,7 @@ def main() -> int:
                     if reviewable(r):
                         pdfmap[str(r["id"])] = {
                             "p": r["p"], "d": r.get("d"), "t": r.get("t"),
-                            "c": r.get("c"),
-                            # מבנה הסקירה נגזר מכאן: דוח כספי מקבל את
-                            # הפירוק הפיננסי, וכל היתר מבנה שמתאים לדיווח.
-                            "fin": 1 if is_financial(r.get("t") or "") else 0}
+                            "c": r.get("c")}
             (OUT / "filings" / "pdfmap.json").write_text(
                 json.dumps(pdfmap, ensure_ascii=False), encoding="utf-8")
             print(f"  דוחות שניתן לסקור: {len(pdfmap)}")
