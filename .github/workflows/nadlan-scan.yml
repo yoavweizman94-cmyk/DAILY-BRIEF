@@ -96,10 +96,18 @@ jobs:
           [ "$total" -gt 0 ]
 
       - name: Push content
+        id: content
         if: '!inputs.diagnose'
         env:
           CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
-        run: bash scripts/content_repo.sh push "עסקאות נדלן"
+        run: |
+          if [ -n "$(git -C output status --porcelain 2>/dev/null)" ]; then
+            bash scripts/content_repo.sh push "עסקאות נדלן"
+            echo "changed=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "אין תוכן חדש"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Push scan state
         if: '!inputs.diagnose'
@@ -109,3 +117,32 @@ jobs:
           git add data/nadlan_state.json
           git diff --cached --quiet || git commit -m "nadlan: מצב סריקה"
           bash scripts/git_sync.sh
+
+      # **מי שמייצר תוכן חייב גם לפרוס אותו.** בלי השלבים האלה הנתונים
+      # מגיעים לריפו התוכן ונשארים שם עד שצינור אחר יבנה את האתר —
+      # ואם אף אחד לא בונה, האתר מציג את של אתמול. נמדד ב-27/08:
+      # העסקאות ושוק הדיור נסרקו בהצלחה, והעמודים הראו את 26/08.
+      #
+      # השלבים רצים רק כשבאמת השתנה תוכן, ולכן ריצה שאין בה חדש אינה
+      # פורסת מחדש אתר זהה.
+      - name: Rebuild site
+        if: steps.content.outputs.changed == 'yes'
+        run: |
+          pip install --quiet markdown pyyaml
+          python site/build.py
+
+      - uses: actions/setup-node@v4
+        if: steps.content.outputs.changed == 'yes'
+        with:
+          node-version: "20"
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.content.outputs.changed == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
+          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
+            echo "::error::הפריסה לא החזירה כתובת"; exit 1; }
