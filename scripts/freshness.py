@@ -14,7 +14,9 @@
 """
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -23,6 +25,83 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "output"
 
 IL = timezone(timedelta(hours=3))
+
+
+# --- למה זה נשבר, לא רק שזה נשבר -------------------------------------
+# **התראה שאומרת "תקוע" מחייבת חקירה; התראה שאומרת "תקוע כי היתרה
+# אזלה" מחייבת פעולה אחת.** הסיבה נשלפת מהריצה האחרונה של הצינור
+# הרלוונטי — אותן אנוטציות שממילא נכתבות שם.
+CAUSES = (
+    ("credit balance", "יתרת Anthropic אזלה"),
+    ("אינו מזוהה", "עוגיית גלובס פגה"),
+    ("הסשן אינו", "עוגיית גלובס פגה"),
+    ("overloaded", "עומס בצד המודל"),
+    ("לא הופק ברייף", "הריצה יצאה בלי להפיק ברייף"),
+    ("rate limit", "מגבלת קצב"),
+)
+
+WORKFLOWS = {
+    "ברייף": "daily-brief.yml",
+    "עסקאות מחוץ לבורסה": "offex-backfill.yml",
+    "דיווחי בעלי עניין": "offex-backfill.yml",
+    "תמלולי שיחות": "globes-calls.yml",
+}
+
+
+def last_failure_reason(workflow: str) -> str | None:
+    """הסיבה מהריצה האחרונה של אותו workflow, אם היא נכשלה."""
+    token = os.environ.get("GITHUB_TOKEN")
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    if not token or not repo:
+        return None
+    api = f"https://api.github.com/repos/{repo}"
+    h = {"Authorization": f"Bearer {token}",
+         "Accept": "application/vnd.github+json"}
+    try:
+        import requests
+        runs = requests.get(f"{api}/actions/workflows/{workflow}/runs",
+                            headers=h, params={"per_page": 1}, timeout=30)
+        if runs.status_code != 200:
+            return None
+        rows = runs.json().get("workflow_runs") or []
+        if not rows or rows[0].get("conclusion") == "success":
+            return None
+        jobs = requests.get(rows[0]["jobs_url"], headers=h, timeout=30).json()
+        for job in jobs.get("jobs", []):
+            ann = requests.get(f"{api}/check-runs/{job['id']}/annotations",
+                               headers=h, timeout=30)
+            for a in (ann.json() if ann.status_code == 200 else []):
+                msg = (a.get("message") or "") + " " + (a.get("title") or "")
+                low = msg.lower()
+                for needle, label in CAUSES:
+                    if needle.lower() in low:
+                        return label
+        return "הריצה נכשלה"
+    except Exception:
+        return None
+
+
+def alert(lines: list[str]) -> None:
+    """שולח את ההתראה לטלגרם. **בלי זה יואב הוא מערכת הניטור.**
+
+    האתר כבר מסמן "ברייף מאתמול", ומשמר הטריות כבר נכשל אדום
+    ב-Actions — ובכל זאת, בשלושה ימים רצופים יואב הוא זה שגילה
+    שמשהו תקוע. ערוץ שדורש ממנו לפתוח דף כדי לדעת אינו התראה.
+    """
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        print("::warning::טלגרם אינו מוגדר — ההתראה לא נשלחה")
+        return
+    import requests
+    text = "\n".join(["<b>TLV TASE View — נתונים לא טריים</b>", ""] + lines)
+    r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                      json={"chat_id": chat, "text": text, "parse_mode": "HTML",
+                            "disable_web_page_preview": True}, timeout=30)
+    if r.ok:
+        print("ההתראה נשלחה לטלגרם")
+    else:
+        print(f"::warning::שליחת ההתראה נכשלה: {r.status_code} {r.text[:150]}")
 
 
 def newest_brief() -> tuple[str, str] | None:
@@ -69,8 +148,13 @@ def business_days_since(day: str, today: date) -> int:
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--alert", action="store_true",
+                    help="לשלוח התראה לטלגרם כשמשהו אינו טרי")
+    args = ap.parse_args()
+
     today = datetime.now(IL).date()
-    rows, bad = [], []
+    rows, bad, tg = [], [], []
 
     # --- הברייף: נכתב שלוש פעמים ביום, כל יום ---
     b = newest_brief()
@@ -83,6 +167,7 @@ def main() -> int:
         if age >= 1:
             bad.append(f"הברייף האחרון הוא של {day} — {age} ימים. "
                        "בדוק את Daily Brief; פעימות ההשלמה היו אמורות לתפוס זאת.")
+            tg.append(("ברייף", day, f"{age} ימים"))
 
     # --- זרמים שנגזרים ממסחר: נמדדים בימי מסחר ---
     for label, dirname, pattern, field, limit, hint in (
@@ -94,12 +179,14 @@ def main() -> int:
         if not day:
             rows.append((label, "—", "אין נתונים", hint))
             bad.append(f"{label}: אין נתונים כלל ב-output/{dirname}")
+            tg.append((label, "—", "אין נתונים"))
             continue
         n = business_days_since(day, today)
         rows.append((label, day, f"{n} ימי מסחר", hint))
         if n > limit:
             bad.append(f"{label}: הרשומה האחרונה היא מ-{day} — {n} ימי מסחר. "
                        f"בדוק את {hint}.")
+            tg.append((label, day, f"{n} ימי מסחר"))
 
     w = max(len(r[0]) for r in rows) if rows else 10
     print("מצב טריות:")
@@ -110,6 +197,15 @@ def main() -> int:
         print()
         for msg in bad:
             print(f"::error title=נתונים לא טריים::{msg}")
+        if args.alert and tg:
+            lines = []
+            for label, day, age in tg:
+                wf = WORKFLOWS.get(label)
+                why = last_failure_reason(wf) if wf else None
+                lines.append(f"• <b>{label}</b> — {day} ({age})"
+                             + (f"\n   הסיבה: {why}" if why else ""))
+            lines += ["", "הצינורות ממשיכים לנסות. הודעה זו נשלחת עד שהמצב נפתר."]
+            alert(lines)
         return 1
     print("\nכל הזרמים בתוך הסף.")
     return 0

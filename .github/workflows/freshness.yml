@@ -20,6 +20,10 @@ on:
 
 permissions:
   contents: read
+  # נדרש כדי לשלוף את סיבת הכישלון מהריצה האחרונה של הצינור התקוע.
+  # התראה שאומרת "תקוע" מחייבת חקירה; "תקוע כי היתרה אזלה" מחייבת
+  # פעולה אחת.
+  actions: read
 
 jobs:
   check:
@@ -36,7 +40,18 @@ jobs:
           CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
         run: bash scripts/content_repo.sh pull
 
+      - name: Install
+        run: pip install --quiet requests truststore certifi
+
       # קובעת ואינה מדפיסה: זרם שחרג מהסף מפיל את הריצה, כדי שהיא
       # תופיע אדומה ברשימת ה-Actions ולא תיבלע כעוד ריצה ירוקה.
+      #
+      # **--alert הוא הלב.** האתר כבר מסמן "ברייף מאתמול", והבדיקה כבר
+      # נכשלת אדום כאן — ובכל זאת, שלושה ימים ברציפות יואב הוא שגילה
+      # שמשהו תקוע. ערוץ שדורש ממנו לפתוח דף כדי לדעת אינו התראה.
       - name: Check freshness
-        run: python scripts/freshness.py
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/freshness.py --alert
