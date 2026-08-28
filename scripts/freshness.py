@@ -83,7 +83,7 @@ def last_failure_reason(workflow: str) -> str | None:
         return None
 
 
-def alert(lines: list[str]) -> None:
+def alert(lines: list[str], subject: str = "TLV TASE View — נתונים לא טריים") -> None:
     """שולח את ההתראה **במייל**, דרך נתיב ההתראות של האתר.
 
     **בלי זה יואב הוא מערכת הניטור.** האתר כבר מסמן "ברייף מאתמול",
@@ -108,8 +108,7 @@ def alert(lines: list[str]) -> None:
         r = requests.post(f"{base}/api/alert",
                           headers={"x-scan-key": key,
                                    "Content-Type": "application/json"},
-                          json={"subject": "TLV TASE View — נתונים לא טריים",
-                                "text": text}, timeout=30)
+                          json={"subject": subject, "text": text}, timeout=30)
     except Exception as e:
         print(f"::warning::שליחת ההתראה נכשלה: {type(e).__name__}: {e}")
         return
@@ -117,6 +116,87 @@ def alert(lines: list[str]) -> None:
         print("ההתראה נשלחה במייל")
     else:
         print(f"::warning::שליחת ההתראה נכשלה: {r.status_code} {r.text[:150]}")
+
+
+# מזהה מרחב ה-KV של המשתמשים. אותו ערך שמופיע ב-users-admin.yml
+# וב-access-flow-check.yml; הוא מזהה ולא סוד.
+USERS_KV = "b437bf78b9bc4f358b6d0b4a64e0ad94"
+
+# כתובת הבדיקה של access-flow-check. היא עשויה להישאר ממתינה לתמיד,
+# ולכן אינה מפעילה התראה — אחרת ההתראה על בקשה אמיתית תיקבר תחת רעש.
+TEST_ADDRESS = "access-check@tlvtaseview.com"
+
+
+def mask_email(e: str) -> str:
+    """כתובת בצורה שמאפשרת זיהוי בידי מי שמכיר אותה, ולא בידי אחר."""
+    local, _, dom = (e or "").partition("@")
+    keep = local[:2] if len(local) > 3 else local[:1]
+    return f"{keep}{'*' * max(1, len(local) - len(keep))}@{dom}"
+
+
+def pending_requests() -> list[dict] | None:
+    """בקשות גישה שממתינות לאישור, ישירות מ-KV.
+
+    **המייל בהרשמה הוא ערוץ יחיד, והוא נכשל פעמיים.** ההרשמה יוצרת
+    חשבון ממתין ואז מנסה לשלוח התראה; אם השליחה נופלת — מפתח פסול,
+    דומיין שאינו מאומת, ספק שנפל — החשבון נשמר והבעלים אינו יודע דבר.
+    שתי הפעמים נראו זהות מבחוץ: אדם ביקש גישה, ולא קרה כלום.
+
+    הבדיקה כאן קוראת את המקור עצמו במקום להסתמך על ההתראה, ולכן היא
+    תופסת גם הרשמה שההודעה עליה מעולם לא נשלחה. היא רצה בכל שעה עם
+    שאר משמר הטריות ואינה דורשת סוד חדש — האסימון של Cloudflare כבר
+    כאן בשביל בדיקת הפריסה.
+
+    מחזיר None כשאי אפשר היה לקרוא — מצב שאינו "אין בקשות".
+    """
+    token = os.environ.get("CLOUDFLARE_API_TOKEN")
+    account = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+    if not token or not account:
+        return None
+    import requests
+    base = (f"https://api.cloudflare.com/client/v4/accounts/{account}"
+            f"/storage/kv/namespaces/{USERS_KV}")
+    head = {"Authorization": f"Bearer {token}"}
+    out: list[dict] = []
+    cursor = None
+    try:
+        while True:
+            params = {"prefix": "user:", "limit": 1000}
+            if cursor:
+                params["cursor"] = cursor
+            r = requests.get(f"{base}/keys", headers=head, params=params, timeout=30)
+            if r.status_code != 200:
+                print(f"::warning::קריאת רשימת המשתמשים נכשלה: {r.status_code}")
+                return None
+            body = r.json()
+            for k in body.get("result") or []:
+                name = k.get("name") or ""
+                if not name.startswith("user:"):
+                    continue
+                v = requests.get(f"{base}/values/{name}", headers=head, timeout=30)
+                if v.status_code != 200:
+                    continue
+                try:
+                    u = v.json()
+                except ValueError:
+                    continue
+                if (u or {}).get("status") != "pending":
+                    continue
+                out.append({
+                    "email": name[5:],
+                    "name": (u.get("name") or "").strip(),
+                    "org": (u.get("org") or "").strip(),
+                    "why": (u.get("why") or "").strip(),
+                    "created": (u.get("created") or "")[:16].replace("T", " "),
+                })
+            cursor = (body.get("result_info") or {}).get("cursor") or None
+            if not cursor:
+                break
+    except Exception as e:  # noqa: BLE001
+        print(f"::warning::קריאת רשימת המשתמשים נכשלה: {type(e).__name__}")
+        return None
+    out.sort(key=lambda r: r["created"], reverse=True)
+    return out
 
 
 def last_deploy() -> tuple[str, str] | None:
@@ -281,6 +361,38 @@ def main() -> int:
     # מה נמדד בפועל הופכת את הבדיקה לניתנת לאימות מבחוץ.
     print("::notice title=מצב טריות::"
           + " · ".join(f"{label} {day} ({age})" for label, day, age, _ in rows))
+
+    # **בקשת גישה שאיש אינו רואה שווה לבקשה שלא הוגשה.** פעמיים נרשם
+    # אדם ולא הגיעה הודעה, ושתי הפעמים התגלו רק כשיואב שאל. הבדיקה
+    # קוראת את המקור ואינה תלויה בכך שההתראה בהרשמה נשלחה בהצלחה.
+    #
+    # אינה נספרת ב-bad ואינה מפילה את הריצה: אדם שממתין לאישור אינו
+    # תקלת נתונים. היא כן שולחת מייל, וכן חוזרת בכל שעה עד האישור.
+    pend = pending_requests()
+    if pend is None:
+        print("::warning::לא ניתן היה לקרוא את רשימת המשתמשים — "
+              "בקשות גישה ממתינות אינן נבדקות בריצה הזו")
+    else:
+        real = [u for u in pend if u["email"] != TEST_ADDRESS]
+        if real:
+            print(f"\n::warning title=בקשות גישה ממתינות::{len(real)} — "
+                  + "%0A".join(f"{u['name'] or 'ללא שם'} · {mask_email(u['email'])}"
+                               f" · נרשם {u['created'] or '—'}" for u in real))
+            if args.alert:
+                lines = ["מישהו ביקש גישה ל-TLV TASE View וטרם אושר.", ""]
+                for u in real:
+                    lines.append(f"• {u['name'] or 'ללא שם'} — {u['email']}")
+                    if u["org"]:
+                        lines.append(f"   גוף: {u['org']}")
+                    if u["why"]:
+                        lines.append(f"   מה מעניין אותו: {u['why'][:200]}")
+                    lines.append(f"   נרשם: {u['created'] or '—'}")
+                lines += ["",
+                          "האישור נעשה בעמוד החשבון באתר, בסעיף בקשות הגישה.",
+                          "ההודעה חוזרת בכל שעה עד שהחשבון יאושר או יימחק."]
+                alert(lines, subject=f"בקשת גישה ממתינה ({len(real)})")
+        else:
+            print("בקשות גישה ממתינות: אין")
 
     if bad:
         print()

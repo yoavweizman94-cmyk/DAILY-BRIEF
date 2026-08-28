@@ -52,11 +52,26 @@
   }
 
   fetch("/api/pending").then(function (r) {
-    // 403 הוא התשובה למשתמש רגיל, ולא תקלה — הסעיף פשוט אינו שלו.
-    if (r.status === 401 || r.status === 403) return null;
+    if (r.status === 401) return null;
+    // **403 אינו "אין בקשות".** הסתרת הסעיף על כל סירוב היא מה שגרם
+    // לכך שבקשת גישה נעלמה פעמיים בלי עקבות: מי שאינו מזוהה כבעלים
+    // רואה בדיוק את מה שרואה מי שאין לו בקשות ממתינות. עכשיו נאמר
+    // מה קרה, ובאיזו כתובת המערכת מצפה לראות את הבעלים.
+    if (r.status === 403) return r.json().then(function (d) {
+      return { denied: true, d: d };
+    });
     return r.json();
   }).then(function (d) {
     if (!d) return;
+    if (d.denied) {
+      var i = d.d || {};
+      pend.hidden = false;
+      psub.textContent = i.ownerConfigured
+        ? "רשימת בקשות הגישה מוצגת לבעלים בלבד (" + (i.ownerHint || "—") +
+          "). אתה מחובר כ-" + (i.you || "—") + "."
+        : "לא הוגדרה כתובת בעלים בשירות, ולכן אי אפשר להציג בקשות גישה.";
+      return;
+    }
     pend.hidden = false;
     if (!d.pending || !d.pending.length) {
       psub.textContent = "אין בקשות ממתינות.";

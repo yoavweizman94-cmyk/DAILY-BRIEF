@@ -15,6 +15,14 @@ import { readCookie, readSession, getUser, normEmail, b64url, COOKIE, json }
 // חשבון בדיקה שנשאר תקוע הוא עצמו תקלה שכדאי לראות.
 const TEST_ADDRESS = "access-check@tlvtaseview.com";
 
+function mask(e) {
+  const at = String(e || "").indexOf("@");
+  if (at < 1) return "";
+  const local = e.slice(0, at), dom = e.slice(at);
+  const keep = local.length > 3 ? local.slice(0, 2) : local.slice(0, 1);
+  return keep + "*".repeat(Math.max(1, local.length - keep.length)) + dom;
+}
+
 async function sign(email, secret) {
   const key = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" },
@@ -37,9 +45,20 @@ export async function onRequestGet(context) {
 
   // הרשימה מחזיקה שמות וכתובות של אנשים, ולכן היא לבעלים בלבד. משתמש
   // מחובר רגיל מקבל 403 ולא רשימה חלקית — אין כאן דרגות ביניים.
+  // **סירוב שקט הוא הסיבה שהבעיה חזרה.** הסעיף בעמוד החשבון הסתתר על
+  // כל 403, ולכן "אינך הבעלים", "כתובת בעלים לא מוגדרת" ו"אין בקשות"
+  // נראו זהים לחלוטין. הבעלים לא ידע להבחין בין השלושה. התשובה כאן
+  // אומרת מה קרה, והכתובת מוחזרת ממוסכת בלבד: מי שמכיר אותה יזהה,
+  // ומי שלא — לא ילמד ממנה דבר.
   const owner = normEmail(env.OWNER_EMAIL || "");
   if (!owner || normEmail(sess.e) !== owner) {
-    return json({ error: "אין הרשאה" }, 403);
+    return json({
+      error: owner ? "אין הרשאה" : "לא הוגדרה כתובת בעלים",
+      owner: false,
+      ownerConfigured: Boolean(owner),
+      ownerHint: owner ? mask(owner) : null,
+      you: sess.e,
+    }, 403);
   }
 
   const base = new URL(request.url).origin;
@@ -68,5 +87,5 @@ export async function onRequestGet(context) {
   } while (cursor);
 
   out.sort((a, b) => String(b.created || "").localeCompare(String(a.created || "")));
-  return json({ pending: out, count: out.length });
+  return json({ pending: out, count: out.length, owner: true });
 }
