@@ -51,11 +51,11 @@ jobs:
       new: ${{ steps.collect.outputs.new }}
       idx: ${{ steps.filings.outputs.idx }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -113,7 +113,7 @@ jobs:
         if: steps.collect.outputs.new != 'yes' && steps.filings.outputs.idx != 'yes'
         run: echo "אין דיווחים חדשים לסיכום ולא השתנה האינדקס — יוצאים בלי להתקין את ה-CLI."
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.collect.outputs.new == 'yes'
         with:
           node-version: "20"
@@ -176,7 +176,7 @@ jobs:
 
       # פריסה ל-Cloudflare Pages. החליף את GitHub Pages, שאינו יודע לבקש
       # הזדהות בכלל — Cloudflare Access יושב לפני האתר וחוסם כברירת מחדל.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.collect.outputs.new == 'yes' || steps.filings.outputs.idx == 'yes'
         with:
           node-version: "20"

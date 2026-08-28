@@ -338,12 +338,60 @@ def standouts(a: dict) -> str:
     return "\n".join(out)
 
 
+def open_day(a: dict) -> str:
+    """יום המסחר הנוכחי, כשהוא עדיין פתוח.
+
+    **הנתונים היו כאן ולא הוצגו.** המספרים הראשיים מחושבים על יום מסחר
+    שהושלם, וזה נכון — יום חלקי אינו בסיס להשוואה. אבל הטבלה היחידה
+    שהראתה עסקאות בפועל רונדרה גם היא על אותו יום, ולכן עסקאות שנאספו
+    היום נכתבו לקובץ ולא הופיעו בעמוד כלל. הקורא ראה את אתמול וסיכם
+    שהעמוד תקוע. נמדד 28/08/2026: 26 עסקאות היום, אפס מהן על המסך.
+
+    היום הפתוח מוצג בנפרד ומסומן בשעת האיסוף, כדי שיהיה ברור שהוא אינו
+    מלא ואינו נספר בסטטיסטיקה שמעליו.
+    """
+    latest = a["latest"]
+    if not latest or latest == a["ref"]:
+        return ""
+    rows = sorted(a["by_day"].get(latest, []), key=lambda r: -r["value"])
+    if not rows:
+        return ""
+    clocks = [(r.get("traded_at") or "")[11:16] for r in rows]
+    asof = max([c for c in clocks if c] or [""])
+    val = sum(r["value"] for r in rows)
+    out = [f'<h2>היום · {hebdate(latest)} <span class="cov">יום פתוח</span></h2>',
+           f'<p class="note">יום המסחר טרם ננעל. {len(rows)} עסקאות עד כה '
+           f'בהיקף {money(val)}'
+           + (f", העדכנית ב-{asof}" if asof else "") + '. הנתונים מתפרסמים '
+           'בהשהיה של 15 דקות, והיום אינו נספר במספרים הראשיים שמעלה.</p>',
+           '<div class="tw"><table class="nadlan"><thead><tr>'
+           '<th>נייר</th><th>שעה</th><th>שער</th><th>שער בסיס</th>'
+           '<th>מול הבסיס</th><th>מול הנעילה</th><th>היקף</th>'
+           '<th>% מהמסחר בבורסה</th></tr></thead><tbody>']
+    for r in rows:
+        cov = '<span class="cov">כיסוי</span>' if r.get("covered") else ""
+        clock = (r.get("traded_at") or "")[11:16] or "—"
+        out.append(
+            f'<tr><td class="city">{r["name"]}{cov}</td>'
+            f'<td dir="ltr">{clock}</td>'
+            f'<td dir="ltr">{num(r["price"], 2)}</td>'
+            f'<td dir="ltr">{num(r.get("base_rate"), 2)}</td>'
+            f'<td class="trend {cls(r.get("premium_pct"))}" dir="ltr">'
+            f'{signed(r.get("premium_pct"))}</td>'
+            f'<td class="trend {cls(r.get("vs_close_pct"))}" dir="ltr">'
+            f'{signed(r.get("vs_close_pct"))}</td>'
+            f'<td class="key" dir="ltr">{money(r["value"])}</td>'
+            f'<td dir="ltr">{num(r.get("pct_of_day"), 1)}%</td></tr>')
+    out.append('</tbody></table></div>')
+    return "\n".join(out)
+
+
 def latest_day(a: dict) -> str:
     ref = a["ref"]
     rows = sorted(a["by_day"].get(ref, []), key=lambda r: -r["value"])
     if not rows:
         return ""
-    out = [f'<h2>כל העסקאות · {hebdate(ref)}</h2>',
+    out = [f'<h2>יום המסחר האחרון שננעל · {hebdate(ref)}</h2>',
            '<div class="tw"><table class="nadlan"><thead><tr>'
            '<th>נייר</th><th>שעה</th><th>שער</th><th>שער בסיס</th>'
            '<th>מול הבסיס</th><th>מול הנעילה</th><th>היקף</th>'
@@ -406,7 +454,8 @@ def page(otc_rows: list[dict], maya_body: str, year: str) -> str:
                 + (maya_body or ""))
     a = analyse(otc_rows, year)
     parts = [head(a, year), tiles(a, year), pricing(a), flow(a),
-             standouts(a), repeats(a, year), latest_day(a), method()]
+             standouts(a), repeats(a, year), open_day(a), latest_day(a),
+             method()]
     if maya_body:
         parts += ['<h2>מי עומד מאחורי העסקאות המדווחות</h2>', maya_body]
     return "\n".join(p for p in parts if p)

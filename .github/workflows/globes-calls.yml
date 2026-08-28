@@ -74,11 +74,11 @@ jobs:
     # הועלה מ-60: הריצה מסכמת כעת את כל הערוץ ולא רק חברות כיסוי.
     timeout-minutes: 300
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -142,7 +142,7 @@ jobs:
       # התוכן, ולכן ניתן להורידו גם כששלב השמירה נכשל.
       - name: Keep the summaries as an artifact
         if: always() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'run')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: transcripts
           path: output/calls/transcripts_*.jsonl
@@ -191,7 +191,7 @@ jobs:
         if: always() && steps.commit.outputs.changed == 'yes'
         run: python site/build.py
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: always() && steps.commit.outputs.changed == 'yes'
         with:
           node-version: "20"
