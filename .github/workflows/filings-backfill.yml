@@ -67,7 +67,11 @@ jobs:
           python ingest/maya_index.py --backfill \
             --until "${{ inputs.until || '2024-01-01' }}" \
             --budget-minutes "${{ inputs.budget_minutes || 20 }}"
-          if [ -n "$(git status --porcelain output/filings)" ]; then
+          # **output/ הוא ריפו נפרד ומוחרג ב-.gitignore של הריפו הראשי**,
+          # ולכן `git status output/filings` מהשורש מחזיר תמיד ריק — כלומר
+          # התנאי היה כוזב בכל ריצה, והמילוי אחורה לא נשמר ולא נפרס
+          # מעולם. אותו באג בדיוק ב-maya-watch. נמדד 28/08/2026.
+          if [ -n "$(git -C output status --porcelain filings 2>/dev/null)" ]; then
             echo "changed=yes" >> "$GITHUB_OUTPUT"
           else
             echo "changed=no" >> "$GITHUB_OUTPUT"

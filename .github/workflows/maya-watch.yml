@@ -94,7 +94,11 @@ jobs:
         id: filings
         run: |
           python ingest/maya_index.py --recent 2 || echo "אינדקס הדוחות נכשל — ייאסף במחזור הבא"
-          if [ -n "$(git status --porcelain output/filings)" ]; then
+          # **output/ הוא ריפו נפרד ומוחרג ב-.gitignore של הריפו הראשי**,
+          # ולכן `git status output/filings` מהשורש מחזיר תמיד ריק — כלומר
+          # התנאי היה כוזב בכל שעה, והאינדקס שנאסף לא נשמר ולא נפרס.
+          # זו הסיבה שדוחות שפורסמו היום לא הופיעו באתר. נמדד 28/08/2026.
+          if [ -n "$(git -C output status --porcelain filings 2>/dev/null)" ]; then
             echo "idx=yes" >> "$GITHUB_OUTPUT"
           else
             echo "idx=no" >> "$GITHUB_OUTPUT"
