@@ -36,7 +36,7 @@ on:
         required: false
         default: ""
       reviews:
-        description: "כמה סקירות דוחות לכתוב בריצה (0 = בלי, ריק = 12)"
+        description: "כמה סקירות דוחות לכתוב בריצה (ריק = 0, כלומר בלחיצה בלבד)"
         required: false
         default: ""
 
@@ -53,8 +53,9 @@ env:
 jobs:
   brief:
     runs-on: ubuntu-latest
-    # הועלה מ-45: המהדורה מפיקה כעת עד 12 סקירות דוחות, וכל אחת היא
-    # קריאה עם PDF מלא. חסם קצר היה הופך את זה לריצות שנקטעות.
+    # הועלה מ-45 כשהמהדורה הפיקה גם סקירות דוחות. הן כבויות מאז
+    # 28/08/2026, אבל המרווח נשאר: הצנרת מושכת שבעה מקורות וסורקת
+    # נדל"ן בבוקר, וחסם קצר הופך אותה לריצות שנקטעות באמצע.
     timeout-minutes: 120
     outputs:
       produced: ${{ steps.pipeline.outputs.produced }}
@@ -126,8 +127,7 @@ jobs:
           TRADINGECONOMICS_KEY: ${{ secrets.TRADINGECONOMICS_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          # ריצה מתוזמנת מגיעה בלי inputs; בלי ברירת המחדל כאן
-          # אף מהדורה לא הייתה מפיקה סקירה מאז שהתזמון הוחזר.
+          # אפס כברירת מחדל: הסקירות נוצרות בלחיצה בעמוד ולא מראש.
           REVIEW_LIMIT: ${{ env.BRIEF_REVIEWS }}
           # Govmap חוסם את טווחי הענן של הראנרים; הסריקה עוברת דרך
           # Cloudflare Functions של האתר.

@@ -53,11 +53,12 @@ def main() -> int:
               file=sys.stderr)
         edition = ""
     if reviews and not reviews.isdigit():
-        print(f"::warning::reviews={reviews!r} אינו מספר — נלקח 12", file=sys.stderr)
+        print(f"::warning::reviews={reviews!r} אינו מספר — נלקח 0", file=sys.stderr)
         reviews = ""
 
     print(f"BRIEF_EDITION_IN={edition}")
-    print(f"BRIEF_REVIEWS={reviews or 12}")
+    # אפס = כבוי. הסקירות נוצרות בלחיצה בעמוד; ראה run_daily.sh.
+    print(f"BRIEF_REVIEWS={reviews or 0}")
     print(f"BRIEF_FORCE_IN={force}")
     print(f"BRIEF_SRC={src}")
     return 0
