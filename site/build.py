@@ -889,12 +889,24 @@ def main() -> int:
     # שתי שכבות בעמוד אחד: הסקירה של הבורסה נותנת שלמות, מאיה נותנת
     # זהויות. הפרדתן לשני עמודים הייתה מחייבת את הקורא להצליב בעצמו.
     yr = str(date.today().year)
+    _otc_rows = otc.load()
     (OUT / "offex.html").write_text(
         PAGE.format(title=f"עסקאות מחוץ לבורסה · {site_title}", site_title=site_title,
-                    root="", body=otc.page(otc.load(),
+                    root="", body=otc.page(_otc_rows,
                                            offex.page(offex.load_offex(), yr, head=False),
                                            yr)),
         encoding="utf-8")
+    # **מה נבנה בפועל, ולא רק שהבנייה הצליחה.** העמוד הזה נראה תקוע
+    # במשך ימים בזמן שהקובץ היה מעודכן, כי היום הפתוח לא רונדר. שורה
+    # שאומרת איזה יום נמצא בקובץ ואיזה יום מוצג הופכת את הפער הזה לגלוי
+    # מיד, בלי גישה ללוגים ובלי לפתוח את העמוד עצמו.
+    if _otc_rows:
+        _a = otc.analyse(_otc_rows, yr)
+        _open = "כן" if _a["latest"] != _a["ref"] else "אין יום פתוח"
+        print(f"::notice::עסקאות מחוץ לבורסה: היום האחרון בקובץ {_a['latest']}, "
+              f"היום השלם האחרון {_a['ref']}, סעיף יום פתוח: {_open}")
+    else:
+        print("::warning::עסקאות מחוץ לבורסה: הקובץ ריק")
 
     (OUT / "calls.html").write_text(
         PAGE.format(title=f"שיחות ועידה · {site_title}", site_title=site_title,
