@@ -125,6 +125,17 @@ jobs:
       #
       # השלבים רצים רק כשבאמת השתנה תוכן, ולכן ריצה שאין בה חדש אינה
       # פורסת מחדש אתר זהה.
+      # **התוכן נמשך שוב לפני הבנייה.** כל צינור מושך את ריפו התוכן
+      # בתחילתו, ומאז ועד הבנייה עוברות דקות שבהן צינור אחר עשוי לדחוף.
+      # בלי הרענון הזה הבנייה נעשית על עותק ישן, והפריסה **דורסת** תוכן
+      # חדש יותר שכבר נמצא באתר. נמדד 28/08: offex פרס 75 תמלולים בזמן
+      # ש-globes כבר שמר 80.
+      - name: Refresh content before build
+        if: steps.content.outputs.changed == 'yes'
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
       - name: Rebuild site
         if: steps.content.outputs.changed == 'yes'
         run: |

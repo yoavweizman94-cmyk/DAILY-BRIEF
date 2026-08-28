@@ -159,6 +159,17 @@ jobs:
 
       # בלי זה הסיכומים יושבים בריפו אבל האתר מציג אותם רק אחרי המהדורה הבאה —
       # עיכוב של עד שמונה שעות, שסותר את כל הרעיון של ניטור רציף.
+      # **התוכן נמשך שוב לפני הבנייה.** כל צינור מושך את ריפו התוכן
+      # בתחילתו, ומאז ועד הבנייה עוברות דקות שבהן צינור אחר עשוי לדחוף.
+      # בלי הרענון הזה הבנייה נעשית על עותק ישן, והפריסה **דורסת** תוכן
+      # חדש יותר שכבר נמצא באתר. נמדד 28/08: offex פרס 75 תמלולים בזמן
+      # ש-globes כבר שמר 80.
+      - name: Refresh content before build
+        if: steps.collect.outputs.new == 'yes' || steps.filings.outputs.idx == 'yes'
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
       - name: Rebuild site
         if: steps.collect.outputs.new == 'yes' || steps.filings.outputs.idx == 'yes'
         run: python site/build.py

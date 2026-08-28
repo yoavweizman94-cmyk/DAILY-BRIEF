@@ -176,6 +176,17 @@ jobs:
             echo "changed=no" >> "$GITHUB_OUTPUT"
           fi
 
+      # **התוכן נמשך שוב לפני הבנייה.** כל צינור מושך את ריפו התוכן
+      # בתחילתו, ומאז ועד הבנייה עוברות דקות שבהן צינור אחר עשוי לדחוף.
+      # בלי הרענון הזה הבנייה נעשית על עותק ישן, והפריסה **דורסת** תוכן
+      # חדש יותר שכבר נמצא באתר. נמדד 28/08: offex פרס 75 תמלולים בזמן
+      # ש-globes כבר שמר 80.
+      - name: Refresh content before build
+        if: always() && steps.commit.outputs.changed == 'yes'
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
       - name: Rebuild site
         if: always() && steps.commit.outputs.changed == 'yes'
         run: python site/build.py
