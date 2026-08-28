@@ -163,8 +163,20 @@ def business_days_since(day: str, today: date) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--alert", action="store_true",
-                    help="לשלוח התראה לטלגרם כשמשהו אינו טרי")
+                    help="לשלוח התראה במייל כשמשהו אינו טרי")
+    # **ערוץ שמעולם לא העביר הודעה אינו ערוץ.** הדגל הזה שולח הודעת
+    # בדיקה בלי קשר למצב, כדי שאפשר יהיה לאמת את הנתיב מקצה לקצה —
+    # ולא לגלות שהוא שבור דווקא ביום שבו הוא באמת נדרש.
+    ap.add_argument("--test-alert", action="store_true",
+                    help="לשלוח הודעת בדיקה ולצאת")
     args = ap.parse_args()
+
+    if args.test_alert:
+        alert(["זו הודעת בדיקה של נתיב ההתראות.",
+               "אם היא הגיעה — כל תקיעה בצנרת תדווח לכאן מעצמה,",
+               "עם הסיבה, שלוש פעמים ביום.", "",
+               "אין צורך בפעולה."])
+        return 0
 
     today = datetime.now(IL).date()
     rows, bad, tg = [], [], []
