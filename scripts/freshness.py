@@ -117,6 +117,37 @@ def alert(lines: list[str]) -> None:
         print(f"::warning::שליחת ההתראה נכשלה: {r.status_code} {r.text[:150]}")
 
 
+def last_deploy() -> tuple[str, str] | None:
+    """(מתי, מזהה) של הפריסה האחרונה ל-Cloudflare Pages.
+
+    **תוכן שנבנה אינו תוכן שמוגש.** כל הכשלים שחזרו כאן ישבו בפער הזה:
+    צינור שדוחף לריפו התוכן בלי לפרוס, פריסה שרצה לפני שהתוכן הגיע,
+    בנייה שהצליחה על ראנר שאיש לא ראה. בדיקת קובץ ב-output אינה מוכיחה
+    שהקורא רואה אותו, ולכן נבדק גם מה נפרס בפועל ומתי.
+    """
+    token = os.environ.get("CLOUDFLARE_API_TOKEN")
+    account = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+    project = os.environ.get("CF_PAGES_PROJECT", "forest-brief")
+    if not token or not account:
+        return None
+    try:
+        import requests
+        r = requests.get(
+            f"https://api.cloudflare.com/client/v4/accounts/{account}"
+            f"/pages/projects/{project}/deployments",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"per_page": 1}, timeout=30)
+        if r.status_code != 200:
+            return None
+        rows = (r.json() or {}).get("result") or []
+        if not rows:
+            return None
+        d = rows[0]
+        return d.get("created_on", "")[:16].replace("T", " "), d.get("short_id", "")
+    except Exception:
+        return None
+
+
 def newest_brief() -> tuple[str, str] | None:
     """(תאריך, שם) של הברייף האחרון."""
     files = sorted(OUT.glob("brief_????-??-??*.md"))
@@ -212,6 +243,20 @@ def main() -> int:
             bad.append(f"{label}: הרשומה האחרונה היא מ-{day} — {n} ימי מסחר. "
                        f"בדוק את {hint}.")
             tg.append((label, day, f"{n} ימי מסחר"))
+
+    # --- מה נפרס בפועל, ומתי ---
+    dep = last_deploy()
+    if dep:
+        when, sid = dep
+        rows.append(("פריסה אחרונה", when[:10], when[11:], sid))
+        # פריסה שקדמה לברייף האחרון פירושה שהאתר מגיש בנייה ישנה יותר
+        # מהתוכן שכבר קיים — הפער שגרם לכך שהעמודים הראו את אתמול.
+        if b and when[:10] < b[0]:
+            bad.append(f"הפריסה האחרונה ({when}) קדמה לברייף של {b[0]} — "
+                       "האתר מגיש בנייה ישנה מהתוכן הקיים.")
+            tg.append(("פריסת האתר", when[:10], "ישנה מהתוכן"))
+    else:
+        rows.append(("פריסה אחרונה", "—", "לא נבדקה", "חסר CLOUDFLARE_API_TOKEN"))
 
     w = max(len(r[0]) for r in rows) if rows else 10
     print("מצב טריות:")
