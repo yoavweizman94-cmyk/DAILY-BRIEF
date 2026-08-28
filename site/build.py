@@ -816,18 +816,24 @@ def main() -> int:
             sys.path.insert(0, str(ROOT / "ingest"))
             from _filings import reviewable
             pdfmap = {}
+            _all_filings = []
             for f in sorted((ROOT / "output" / "filings").glob("[0-9][0-9][0-9][0-9].jsonl")):
                 for line in f.read_text(encoding="utf-8").splitlines():
                     if not line.strip():
                         continue
                     r = json.loads(line)
+                    _all_filings.append(r)
                     if reviewable(r):
                         pdfmap[str(r["id"])] = {
                             "p": r["p"], "d": r.get("d"), "t": r.get("t"),
                             "c": r.get("c")}
             (OUT / "filings" / "pdfmap.json").write_text(
                 json.dumps(pdfmap, ensure_ascii=False), encoding="utf-8")
-            print(f"  דוחות שניתן לסקור: {len(pdfmap)}")
+            # **מונה שאומר מה נכנס בפועל.** "נבנה בהצלחה" אינו מבטיח
+            # שהאינדקס עדכני — הוא היה ירוק גם כשהדוחות לא נשמרו כלל.
+            newest = max((r.get("d") or "" for r in _all_filings), default="—")
+            print(f"::notice::אינדקס הדוחות: {len(_all_filings):,} דיווחים, "
+                  f"האחרון {newest} · מהם ניתנים לסקירה {len(pdfmap):,}")
         except Exception as e:  # noqa: BLE001
             print(f"  ::warning::מפת הדוחות לא נבנתה ({type(e).__name__}) — "
                   f"סקירה לפי דרישה לא תעבוד")

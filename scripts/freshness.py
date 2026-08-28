@@ -42,6 +42,8 @@ CAUSES = (
 
 WORKFLOWS = {
     "ברייף": "daily-brief.yml",
+    "אינדקס הדוחות": "maya-watch.yml",
+    "סיכומי דיווחים": "maya-watch.yml",
     "עסקאות מחוץ לבורסה": "offex-backfill.yml",
     "דיווחי בעלי עניין": "offex-backfill.yml",
     "תמלולי שיחות": "globes-calls.yml",
@@ -226,7 +228,16 @@ def main() -> int:
             tg.append(("ברייף", day, f"{age} ימים"))
 
     # --- זרמים שנגזרים ממסחר: נמדדים בימי מסחר ---
+    #
+    # **שלושת אלה נוספו ב-28/08/2026 אחרי שיואב דיווח שהם ישנים.**
+    # אינדקס הדוחות ("עמוד הדוחות") ודיווחי מאיה ("עמוד הדיווחים")
+    # הם מה שהאתר מציג בפועל, והמשמר לא בדק אותם כלל — כלומר הוא היה
+    # ירוק בדיוק בזמן שהעמודים היו תקועים.
+    #
+    # מאיה מפרסמת רצוף, ולכן הסף כאן צמוד: יום מסחר אחד.
     for label, dirname, pattern, field, limit, hint in (
+        ("אינדקס הדוחות", "filings", "[0-9][0-9][0-9][0-9].jsonl", "d", 1, "Maya Watch"),
+        ("סיכומי דיווחים", "reports", "*.jsonl", "ts", 2, "Maya Watch"),
         ("עסקאות מחוץ לבורסה", "otc", "*.jsonl", "date", 3, "Offex Backfill"),
         ("דיווחי בעלי עניין", "offex", "*.jsonl", "date", 3, "Offex Backfill"),
         ("תמלולי שיחות", "calls", "transcripts_*.jsonl", "date", 4, "Globes Calls"),
