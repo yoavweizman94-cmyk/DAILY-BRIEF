@@ -1197,5 +1197,19 @@
    "https://us02web.zoom.us/webinar/register/WN_1NJyvVuFSUORq26_LXHwAg"
   ],
   "others": []
+ },
+ "1766573": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": []
+ },
+ "1766778": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_-icZjIg0S3-hONB3tbFxKA",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_-icZjIg0S3-hONB3tbFxKA"
+  ],
+  "others": []
  }
 }
