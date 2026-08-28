@@ -216,5 +216,16 @@ python scripts/publish_status.py
 python scripts/publish_news.py || echo "אזהרה: סיווג החדשות נכשל"
 python scripts/summarize_topics.py || echo "אזהרה: סיכומי הנושאים נכשלו"
 python site/build.py
-python scripts/send_telegram.py --brief "$BRIEF" || echo "אזהרה: שליחת הטלגרם נכשלה"
+# **הטלגרם מעולם לא הוגדר.** TELEGRAM_BOT_TOKEN ו-TELEGRAM_CHAT_ID
+# נשארו ברשימת ההקמה כ"נשאר ליואב" ולא הוזנו, ולכן הקריאה הזו נכשלה
+# בשקט בכל ריצה מאז ומעולם — ה-`|| echo` הפך אותה לאזהרה בלוג שאיש
+# אינו קורא. ההתראות עברו למייל (scripts/freshness.py → /api/alert),
+# בנתיב Resend שכבר מוכח.
+#
+# הקריאה נשמרת מאחורי בדיקת סוד: אם יוגדר טלגרם בעתיד היא תתחיל
+# לעבוד, וכל עוד לא — היא אינה מתחזה לערוץ פעיל.
+if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
+  python scripts/send_telegram.py --brief "$BRIEF" ||
+    echo "::warning title=שליחת הטלגרם נכשלה::הברייף הופק ונפרס כרגיל."
+fi
 echo "=== הושלם: $BRIEF (מהדורת $ED_HE) ==="

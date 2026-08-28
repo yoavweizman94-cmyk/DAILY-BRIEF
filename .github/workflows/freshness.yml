@@ -49,9 +49,11 @@ jobs:
       # **--alert הוא הלב.** האתר כבר מסמן "ברייף מאתמול", והבדיקה כבר
       # נכשלת אדום כאן — ובכל זאת, שלושה ימים ברציפות יואב הוא שגילה
       # שמשהו תקוע. ערוץ שדורש ממנו לפתוח דף כדי לדעת אינו התראה.
+      # ההתראה יוצאת במייל, באותו נתיב Resend שכבר מוכח.
       - name: Check freshness
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # ההתראה נשלחת במייל דרך /api/alert של האתר, שמחזיק את מפתח
+          # הדואר. SCAN_KEY כבר קיים בשני הצדדים ולכן אין סוד חדש.
+          SCAN_KEY: ${{ secrets.SCAN_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/freshness.py --alert

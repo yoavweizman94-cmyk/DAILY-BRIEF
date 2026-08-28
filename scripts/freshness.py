@@ -82,24 +82,37 @@ def last_failure_reason(workflow: str) -> str | None:
 
 
 def alert(lines: list[str]) -> None:
-    """שולח את ההתראה לטלגרם. **בלי זה יואב הוא מערכת הניטור.**
+    """שולח את ההתראה **במייל**, דרך נתיב ההתראות של האתר.
 
-    האתר כבר מסמן "ברייף מאתמול", ומשמר הטריות כבר נכשל אדום
-    ב-Actions — ובכל זאת, בשלושה ימים רצופים יואב הוא זה שגילה
-    שמשהו תקוע. ערוץ שדורש ממנו לפתוח דף כדי לדעת אינו התראה.
+    **בלי זה יואב הוא מערכת הניטור.** האתר כבר מסמן "ברייף מאתמול",
+    והבדיקה כאן כבר נכשלת אדום — ובכל זאת, שלושה ימים ברציפות הוא זה
+    שגילה שמשהו תקוע. ערוץ שדורש ממנו לפתוח דף כדי לדעת אינו התראה.
+
+    **למה דרך האתר.** מפתח הדואר יושב בסביבת Cloudflare ולא בסודות של
+    GitHub, ואין סיבה לשכפל סוד לשני מקומות. SCAN_KEY כבר קיים בשניהם
+    — הוא משמש את ממסר Govmap מאותה סיבה — ולכן הוא המפתח כאן.
+
+    (טלגרם היה הניסיון הראשון ונזנח: הסודות שלו מעולם לא הוגדרו, וכל
+    קריאה אליו בצנרת נכשלה בשקט מאז ומעולם.)
     """
-    token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat = os.environ.get("TELEGRAM_CHAT_ID")
-    if not token or not chat:
-        print("::warning::טלגרם אינו מוגדר — ההתראה לא נשלחה")
+    key = os.environ.get("SCAN_KEY")
+    base = os.environ.get("ALERT_BASE", "https://app.tlvtaseview.com")
+    if not key:
+        print("::warning::SCAN_KEY אינו מוגדר — ההתראה במייל לא נשלחה")
         return
     import requests
-    text = "\n".join(["<b>TLV TASE View — נתונים לא טריים</b>", ""] + lines)
-    r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
-                      json={"chat_id": chat, "text": text, "parse_mode": "HTML",
-                            "disable_web_page_preview": True}, timeout=30)
+    text = "\n".join(lines)
+    try:
+        r = requests.post(f"{base}/api/alert",
+                          headers={"x-scan-key": key,
+                                   "Content-Type": "application/json"},
+                          json={"subject": "TLV TASE View — נתונים לא טריים",
+                                "text": text}, timeout=30)
+    except Exception as e:
+        print(f"::warning::שליחת ההתראה נכשלה: {type(e).__name__}: {e}")
+        return
     if r.ok:
-        print("ההתראה נשלחה לטלגרם")
+        print("ההתראה נשלחה במייל")
     else:
         print(f"::warning::שליחת ההתראה נכשלה: {r.status_code} {r.text[:150]}")
 
