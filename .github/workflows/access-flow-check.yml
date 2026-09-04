@@ -36,6 +36,17 @@ jobs:
         with:
           python-version: "3.12"
 
+      # **"נשלח" אינו "הגיע".** הבדיקה למטה מאשרת ש-Resend קיבל את
+      # ההודעה, וזה כל מה שהיא יכולה לדעת. ב-28/08/2026 היא דיווחה
+      # ירוק בזמן ששום מייל לא הגיע בפועל — לא על בקשת גישה ולא
+      # מהבדיקה עצמה. השלב הזה מראה לאן הדואר נשלח, כדי שאפשר יהיה
+      # להבחין בין מפתח חסר, דומיין לא מאומת ותיבת יעד שאינה נקראת.
+      - name: Mail configuration
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 scripts/mail_config.py
+
       - name: Probe access flow
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
