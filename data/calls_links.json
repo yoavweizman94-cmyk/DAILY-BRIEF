@@ -1229,5 +1229,48 @@
   "others": [
    "https://www.solaer.co.il/%D7%9E%D7%99%D7%93%D7%A2-%D7%9E%D7%A9%D7%A7%D7%99%D7%A2%D7%99%D7%9D"
   ]
+ },
+ "1768670": {
+  "link": "https://gk-biz.zoom.us/webinar/register/WN_FCBssrviRvqHhqou9v17NQ",
+  "certain": true,
+  "known": [
+   "https://gk-biz.zoom.us/webinar/register/WN_FCBssrviRvqHhqou9v17NQ"
+  ],
+  "others": [
+   "https://www.blender.co.il/"
+  ]
+ },
+ "1767830": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": []
+ },
+ "1768090": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_T8DIxqLJT_CIVUXToEs0bA",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_T8DIxqLJT_CIVUXToEs0bA"
+  ],
+  "others": []
+ },
+ "1768011": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_LOhEKuOAR8OTZxKpbLMXOA",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_LOhEKuOAR8OTZxKpbLMXOA"
+  ],
+  "others": []
+ },
+ "1767509": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_U8aSQfg8THq-3W_65nFHVw",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_U8aSQfg8THq-3W_65nFHVw"
+  ],
+  "others": [
+   "https://www.avgad-home.co.il",
+   "https://www.avgad-home.co.il/"
+  ]
  }
 }
