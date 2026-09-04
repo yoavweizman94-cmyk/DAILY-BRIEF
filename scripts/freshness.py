@@ -199,6 +199,42 @@ def pending_requests() -> list[dict] | None:
     return out
 
 
+
+def signup_failures() -> list[dict]:
+    """ניסיונות הרשמה שנדחו בשבוע האחרון.
+
+    משלים את pending_requests: זו רשימת מי שנרשם, וזו רשימת מי שניסה
+    ולא הצליח. בלעדיה "החבר שלי לא מצליח להיכנס" אינה שאלה שאפשר
+    לענות עליה — אין חשבון, אין מייל, ואין שום עקבה לבדוק.
+    """
+    token = os.environ.get("CLOUDFLARE_API_TOKEN")
+    account = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+    if not token or not account:
+        return []
+    import requests
+    base = (f"https://api.cloudflare.com/client/v4/accounts/{account}"
+            f"/storage/kv/namespaces/{USERS_KV}")
+    head = {"Authorization": f"Bearer {token}"}
+    out: list[dict] = []
+    try:
+        r = requests.get(f"{base}/keys", headers=head,
+                         params={"prefix": "regfail:", "limit": 1000}, timeout=30)
+        if r.status_code != 200:
+            return []
+        for k in (r.json().get("result") or []):
+            v = requests.get(f"{base}/values/{k['name']}", headers=head, timeout=30)
+            if v.status_code != 200:
+                continue
+            try:
+                out.append(v.json())
+            except ValueError:
+                continue
+    except Exception:  # noqa: BLE001
+        return []
+    out.sort(key=lambda r: r.get("at") or "", reverse=True)
+    return out
+
+
 def last_deploy() -> tuple[str, str] | None:
     """(מתי, מזהה) של הפריסה האחרונה ל-Cloudflare Pages.
 
@@ -393,6 +429,15 @@ def main() -> int:
                 alert(lines, subject=f"בקשת גישה ממתינה ({len(real)})")
         else:
             print("בקשות גישה ממתינות: אין")
+
+        # ניסיונות שנדחו — נאמרים גם כשאין בקשה ממתינה. זה בדיוק המצב
+        # שבו מישהו מנסה להיכנס ונכשל, ואין לכך שום עקבה אחרת.
+        fails = signup_failures()
+        if fails:
+            print(f"::warning title=ניסיונות הרשמה שנדחו::{len(fails)} בשבוע האחרון%0A"
+                  + "%0A".join(f"{f.get('at','')[:16].replace('T',' ')} · "
+                               f"{f.get('email','?')} · {f.get('reason','?')}"
+                               for f in fails[:10]))
 
     if bad:
         print()

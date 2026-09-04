@@ -19,6 +19,37 @@ async function sign(email, secret) {
   return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// **ניסיון שנכשל לא השאיר עקבות בכלל.** ב-28/08/2026 אדם ניסה להירשם
+// ולא נוצר חשבון, ומהצד של הבעלים זה נראה זהה לגמרי למי שמעולם לא
+// פתח את הטופס: אין רשומה, אין מייל, אין מה לבדוק. השאלה "למה הוא לא
+// נכנס" לא הייתה ניתנת לתשובה.
+//
+// נשמרת שורה אחת לכל דחייה, עם כתובת ממוסכת בלבד ועם סיבה — די כדי
+// להבחין בין סיסמה קצרה, תקרת בקשות ותקלת הגדרה, ובלי לצבור כתובות
+// של אנשים שלא נרשמו. פג תוקף אחרי שבוע מעצמו.
+const FAIL_TTL = 7 * 24 * 3600;
+
+function maskEmail(e) {
+  const at = String(e || "").indexOf("@");
+  if (at < 1) return "(לא תקינה)";
+  const local = e.slice(0, at), dom = e.slice(at);
+  const keep = local.length > 3 ? local.slice(0, 2) : local.slice(0, 1);
+  return keep + "*".repeat(Math.max(1, local.length - keep.length)) + dom;
+}
+
+async function noteFailure(env, email, reason) {
+  if (!env.USERS) return;
+  try {
+    const at = new Date().toISOString();
+    await env.USERS.put(
+      `regfail:${at}:${Math.random().toString(36).slice(2, 8)}`,
+      JSON.stringify({ at, email: maskEmail(email), reason }),
+      { expirationTtl: FAIL_TTL });
+  } catch {
+    // רישום אבחון לעולם אינו מפיל הרשמה
+  }
+}
+
 export async function onRequestPost(context) {
   const { request, env } = context;
 
@@ -31,24 +62,35 @@ export async function onRequestPost(context) {
   const why = String(body.why || "").trim().slice(0, 500);
   const password = String(body.password || "");
 
-  if (!name || !validEmail(email)) return json({ error: "שם וכתובת מייל תקינה הם שדות חובה" }, 400);
+  if (!name || !validEmail(email)) {
+    await noteFailure(env, email, "שם חסר או כתובת מייל לא תקינה");
+    return json({ error: "שם וכתובת מייל תקינה הם שדות חובה" }, 400);
+  }
   const pwErr = passwordProblem(password);
-  if (pwErr) return json({ error: pwErr }, 400);
+  if (pwErr) {
+    await noteFailure(env, email, `סיסמה: ${pwErr}`);
+    return json({ error: pwErr }, 400);
+  }
 
   // רק מה שנדרש כדי **ליצור** את החשבון. שליחת ההתראה היא שלב נפרד:
   // מפתח דואר חסר או ספק שנפל אינם סיבה לאבד הרשמה של לקוח משלם —
   // החשבון נשמר כממתין, והבעלים רואה אותו ברשימת המשתמשים גם בלי מייל.
   if (!env.USERS || !env.APPROVAL_SECRET) {
+    await noteFailure(env, email, "השירות אינו מוגדר — חסר USERS או APPROVAL_SECRET");
     return json({ error: "השירות אינו מוגדר במלואו" }, 503);
   }
 
   // תקרה לפי כתובת IP — נרשם אחד לא אמור לפתוח עשרות חשבונות
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const rl = await rateLimit(env, `reg:${ip}`, 5, 3600);
-  if (!rl.ok) return json({ error: "יותר מדי בקשות. נסה שוב בעוד שעה." }, 429);
+  if (!rl.ok) {
+    await noteFailure(env, email, "תקרת בקשות לפי כתובת IP (5 לשעה)");
+    return json({ error: "יותר מדי בקשות. נסה שוב בעוד שעה." }, 429);
+  }
 
   const existing = await getUser(env, email);
   if (existing && existing.status === "active") {
+    await noteFailure(env, email, "כבר רשום ופעיל — צריך להתחבר, לא להירשם");
     return json({ error: "כתובת המייל הזו כבר רשומה. אפשר להתחבר." }, 409);
   }
 
