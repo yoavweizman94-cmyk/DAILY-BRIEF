@@ -167,6 +167,20 @@ jobs:
             bad "השומר על כתובת הבדיקה אינו פעיל — קיבלנו \"$title\" ($code)"
           fi
 
+          echo "=== 6. תשובת JSON לאישור מתוך הרשימה ==="
+          # **הרשימה באתר מאשרת דרך אותה נקודה, בייצוג אחר.** אם מצב
+          # ה-JSON נשבר, הכפתור ברשימה מקבל HTML, נופל בפענוח, והבעלים
+          # רואה "האישור נכשל" בלי סיבה. הבדיקה על כתובת הבדיקה, שחסומה
+          # ממילא — כלומר מאמתת את הייצוג בלי להפעיל חשבון של אף אחד.
+          : > r6.json
+          code=$(curl -s -o r6.json -w '%{http_code}' --max-time 25                  -H 'Accept: application/json'                  "$B/api/approve/YWNjZXNzLWNoZWNrQHRsdnRhc2V2aWV3LmNvbQ.whatever?json=1" || true)
+          note "אישור ב-JSON → $code   $(cut -c1-120 r6.json)"
+          if head -c 1 r6.json | grep -q '{' && grep -q '"ok"' r6.json; then
+            note "מצב ה-JSON פעיל ✓"
+          else
+            bad "נקודת האישור לא החזירה JSON — הכפתור ברשימה יישבר ($code)"
+          fi
+
           echo
           if [ "$fail" = "0" ]; then
             echo "זרימת בקשת הגישה תקינה. בדוק שהמייל הגיע לתיבה."
