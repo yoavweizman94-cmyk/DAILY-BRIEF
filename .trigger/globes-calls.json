@@ -1,10 +1,1 @@
-{
-  "note": "דחיפה של הקובץ הזה מריצה את Globes Calls. ראה scripts/globes_args.py.",
-  "mode": "run",
-  "limit": 70,
-  "all": true,
-  "redo": false,
-  "run": 11,
-  "why": "תמליל אאורה מהיום",
-  "since": ""
-}
+{"reason": "אימות אחרי רענון העוגייה", "mode": "run", "limit": 8, "at": "2026-09-07T10:01:00"}
