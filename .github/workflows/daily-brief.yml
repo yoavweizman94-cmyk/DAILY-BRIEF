@@ -134,7 +134,29 @@ jobs:
           GOVMAP_PROXY: https://app.tlvtaseview.com/api/govmap
           SCAN_KEY: ${{ secrets.SCAN_KEY }}
         run: |
-          bash run_daily.sh
+          # **כישלון בלי סיבה הוא כישלון שאיש אינו מטפל בו.** הצינור רץ
+          # כאן חשוף, ולכן כל נפילה שלו הופיעה כ-"Process completed with
+          # exit code 1" ותו לא. נמדד 04–07/09/2026: הברייף לא הופק
+          # שלושה ימים, כל ריצה נכשלה אדום, ולא היה בשום מקום רמז למה.
+          # הלוגים של Actions דורשים הזדהות ואינם נקראים מבחוץ, ולכן
+          # הסיבה חייבת לעלות לאנוטציה.
+          set -o pipefail
+          set +e
+          bash run_daily.sh 2>&1 | tee brief.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            if grep -qi 'credit balance is too low\|insufficient.*credit\|quota' brief.log; then
+              echo "::error title=יתרת Anthropic אזלה::הברייף אינו נכתב וגם הסיכומים אינם רצים. טעינה: console.anthropic.com/settings/billing"
+            elif grep -qi 'overloaded\|rate_limit\|529' brief.log; then
+              echo "::error title=המודל עמוס או מוגבל בקצב::הברייף לא הופק; המהדורה הבאה תנסה שוב."
+            elif grep -qi 'authentication\|invalid.*api.key\|401' brief.log; then
+              echo "::error title=מפתח Anthropic נדחה::ANTHROPIC_API_KEY אינו תקף."
+            else
+              echo "::error title=הצינור נכשל (קוד $rc)::$(tail -6 brief.log | tr '\n' ' ' | cut -c1-320)"
+            fi
+            exit "$rc"
+          fi
           # site/dist נוצר רק כשהופק ברייף; ריצת "skip" יוצאת לפני כן.
           if [ -d site/dist ]; then
             echo "produced=yes" >> "$GITHUB_OUTPUT"
