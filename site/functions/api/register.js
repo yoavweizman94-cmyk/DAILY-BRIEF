@@ -37,8 +37,23 @@ function maskEmail(e) {
   return keep + "*".repeat(Math.max(1, local.length - keep.length)) + dom;
 }
 
-async function noteFailure(env, email, reason) {
+// **הרעש של הבודק אינו ממצא.** access-flow-check שולח בכוונה בקשות
+// פסולות — סיסמה קצרה וכתובת לא תקינה — כדי לוודא שהוולידציה דוחה
+// אותן. הן נרשמו כשתי דחיות, ובדוח נראו בדיוק כמו אדם שניסה להיכנס
+// ונכשל. מי שקורא את ההתראה צריך לראות אנשים בלבד, אחרת ממצא אמיתי
+// נבלע בין שתי שורות של בדיקה עצמית.
+//
+// הבודק מזוהה בשני סימנים: כתובת בדומיין של השירות עצמו — אין
+// משתמשים כאלה, לדומיין אין בכלל תיבות דואר — או שם שמתחיל ב"בדיקה".
+function isProbe(email, name) {
+  const at = String(email || "").indexOf("@");
+  const dom = at > 0 ? email.slice(at + 1).toLowerCase() : "";
+  return dom === "tlvtaseview.com" || String(name || "").trim().startsWith("בדיקה");
+}
+
+async function noteFailure(env, email, reason, name) {
   if (!env.USERS) return;
+  if (isProbe(email, name)) return;
   try {
     const at = new Date().toISOString();
     await env.USERS.put(
@@ -63,12 +78,12 @@ export async function onRequestPost(context) {
   const password = String(body.password || "");
 
   if (!name || !validEmail(email)) {
-    await noteFailure(env, email, "שם חסר או כתובת מייל לא תקינה");
+    await noteFailure(env, email, "שם חסר או כתובת מייל לא תקינה", name);
     return json({ error: "שם וכתובת מייל תקינה הם שדות חובה" }, 400);
   }
   const pwErr = passwordProblem(password);
   if (pwErr) {
-    await noteFailure(env, email, `סיסמה: ${pwErr}`);
+    await noteFailure(env, email, `סיסמה: ${pwErr}`, name);
     return json({ error: pwErr }, 400);
   }
 
@@ -76,7 +91,7 @@ export async function onRequestPost(context) {
   // מפתח דואר חסר או ספק שנפל אינם סיבה לאבד הרשמה של לקוח משלם —
   // החשבון נשמר כממתין, והבעלים רואה אותו ברשימת המשתמשים גם בלי מייל.
   if (!env.USERS || !env.APPROVAL_SECRET) {
-    await noteFailure(env, email, "השירות אינו מוגדר — חסר USERS או APPROVAL_SECRET");
+    await noteFailure(env, email, "השירות אינו מוגדר — חסר USERS או APPROVAL_SECRET", name);
     return json({ error: "השירות אינו מוגדר במלואו" }, 503);
   }
 
@@ -84,13 +99,13 @@ export async function onRequestPost(context) {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const rl = await rateLimit(env, `reg:${ip}`, 5, 3600);
   if (!rl.ok) {
-    await noteFailure(env, email, "תקרת בקשות לפי כתובת IP (5 לשעה)");
+    await noteFailure(env, email, "תקרת בקשות לפי כתובת IP (5 לשעה)", name);
     return json({ error: "יותר מדי בקשות. נסה שוב בעוד שעה." }, 429);
   }
 
   const existing = await getUser(env, email);
   if (existing && existing.status === "active") {
-    await noteFailure(env, email, "כבר רשום ופעיל — צריך להתחבר, לא להירשם");
+    await noteFailure(env, email, "כבר רשום ופעיל — צריך להתחבר, לא להירשם", name);
     return json({ error: "כתובת המייל הזו כבר רשומה. אפשר להתחבר." }, 409);
   }
 
