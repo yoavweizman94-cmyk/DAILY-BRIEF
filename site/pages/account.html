@@ -130,33 +130,60 @@
     });
   }
 
+  // **סעיף שנעלם בשקט הוא הבאג שחזר.** הגרסה הקודמת הסתירה את הרשימה
+  // על כל תשובה שאינה 200 — כולל 404 כשהנתיב אינו פרוס, וכולל תשובה
+  // שאינה JSON — ואז המסך נראה בדיוק כמו "אין בקשות". בדיוק הדפוס שכל
+  // הסשן הזה עסק בהסרתו, שהוחזר כאן בקוד שלי. הסעיף מוצג עכשיו תמיד
+  // (חוץ ממי שאינו מחובר) ואומר מה קרה.
+  var pshown = false;
+
+  function fail(msg) {
+    pend.hidden = false;
+    psub.textContent = msg;
+    if (!pshown) plist.innerHTML = "";
+  }
+
   function load() {
     return fetch("/api/pending", { headers: { "Accept": "application/json" } })
       .then(function (r) {
-        if (r.status === 401) return null;
-        // **403 אינו "אין בקשות".** הסתרת הסעיף על כל סירוב היא מה שגרם
-        // לכך שבקשת גישה נעלמה פעמיים בלי עקבות: מי שאינו מזוהה כבעלים
-        // רואה בדיוק את מה שרואה מי שאין לו בקשות ממתינות.
-        if (r.status === 403) return r.json().then(function (x) {
-          return { denied: true, d: x };
+        // 401 = אינך מחובר. זו האפשרות היחידה שבה אין מה להציג כאן.
+        if (r.status === 401) return { skip: true };
+        return r.text().then(function (t) {
+          var d = null;
+          try { d = JSON.parse(t); } catch (e) { d = null; }
+          if (d === null) {
+            // 404 מגיע כ-HTML: הנתיב אינו פרוס, או שהפריסה ישנה.
+            return { error: "השרת החזיר תשובה שאינה JSON (קוד " + r.status +
+                            "). ייתכן שהנתיב /api/pending אינו פרוס." };
+          }
+          // **403 אינו "אין בקשות".** מי שאינו מזוהה כבעלים היה רואה
+          // בדיוק את מה שרואה מי שאין לו בקשות ממתינות.
+          if (r.status === 403) return { denied: true, d: d };
+          if (!r.ok) {
+            return { error: (d.error || "הבקשה נכשלה") + " (קוד " + r.status + ")" };
+          }
+          return d;
         });
-        return r.json();
       })
       .then(function (d) {
-        if (!d) return;
+        if (!d || d.skip) return;
+        if (d.error) { fail(d.error); return; }
         if (d.denied) {
           var i = d.d || {};
-          pend.hidden = false;
-          psub.textContent = i.ownerConfigured
+          fail(i.ownerConfigured
             ? "רשימת בקשות הגישה מוצגת לבעלים בלבד (" + (i.ownerHint || "—") +
               "). אתה מחובר כ-" + (i.you || "—") + "."
-            : "לא הוגדרה כתובת בעלים בשירות, ולכן אי אפשר להציג בקשות גישה.";
+            : "לא הוגדרה כתובת בעלים בשירות, ולכן אי אפשר להציג בקשות גישה.");
           if (ptimer) { clearInterval(ptimer); ptimer = null; }
           return;
         }
+        pshown = true;
         render(d);
       })
-      .catch(function () { /* רענון שנכשל אינו מוחק את מה שכבר מוצג */ });
+      .catch(function (e) {
+        // רענון שנכשל אינו מוחק רשימה שכבר מוצגת, אבל כן נאמר.
+        fail("לא ניתן לטעון את רשימת הבקשות (" + (e && e.message ? e.message : "שגיאת רשת") + ").");
+      });
   }
 
   load();
