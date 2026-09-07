@@ -154,8 +154,7 @@ TLV TASE View מספק מידע, נתונים וניתוח השפעה על בס�
         var lines = ["שם: " + body.name, "מייל: " + body.email,
                      "גוף: " + (body.org || "—"), "", body.why || ""];
         var mailto = "mailto:" + OWNER + "?subject=" + subject +
-                     "&body=" + encodeURIComponent(lines.join("
-"));
+                     "&body=" + encodeURIComponent(lines.join("\n"));
         msg.className = "msg err";
         msg.innerHTML = "השליחה האוטומטית נכשלה. " +
           '<a href="' + mailto + '">שלח את הבקשה במייל</a> ואחזור אליך.';

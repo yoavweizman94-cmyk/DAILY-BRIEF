@@ -52,6 +52,15 @@ jobs:
           CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
         run: bash scripts/content_repo.sh pull
 
+      # **HTML אינו נכשל על JS פגום — הדפדפן מדלג בשקט.** שורת מעבר
+      # בתוך מחרוזת ב-landing.html שברה את כל בלוק ה-script, ואיתו את
+      # מטפל השליחה של טופס ההרשמה: הלחיצה על "שלח בקשה" לא שלחה דבר,
+      # ואף בקשה לא הגיעה לשרת. מבחוץ זה נראה כמו אדם שלא נרשם — אין
+      # חשבון, אין דחייה רשומה, אין מה לחקור. שניים ניסו ונכשלו כך.
+      # הבדיקה עוצרת את הפריסה, כי עמוד כזה גרוע מעמוד שאינו עולה.
+      - name: Check inline JS
+        run: python scripts/check_inline_js.py
+
       - name: Build site
         run: python site/build.py
 
