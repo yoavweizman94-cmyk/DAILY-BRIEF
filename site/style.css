@@ -1297,4 +1297,13 @@ label .hint {
   background: var(--accent); color: var(--on-accent); border-radius: 6px;
   text-decoration: none; font-size: 0.85rem; font-weight: 600;
 }
-.pend-go:hover { background: var(--accent-2); }
+.pend-go:hover:not(:disabled) { background: var(--accent-2); }
+/* הכפתור החליף קישור: האישור נעשה במקום ולא בניווט לדף תוצאה, ולכן
+   צריך לאפס את ברירות המחדל של הדפדפן ולשמור על אותו מראה בדיוק. */
+button.pend-go {
+  border: 0; cursor: pointer; font-family: inherit; line-height: 1.5;
+}
+button.pend-go:disabled { opacity: 0.55; cursor: default; }
+button.pend-go:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}

@@ -8,6 +8,24 @@ const RESEND = "https://api.resend.com/emails";
 // הבדיקה שולחת מייל אמיתי עם כפתור עובד, וב-19/08/2026 הוא נלחץ בטעות.
 const TEST_ADDRESS = "access-check@tlvtaseview.com";
 
+// **אותה נקודה, שתי צורות תשובה.** הרשימה בעמוד החשבון מאשרת במקום
+// ולא מנווטת לדף תוצאה, ולכן היא צריכה JSON. הלוגיקה, בדיקת ה-HMAC
+// והחסימה של כתובת הבדיקה זהות לחלוטין — אין כאן נתיב אישור שני,
+// רק ייצוג שני של אותה תשובה. הקישור מהמייל ממשיך לעבוד כשהיה.
+function wantsJson(request) {
+  try {
+    if (new URL(request.url).searchParams.get("json") === "1") return true;
+  } catch { /* כתובת פגומה — נופלים ל-HTML */ }
+  return (request.headers.get("accept") || "").includes("application/json");
+}
+
+function reply(asJson, title, msg, ok) {
+  if (!asJson) return page(title, msg, ok);
+  return new Response(JSON.stringify({ ok, title, message: msg }),
+    { status: ok ? 200 : 400,
+      headers: { "Content-Type": "application/json; charset=utf-8" } });
+}
+
 function page(title, msg, ok) {
   return new Response(
     `<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="utf-8">
@@ -34,6 +52,7 @@ async function sign(email, secret) {
 // ו-‎"=1a" הפך לתו 0x1A. בלי סימן שוויון אין מה לפרש.
 export async function onRequestGet(context) {
   const { request, env, params } = context;
+  const asJson = wantsJson(request);
   const raw = String(params.token || "");
   const dot = raw.lastIndexOf(".");
   let email = "", token = "";
@@ -44,25 +63,25 @@ export async function onRequestGet(context) {
     token = raw.slice(dot + 1);
   }
 
-  if (!email || !token) return page("קישור חסר", "חסרים פרטים בקישור.", false);
+  if (!email || !token) return reply(asJson, "קישור חסר", "חסרים פרטים בקישור.", false);
 
   if (email === TEST_ADDRESS) {
-    return page("כתובת בדיקה", "זו הכתובת שבה משתמש אימות הזרימה. " +
-                "היא לא הופעלה, וזו התנהגות מכוונת.", false);
+    return reply(asJson, "כתובת בדיקה", "זו הכתובת שבה משתמש אימות הזרימה. " +
+                 "היא לא הופעלה, וזו התנהגות מכוונת.", false);
   }
   if (!env.APPROVAL_SECRET || !env.USERS) {
-    return page("השירות אינו מוגדר", "חסרות הגדרות בצד השרת.", false);
+    return reply(asJson, "השירות אינו מוגדר", "חסרות הגדרות בצד השרת.", false);
   }
   if (!timingSafeEqual(token, await sign(email, env.APPROVAL_SECRET))) {
-    return page("קישור לא תקף", "החתימה אינה תואמת.", false);
+    return reply(asJson, "קישור לא תקף", "החתימה אינה תואמת.", false);
   }
 
   const user = await getUser(env, email);
   if (!user) {
-    return page("לא נמצאה הרשמה", `אין הרשמה ממתינה עבור ${email}.`, false);
+    return reply(asJson, "לא נמצאה הרשמה", `אין הרשמה ממתינה עבור ${email}.`, false);
   }
   if (user.status === "active") {
-    return page("כבר פעיל", `החשבון של ${email} כבר פעיל.`, true);
+    return reply(asJson, "כבר פעיל", `החשבון של ${email} כבר פעיל.`, true);
   }
 
   user.status = "active";
@@ -96,5 +115,5 @@ export async function onRequestGet(context) {
     } catch (e) { console.log("notify failed", String(e)); }
   }
 
-  return page("החשבון הופעל", `${email} יכול להיכנס מעכשיו עם הסיסמה שבחר.`, true);
+  return reply(asJson, "החשבון הופעל", `${email} יכול להיכנס מעכשיו עם הסיסמה שבחר.`, true);
 }

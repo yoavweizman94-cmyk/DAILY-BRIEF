@@ -22,6 +22,7 @@
   <h2>בקשות גישה ממתינות</h2>
   <p class="auth-sub" id="pendsub">טוען…</p>
   <div id="pendlist"></div>
+  <p class="pend-when" id="pendfoot" hidden></p>
 </section>
 
 <script>
@@ -51,34 +52,59 @@
     });
   }
 
-  fetch("/api/pending").then(function (r) {
-    if (r.status === 401) return null;
-    // **403 אינו "אין בקשות".** הסתרת הסעיף על כל סירוב היא מה שגרם
-    // לכך שבקשת גישה נעלמה פעמיים בלי עקבות: מי שאינו מזוהה כבעלים
-    // רואה בדיוק את מה שרואה מי שאין לו בקשות ממתינות. עכשיו נאמר
-    // מה קרה, ובאיזו כתובת המערכת מצפה לראות את הבעלים.
-    if (r.status === 403) return r.json().then(function (d) {
-      return { denied: true, d: d };
-    });
-    return r.json();
-  }).then(function (d) {
-    if (!d) return;
-    if (d.denied) {
-      var i = d.d || {};
-      pend.hidden = false;
-      psub.textContent = i.ownerConfigured
-        ? "רשימת בקשות הגישה מוצגת לבעלים בלבד (" + (i.ownerHint || "—") +
-          "). אתה מחובר כ-" + (i.you || "—") + "."
-        : "לא הוגדרה כתובת בעלים בשירות, ולכן אי אפשר להציג בקשות גישה.";
-      return;
-    }
+  // **הרשימה היא נתיב האישור, לא המייל.** ההתראה במייל נכשלה שוב ושוב
+  // — Resend החזיר 200 והודעה לא הגיעה — ובכל פעם בקשת גישה נעלמה בלי
+  // עקבות. כאן היא נקראת מהמקור בכל רענון, והאישור נעשה מתוכה.
+  //
+  // **האישור אינו נתיב חדש.** הוא פונה לאותה נקודה חתומה ב-HMAC שאליה
+  // הפנה הקישור במייל, רק בבקשת JSON במקום ניווט לדף. אותה בדיקת חתימה,
+  // אותה חסימה של כתובת הבדיקה — רק בלי לצאת מהעמוד.
+  var pfoot = document.getElementById("pendfoot"), ptimer = null, pbusy = false;
+
+  function stamp(t) {
+    pfoot.hidden = false;
+    pfoot.textContent = "עודכן " + t.toLocaleTimeString("he-IL", {
+      hour: "2-digit", minute: "2-digit" }) + " · מתרענן אוטומטית";
+  }
+
+  function approve(url, btn) {
+    if (pbusy) return;
+    pbusy = true;
+    btn.disabled = true;
+    var was = btn.textContent;
+    btn.textContent = "מאשר…";
+    // json=1 מבקש תשובת JSON מאותה נקודה בדיוק.
+    fetch(url + (url.indexOf("?") < 0 ? "?" : "&") + "json=1",
+          { headers: { "Accept": "application/json" } })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        pbusy = false;
+        if (!res.ok) {
+          btn.disabled = false;
+          btn.textContent = was;
+          psub.textContent = (res.d && (res.d.message || res.d.title)) || "האישור נכשל.";
+          return;
+        }
+        load();
+      })
+      .catch(function () {
+        pbusy = false;
+        btn.disabled = false;
+        btn.textContent = was;
+        psub.textContent = "האישור נכשל — בדוק את החיבור ונסה שוב.";
+      });
+  }
+
+  function render(d) {
     pend.hidden = false;
+    stamp(new Date());
     if (!d.pending || !d.pending.length) {
       psub.textContent = "אין בקשות ממתינות.";
+      plist.innerHTML = "";
       return;
     }
-    psub.textContent = d.count + " ממתינות לאישור.";
-    plist.innerHTML = d.pending.map(function (u) {
+    psub.textContent = d.count + (d.count === 1 ? " בקשה ממתינה" : " בקשות ממתינות") + " לאישור.";
+    plist.innerHTML = d.pending.map(function (u, i) {
       var head = '<div class="pend-head"><b>' + esc(u.name || "ללא שם") + "</b>" +
                  '<span class="pend-mail">' + esc(u.email) + "</span>" +
                  (u.org ? '<span class="pend-org">' + esc(u.org) + "</span>" : "") +
@@ -89,11 +115,57 @@
         : "";
       // חשבון הבדיקה חסום להפעלה בצד השרת ממילא, ולכן אין לו כפתור.
       var act = u.approve
-        ? '<p><a class="pend-go" href="' + esc(u.approve) + '">אישור והפעלה</a></p>'
+        ? '<p><button type="button" class="pend-go" data-i="' + i + '">אישור והפעלה</button></p>'
         : '<p class="pend-when">אין קישור אישור לחשבון הזה.</p>';
       return '<div class="pend-item">' + head + why + when + act + "</div>";
     }).join("");
-  }).catch(function () { /* הסעיף נשאר מוסתר */ });
+    // הקישורים מוחזקים ב-JS ולא ב-DOM: הם חתומים, ואין סיבה שיישבו
+    // ב-HTML שאפשר להעתיק ממנו בטעות.
+    var btns = plist.querySelectorAll("button.pend-go");
+    Array.prototype.forEach.call(btns, function (b) {
+      b.addEventListener("click", function () {
+        var u = d.pending[parseInt(b.getAttribute("data-i"), 10)];
+        if (u && u.approve) approve(u.approve, b);
+      });
+    });
+  }
+
+  function load() {
+    return fetch("/api/pending", { headers: { "Accept": "application/json" } })
+      .then(function (r) {
+        if (r.status === 401) return null;
+        // **403 אינו "אין בקשות".** הסתרת הסעיף על כל סירוב היא מה שגרם
+        // לכך שבקשת גישה נעלמה פעמיים בלי עקבות: מי שאינו מזוהה כבעלים
+        // רואה בדיוק את מה שרואה מי שאין לו בקשות ממתינות.
+        if (r.status === 403) return r.json().then(function (x) {
+          return { denied: true, d: x };
+        });
+        return r.json();
+      })
+      .then(function (d) {
+        if (!d) return;
+        if (d.denied) {
+          var i = d.d || {};
+          pend.hidden = false;
+          psub.textContent = i.ownerConfigured
+            ? "רשימת בקשות הגישה מוצגת לבעלים בלבד (" + (i.ownerHint || "—") +
+              "). אתה מחובר כ-" + (i.you || "—") + "."
+            : "לא הוגדרה כתובת בעלים בשירות, ולכן אי אפשר להציג בקשות גישה.";
+          if (ptimer) { clearInterval(ptimer); ptimer = null; }
+          return;
+        }
+        render(d);
+      })
+      .catch(function () { /* רענון שנכשל אינו מוחק את מה שכבר מוצג */ });
+  }
+
+  load();
+  // רענון תקופתי, ועוד אחד כשחוזרים ללשונית: בקשה שנרשמה בזמן שהעמוד
+  // היה פתוח ברקע צריכה להופיע בלי טעינה מחדש.
+  ptimer = setInterval(load, 45000);
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) load();
+  });
 
   f.addEventListener("submit", function (e) {
     e.preventDefault();
