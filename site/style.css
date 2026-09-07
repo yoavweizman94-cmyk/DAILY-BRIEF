@@ -545,6 +545,18 @@ ul.ac li:hover { background: var(--accent-soft); color: var(--accent); }
 .reqdone-h::before { content: "✓ "; }
 .reqdone-n { color: var(--muted); font-size: 0.82rem; }
 
+/* סקירת התקופה מעל כל טבלה. עובדות מחושבות מהטבלה שמתחת, לא הערכה. */
+.otc-review {
+  margin: 0.6rem 0 0.9rem; font-size: 0.9rem; line-height: 1.7;
+  border-inline-start: 3px solid var(--accent); padding-inline-start: 0.8rem;
+}
+.otc-png {
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+  border-radius: 6px; padding: 0.3rem 0.75rem; font-size: 0.8rem;
+  font-family: inherit; cursor: pointer;
+}
+.otc-png:hover { color: var(--accent); border-color: var(--accent); }
+
 .stats {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
   gap: 0.5rem; margin-bottom: 1.2rem;

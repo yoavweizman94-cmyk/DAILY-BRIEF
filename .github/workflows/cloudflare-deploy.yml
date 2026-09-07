@@ -52,6 +52,9 @@ jobs:
           CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
         run: bash scripts/content_repo.sh pull
 
+      - name: Build site
+        run: python site/build.py
+
       # **HTML אינו נכשל על JS פגום — הדפדפן מדלג בשקט.** שורת מעבר
       # בתוך מחרוזת ב-landing.html שברה את כל בלוק ה-script, ואיתו את
       # מטפל השליחה של טופס ההרשמה: הלחיצה על "שלח בקשה" לא שלחה דבר,
@@ -60,9 +63,6 @@ jobs:
       # הבדיקה עוצרת את הפריסה, כי עמוד כזה גרוע מעמוד שאינו עולה.
       - name: Check inline JS
         run: python scripts/check_inline_js.py
-
-      - name: Build site
-        run: python site/build.py
 
       # אבחון הטוקן הוא כלי הקמה, ולא משהו שצריך לרוץ בכל דחיפה. שלב
       # הפריסה עצמו נכשל ברעש כשהאימות שבור, ולכן שום אות לא הולך לאיבוד.

@@ -64,7 +64,13 @@ def main() -> int:
         print("::warning::node אינו זמין — בדיקת ה-JS המוטמע דולגה")
         return 0
 
+    # **גם עמודים מחוללים.** ה-JS של עמוד העסקאות נכתב מתוך site/otc.py
+    # ואינו יושב ב-pages/, ולכן בדיקה שמסתכלת רק שם מפספסת בדיוק את הקוד
+    # שנוצר בכל בנייה. dist נבדק כשהוא קיים.
     targets = sorted((ROOT / "site" / "pages").glob("*.html"))
+    dist = ROOT / "site" / "dist"
+    if dist.is_dir():
+        targets += sorted(dist.glob("*.html"))
     if not targets:
         print("::warning::לא נמצאו עמודים לבדיקה")
         return 0
