@@ -57,7 +57,13 @@ def capital() -> dict[str, dict]:
         return {}
     return d.get("securities") or {}
 
-def load() -> list[dict]:
+# סוגי נייר שאינם מניה של חברה. **הבדיקה על שדה הסוג ולא על השם** —
+# "סלקום", "שופרסל", "סלע נדלן" ו"יוניברסל מוטורס" כולם מכילים "סל"
+# בשמם והם מניות לכל דבר. שדה הסוג הוא רשימה סגורה, ולכן חד־משמעי.
+NOT_SHARE = ("קרנות סל", "תעודות סל")
+
+
+def _load_raw() -> list[dict]:
     rows = []
     for f in sorted(OTC.glob("*.jsonl")):
         for line in f.read_text(encoding="utf-8").splitlines():
@@ -65,6 +71,23 @@ def load() -> list[dict]:
                 rows.append(json.loads(line))
     rows.sort(key=lambda r: r.get("traded_at") or r["date"])
     return rows
+
+
+def load() -> list[dict]:
+    """כל העסקאות, בלי קרנות סל ותעודות סל.
+
+    **הסוג נלמד לפי נייר ולא לפי רשומה.** רשומה שנמשכה מהיסטוריית הנייר
+    מגיעה בלי שדה סוג כלל, ולכן סינון פר-רשומה היה מדלג עליה. הסוג נקבע
+    מכל רשומה שבה הוא כן ידוע, וחל על כל הרשומות של אותו נייר.
+    """
+    rows = _load_raw()
+    kind: dict[str, str] = {}
+    for r in rows:
+        t = (r.get("sec_type") or "").strip()
+        if t:
+            kind.setdefault(r["security_id"], t)
+    return [r for r in rows
+            if kind.get(r["security_id"], r.get("sec_type") or "") not in NOT_SHARE]
 
 
 def bucket(r: dict) -> str:
@@ -255,6 +278,10 @@ def aggregate(rows: list[dict]) -> list[dict]:
         e["days"] = len(e["days"])
         e["median_prem"] = (round(statistics.median(e["prem"]), 2)
                             if e["prem"] else None)
+        # ביום בודד יש לרוב עסקה אחת או שתיים לנייר, וחציון של שתיים הוא
+        # ממוצע ממילא. הממוצע נאמר כפי שהוא ואינו מתחזה למדד עמיד.
+        e["mean_prem"] = (round(statistics.fmean(e["prem"]), 2)
+                          if e["prem"] else None)
         issued = (cap.get(e["sid"]) or {}).get("issued")
         # **מצטבר, ולא ממוצע.** אותו נייר שנסחר בחמישה ימים — הסכום הוא
         # כמה מההון עבר ידיים בתקופה כולה.
@@ -320,9 +347,95 @@ def review(rows: list[dict], label: str) -> str:
 
     return '<p class="otc-review">' + " ".join(bits) + "</p>"
 
+def buyers(rows: list[dict], off: list[dict]) -> dict[str, list[str]]:
+    """זהויות מדווחות לעסקאות של אותה תקופה, מתוך דיווחי מאיה.
+
+    **סקירת הבורסה אינה נושאת זהויות בכלל.** מי שקנה נודע רק כשהוא חייב
+    בדיווח — בעל עניין, או מי שחצה סף — ואז ת076 נושא את שמו. ההצלבה היא
+    לפי נייר ותאריך, ולכן היא **אפשרית ולא ודאית**: באותו יום ובאותו
+    נייר יכולות להיות גם עסקאות של אחרים. הניסוח בהתאם — "מדווח" ולא
+    "הרוכש".
+    """
+    if not off:
+        return {}
+    days = {r["date"] for r in rows}
+    secs = {r["security_id"] for r in rows}
+    out: dict[str, list[str]] = {}
+    for o in off:
+        if str(o.get("security_id")) not in secs or o.get("date") not in days:
+            continue
+        if o.get("counted") is False or o.get("partial"):
+            continue
+        who = (o.get("holder") or "").strip()
+        if not who:
+            continue
+        side = "רכש" if o.get("direction") == "buy" else "מכר"
+        line = f"{who} {side}"
+        out.setdefault(str(o["security_id"]), [])
+        if line not in out[str(o["security_id"])]:
+            out[str(o["security_id"])].append(line)
+    return out
+
+
+def tweet(rows: list[dict], label: str, off: list[dict], key: str) -> str:
+    """תקציר באורך ציוץ, מוכן להעתקה.
+
+    **נכתב לפרסום ולא לקריאה בעמוד.** לכן הוא קצר מהסקירה שמעליו, נוקב
+    בשמות כשהם ידועים, ונעצר ב-280 תווים — האורך שאפשר להדביק בלי
+    שייחתך. מעקה 5 חל: תיאור מה קרה, בלי המלצה.
+    """
+    if not rows:
+        return ""
+    agg = aggregate(rows)
+    total = sum(e["value"] for e in agg)
+    if not agg or not total:
+        return ""
+    ident = buyers(rows, off)
+    lines = [f"עסקאות מחוץ לבורסה · {label}",
+             f"{money(total)} ב-{sum(e['n'] for e in agg):,} עסקאות, "
+             f"{len(agg)} ניירות"]
+
+    big = agg[0]
+    cap = (f" — {big['pct_capital']:.2f}% מההון"
+           if big["pct_capital"] is not None else "")
+    lines.append(f"הגדולה: {big['name']} {money(big['value'])}{cap}")
+
+    # נייר שבו עבר החלק הגדול ביותר מההון — לא בהכרח הגדול בכסף, וזה
+    # בדיוק מה שמעניין: מחזור גדול בחברה גדולה אינו שינוי החזקות.
+    withcap = [e for e in agg if e["pct_capital"]]
+    if withcap:
+        top = max(withcap, key=lambda e: e["pct_capital"])
+        if top["sid"] != big["sid"]:
+            lines.append(f"החלק הגדול מההון: {top['name']} "
+                         f"{top['pct_capital']:.2f}%")
+
+    named = []
+    for e in agg[:6]:
+        for who in ident.get(e["sid"], [])[:1]:
+            named.append(f"{e['name']}: {who}")
+    if named:
+        lines.append("מדווחים — " + " · ".join(named[:2]))
+
+    out = ""
+    for ln in lines:
+        nxt = (out + "\n" + ln) if out else ln
+        if len(nxt) > 268:
+            break
+        out = nxt
+    return out + "\ntlvtaseview.com"
+
+
+def tweet_block(text: str, key: str) -> str:
+    if not text:
+        return ""
+    esc = (text.replace("&", "&amp;").replace("<", "&lt;")
+               .replace(">", "&gt;"))
+    return (f'<div class="otc-tweet" id="tw-{key}">'
+            f'<pre>{esc}</pre></div>')
+
 def period_table(title: str, sub: str, rows: list[dict],
                  show_days: bool, key: str = "", label: str = "",
-                 limit: int = 30) -> str:
+                 stat: str = "median", extra: str = "", limit: int = 30) -> str:
     """טבלה אחת, במבנה זהה לשלוש התקופות.
 
     אותן עמודות בשלושתן בכוונה: כך אפשר להשוות נייר בין יום, חודש ושנה
@@ -335,7 +448,9 @@ def period_table(title: str, sub: str, rows: list[dict],
     total = sum(e["value"] for e in agg)
     head = ('<th>נייר</th><th>עסקאות</th>'
             + ('<th>ימים</th>' if show_days else '')
-            + '<th>היקף</th><th>% מהון החברה</th><th>חציון מול הבסיס</th>')
+            + '<th>היקף</th><th>% מהון החברה</th>'
+            + (f'<th>{"ממוצע" if stat == "mean" else "חציון"} מול הבסיס</th>'))
+    fld = "mean_prem" if stat == "mean" else "median_prem"
     # מטען לייצוא: הכפתור מצייר מהנתונים ולא מגרד את ה-DOM, כך
     # שהתמונה אינה תלויה בעיצוב העמוד או ברוחב המסך.
     payload = json.dumps({
@@ -347,28 +462,32 @@ def period_table(title: str, sub: str, rows: list[dict],
             "value": money(e["value"]),
             "cap": (f'{e["pct_capital"]:.2f}%'
                     if e["pct_capital"] is not None else "—"),
-            "prem": signed(e["median_prem"]),
-        } for e in agg[:12]],
+            "prem": signed(e[fld]),
+        } for e in agg[:16]],
+        "more": max(0, len(agg) - 16),
     }, ensure_ascii=False)
     out = [f'<h2>{title}</h2>',
            f'<p class="note">{sub}</p>',
            review(rows, label or title),
+           extra,
            f'<script type="application/json" id="otc-{key}">{payload}</script>',
-           f'<p><button type="button" class="otc-png" data-key="{key}">'
-           'ייצוא לתמונה</button></p>',
+           f'<p class="otc-acts">'
+           f'<button type="button" class="otc-png" data-key="{key}">'
+           'ייצוא לתמונה</button>'
+           f'<button type="button" class="otc-copy" data-key="{key}">'
+           'העתקת התקציר</button></p>',
            '<div class="tw"><table class="nadlan"><thead><tr>'
            + head + '</tr></thead><tbody>']
     for e in agg[:limit]:
-        cov = '<span class="cov">כיסוי</span>' if e["covered"] else ""
         pc = e["pct_capital"]
         out.append(
-            f'<tr><td class="city">{e["name"]}{cov}</td>'
+            f'<tr><td class="city">{e["name"]}</td>'
             f'<td dir="ltr">{e["n"]}</td>'
             + (f'<td dir="ltr">{e["days"]}</td>' if show_days else '')
             + f'<td class="key" dir="ltr">{money(e["value"])}</td>'
             f'<td dir="ltr">{num(pc, 2) + "%" if pc is not None else "—"}</td>'
-            f'<td class="trend {cls(e["median_prem"])}" dir="ltr">'
-            f'{signed(e["median_prem"])}</td></tr>')
+            f'<td class="trend {cls(e[fld])}" dir="ltr">'
+            f'{signed(e[fld])}</td></tr>')
     cols = 6 if show_days else 5
     rest = len(agg) - limit
     if rest > 0:
@@ -385,7 +504,7 @@ def period_table(title: str, sub: str, rows: list[dict],
     return "\n".join(out)
 
 
-def periods(a: dict, year: str) -> str:
+def periods(a: dict, year: str, off: list[dict] | None = None) -> str:
     """שלוש התקופות, מהצרה לרחבה — יום, חודש, שנה.
 
     **היום הוא היום האחרון שיש בו נתונים, גם כשטרם ננעל.** הפרדת יום
@@ -393,6 +512,7 @@ def periods(a: dict, year: str) -> str:
     אותה טבלה, עם כותרת שאומרת שהיום פתוח ועד איזו שעה נאסף — כדי
     שהמספר לא ייקרא כיום מלא.
     """
+    off = off or []
     latest = a["latest"]
     day_rows = a["by_day"].get(latest, [])
     month = (latest or "")[:7]
@@ -411,31 +531,34 @@ def periods(a: dict, year: str) -> str:
         else:
             title = f"יום המסחר האחרון · {hebdate(latest)}"
             sub = "כל העסקאות במניות באותו יום, מסוכמות לפי נייר."
-        parts.append(period_table(title, sub, day_rows, show_days=False,
-                                  key="day",
-                                  label="היום" if openday else "יום המסחר האחרון"))
+        dlabel = "היום" if openday else "יום המסחר האחרון"
+        parts.append(period_table(
+            title, sub, day_rows, show_days=False, key="day", label=dlabel,
+            # ביום בודד יש לרוב עסקה אחת לנייר; ממוצע נאמר כפי שהוא.
+            stat="mean",
+            extra=tweet_block(tweet(day_rows, f"{dlabel} {hebdate(latest)}",
+                                    off, "day"), "day")))
     if month:
         parts.append(period_table(
             f"מתחילת החודש · {month[5:7]}/{month[:4]}",
             "מצטבר מהראשון בחודש ועד היום האחרון שנאסף.",
-            mtd, show_days=True, key="mtd", label="החודש"))
+            mtd, show_days=True, key="mtd", label="החודש",
+            extra=tweet_block(tweet(mtd, f"מתחילת {month[5:7]}/{month[:4]}",
+                                    off, "mtd"), "mtd")))
     parts.append(period_table(
         f"מתחילת {year}",
         "מצטבר לכל השנה. עמודת הימים מראה נייר שחוזר מחוץ לבורסה — "
         "מספר הימים אומר יותר מהיקף של עסקה בודדת.",
-        a["ytd"], show_days=True, key="ytd", label=f"מתחילת {year}"))
+        a["ytd"], show_days=True, key="ytd", label=f"מתחילת {year}",
+        extra=tweet_block(tweet(a["ytd"], f"מתחילת {year}", off, "ytd"), "ytd")))
     return "\n".join(parts)
 
 
 
 def head(a: dict, year: str) -> str:
-    others = a["other_types"]
-    ov = sum(r["value"] for r in others)
+    # ספירת הניירות האחרים הוסרה מהעמוד: היא תיאור של מה שלא מוצג,
+    # והקורא לא ביקש אותו.
     note = ""
-    if others:
-        note = ('<p class="note">העמוד מציג מניות בלבד. באותה סקירה דווחו גם '
-                f'{len(others)} עסקאות בניירות אחרים — אג"ח, מק"מ, קרנות סל '
-                f'ויחידות השתתפות — בהיקף {money(ov)}.</p>')
     return "\n".join([
         '<div class="dash-head"><h1>עסקאות מחוץ לבורסה</h1>',
         f'<span class="stamp">מתחילת {year} · נבנה {datetime.now():%d/%m %H:%M}</span></div>',
@@ -457,8 +580,7 @@ def method() -> str:
             'נייר, ולכן הוא כולל התאמות לדיבידנד ולפיצול. "% מהמסחר בבורסה" '
             'משווה את היקף העסקה למחזור אותו נייר בבורסה באותו יום; הוא יכול '
             'לעבור 100%, כי מחזור הבורסה אינו כולל את העסקאות מחוץ לה. '
-            'עסקה בלי שער ייחוס — נייר שלא נסחר באותו יום — מוצגת בלי סטייה '
-            'ואינה נספרת בהתפלגות.</p>')
+'</p>')
 
 
 def export_js() -> str:
@@ -473,15 +595,23 @@ def export_js() -> str:
     return """<script>
 (function () {
   "use strict";
-  var W = 1200, PAD = 44, ROW = 46;
+  var W = 1200, PAD = 40, ROW = 46;
 
   function draw(d) {
+    // **סכום הרוחבים חייב להיות בדיוק W - 2*PAD.** בגרסה הקודמת הוא
+    // עלה עליו (1156 ו-1200 מול 1112 פנויים), ולכן העמודה השמאלית
+    // ביותר צוירה מחוץ לקנבס והתמונה נראתה חתוכה. הבדיקה למטה נכשלת
+    // ברעש אם מישהו ישנה רוחב ולא יאזן.
     var cols = d.showDays
-      ? [["נייר", 470, "rtl"], ["עסקאות", 110, "ltr"], ["ימים", 100, "ltr"],
-         ["היקף", 190, "ltr"], ["% מההון", 150, "ltr"], ["מול הבסיס", 136, "ltr"]]
-      : [["נייר", 570, "rtl"], ["עסקאות", 130, "ltr"],
-         ["היקף", 210, "ltr"], ["% מההון", 160, "ltr"], ["מול הבסיס", 130, "ltr"]];
-    var H = PAD * 2 + 96 + ROW * (d.rows.length + 2) + 54;
+      ? [["נייר", 420, "rtl"], ["עסקאות", 110, "ltr"], ["ימים", 90, "ltr"],
+         ["היקף", 200, "ltr"], ["% מההון", 160, "ltr"], ["מול הבסיס", 140, "ltr"]]
+      : [["נייר", 470, "rtl"], ["עסקאות", 130, "ltr"],
+         ["היקף", 220, "ltr"], ["% מההון", 170, "ltr"], ["מול הבסיס", 130, "ltr"]];
+    var sum = 0;
+    for (var q = 0; q < cols.length; q++) { sum += cols[q][1]; }
+    if (sum !== W - PAD * 2) { throw new Error("רוחב עמודות " + sum); }
+    var extra = d.more ? ROW : 0;
+    var H = PAD * 2 + 96 + ROW * (d.rows.length + 2) + extra + 54;
     var c = document.createElement("canvas");
     c.width = W; c.height = H;
     var x = c.getContext("2d");
@@ -532,6 +662,13 @@ def export_js() -> str:
       }
     });
 
+    if (d.more) {
+      x.direction = "rtl"; x.textAlign = "right";
+      x.fillStyle = "#5b6b73";
+      x.font = "400 19px system-ui, 'Segoe UI', Arial";
+      x.fillText("ועוד " + d.more + " ניירות",
+                 right, y + 14 + ROW * (d.rows.length + 1) - 12);
+    }
     var fy = H - PAD + 4;
     x.direction = "rtl"; x.textAlign = "right";
     x.fillStyle = "#8a949a";
@@ -552,21 +689,42 @@ def export_js() -> str:
     }, "image/png");
   }
 
+  var cps = document.querySelectorAll("button.otc-copy");
+  Array.prototype.forEach.call(cps, function (b) {
+    b.addEventListener("click", function () {
+      var el = document.getElementById("tw-" + b.getAttribute("data-key"));
+      if (!el) { return; }
+      var t = (el.textContent || "").trim(), was = b.textContent;
+      function done() { b.textContent = "הועתק"; setTimeout(function () {
+        b.textContent = was; }, 2000); }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(t).then(done, function () {});
+        return;
+      }
+      // דפדפן בלי clipboard API: בחירת הטקסט מאפשרת העתקה ידנית.
+      var r = document.createRange();
+      r.selectNodeContents(el);
+      var sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(r);
+      done();
+    });
+  });
+
   var btns = document.querySelectorAll("button.otc-png");
   Array.prototype.forEach.call(btns, function (b) {
     b.addEventListener("click", function () {
       var el = document.getElementById("otc-" + b.getAttribute("data-key"));
-      if (!el) { b.textContent = "אין נתונים לייצוא"; return; }
+      if (!el) { return; }
       var d;
       try { d = JSON.parse(el.textContent); } catch (e) { d = null; }
-      if (!d || !d.rows || !d.rows.length) { b.textContent = "אין נתונים לייצוא"; return; }
+      if (!d || !d.rows || !d.rows.length) { return; }
       var was = b.textContent;
       b.textContent = "מייצא…";
       try {
         save(draw(d), "otc-" + b.getAttribute("data-key") + ".png");
         b.textContent = "התמונה הורדה";
       } catch (e) {
-        b.textContent = "הייצוא נכשל";
+        b.textContent = was;
       }
       setTimeout(function () { b.textContent = was; }, 2500);
     });
@@ -574,18 +732,18 @@ def export_js() -> str:
 })();
 </script>"""
 
-def page(otc_rows: list[dict], maya_body: str, year: str) -> str:
+def page(otc_rows: list[dict], maya_body: str, year: str,
+         offex_rows: list[dict] | None = None) -> str:
     if not otc_rows:
         return ('<div class="dash-head"><h1>עסקאות מחוץ לבורסה</h1></div>'
-                '<p class="lead">טרם נאספו עסקאות. הסריקה רצה בכל מהדורה.</p>'
                 + (maya_body or ""))
     a = analyse(otc_rows, year)
     # **סדר אחד: מהיום אל השנה.** הגרסה הקודמת פיזרה היסטוגרמה, גרף קו,
     # ליקוט עסקאות חריגות בשמן וטבלת חזרות בין שני חתכים יומיים, ולא
     # הייתה בה דרך לענות על "מה קרה החודש". שלוש טבלאות באותו מבנה
     # עונות על זה, ומאפשרות להשוות נייר בין התקופות בלי ללמוד מבנה חדש.
-    parts = [head(a, year), tiles(a, year), periods(a, year), method(),
-             export_js()]
+    parts = [head(a, year), tiles(a, year),
+             periods(a, year, offex_rows), method(), export_js()]
     if maya_body:
         parts += ['<h2>מי עומד מאחורי העסקאות המדווחות</h2>', maya_body]
     return "\n".join(p for p in parts if p)

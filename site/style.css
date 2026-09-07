@@ -556,6 +556,24 @@ ul.ac li:hover { background: var(--accent-soft); color: var(--accent); }
   font-family: inherit; cursor: pointer;
 }
 .otc-png:hover { color: var(--accent); border-color: var(--accent); }
+.otc-acts { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0 0.9rem; }
+.otc-copy {
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+  border-radius: 6px; padding: 0.3rem 0.75rem; font-size: 0.8rem;
+  font-family: inherit; cursor: pointer;
+}
+.otc-copy:hover { color: var(--accent); border-color: var(--accent); }
+
+/* התקציר לציוץ: נועד להעתקה, ולכן מוצג כפי שיודבק — שורות שמורות,
+   בלי גלישה מחדש שתשנה את מה שהקורא רואה מול מה שיקבל. */
+.otc-tweet {
+  background: var(--card, #f6f4ef); border: 1px solid var(--line);
+  border-radius: 8px; padding: 0.7rem 0.9rem; margin: 0.2rem 0 0;
+}
+.otc-tweet pre {
+  margin: 0; font-family: inherit; font-size: 0.86rem; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word;
+}
 
 .stats {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));

@@ -890,11 +890,14 @@ def main() -> int:
     # זהויות. הפרדתן לשני עמודים הייתה מחייבת את הקורא להצליב בעצמו.
     yr = str(date.today().year)
     _otc_rows = otc.load()
+    # אותן רשומות משמשות פעמיים: כגוף הסעיף של מאיה, וכמקור הזהויות
+    # לתקציר לציוץ — סקירת הבורסה עצמה אינה נושאת שמות.
+    _off_rows = offex.load_offex()
     (OUT / "offex.html").write_text(
         PAGE.format(title=f"עסקאות מחוץ לבורסה · {site_title}", site_title=site_title,
                     root="", body=otc.page(_otc_rows,
-                                           offex.page(offex.load_offex(), yr, head=False),
-                                           yr)),
+                                           offex.page(_off_rows, yr, head=False),
+                                           yr, _off_rows)),
         encoding="utf-8")
     # **מה נבנה בפועל, ולא רק שהבנייה הצליחה.** העמוד הזה נראה תקוע
     # במשך ימים בזמן שהקובץ היה מעודכן, כי היום הפתוח לא רונדר. שורה
