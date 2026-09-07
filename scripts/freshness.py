@@ -47,6 +47,8 @@ WORKFLOWS = {
     "עסקאות מחוץ לבורסה": "offex-backfill.yml",
     "דיווחי בעלי עניין": "offex-backfill.yml",
     "תמלולי שיחות": "globes-calls.yml",
+    "שוק הדיור": "nadlan-scan.yml",
+    "לוח שיחות ועידה": "daily-brief.yml",
 }
 
 
@@ -370,6 +372,45 @@ def main() -> int:
             bad.append(f"{label}: הרשומה האחרונה היא מ-{day} — {n} ימי מסחר. "
                        f"בדוק את {hint}.")
             tg.append((label, day, f"{n} ימי מסחר"))
+
+    # **שני עמודים שהמשמר לא כיסה כלל.** שוק הדיור ולוח שיחות הוועידה
+    # מוצגים באתר כמו כל השאר, ואיש לא בדק אותם — כלומר הבדיקה יכלה
+    # להיות ירוקה בזמן ששניהם תקועים. זה בדיוק הכשל שהיא נועדה לתפוס.
+    #
+    # שניהם נמדדים לפי **מועד הסריקה** ולא לפי תאריך הרשומה החדשה
+    # ביותר, ובכוונה: עסקאות רשות המסים מפגרות כשישה שבועות אחרי מועד
+    # העסקה, ולוח השיחות מצביע קדימה. מדידת תאריך הרשומה הייתה מתריעה
+    # בכל יום על פיגור שהוא תכונה של המקור ולא תקלה.
+    #
+    # הספים בימי לוח ולא בימי מסחר, לפי הקצב בפועל: סריקת הנדל"ן רצה
+    # שבועית (שבת 01:30), ולכן תשעה ימים מסמנים שבוע שהוחמץ; לוח
+    # השיחות נכתב בכל מהדורה של הברייף, ולכן יומיים הם כבר פיגור.
+    for label, path, field, limit, hint in (
+        ("שוק הדיור", ROOT / "data" / "nadlan_state.json", "updated", 9, "Nadlan Scan"),
+        ("לוח שיחות ועידה", ROOT / "output" / "calls" / "upcoming.json", "asof", 2, "Daily Brief"),
+    ):
+        stamp = None
+        if path.exists():
+            try:
+                stamp = (json.loads(path.read_text(encoding="utf-8")) or {}).get(field)
+            except (json.JSONDecodeError, OSError):
+                stamp = None
+        if not stamp:
+            rows.append((label, "—", "אין נתונים", hint))
+            bad.append(f"{label}: אין חותמת סריקה ב-{path.name}")
+            tg.append((label, "—", "אין נתונים"))
+            continue
+        day = str(stamp)[:10]
+        try:
+            n = (today - date.fromisoformat(day)).days
+        except ValueError:
+            rows.append((label, day, "תאריך לא תקין", hint))
+            continue
+        rows.append((label, day, f"{n} ימים", hint))
+        if n > limit:
+            bad.append(f"{label}: הסריקה האחרונה הייתה ב-{day} — {n} ימים. "
+                       f"בדוק את {hint}.")
+            tg.append((label, day, f"{n} ימים"))
 
     # --- מה נפרס בפועל, ומתי ---
     dep = last_deploy()
