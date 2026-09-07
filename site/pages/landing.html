@@ -89,7 +89,7 @@
       <button type="submit" id="rsend">שלח בקשה</button>
     </div>
   </form>
-  <div id="rmsg" class="msg"></div>
+  <div id="rmsg" class="msg" role="status" aria-live="polite"></div>
 </section>
 
 <p class="fineprint">
@@ -107,6 +107,11 @@ TLV TASE View מספק מידע, נתונים וניתוח השפעה על בס�
   var f = document.getElementById("req"), msg = document.getElementById("rmsg");
   var OWNER = "yoavweizman94@gmail.com";
   function say(t, c) { msg.className = "msg " + (c || ""); msg.textContent = t; }
+  function esc(t) {
+    return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
   f.addEventListener("submit", function (e) {
     e.preventDefault();
     var pw = document.getElementById("rpw").value,
@@ -128,26 +133,40 @@ TLV TASE View מספק מידע, נתונים וניתוח השפעה על בס�
       body: JSON.stringify(body)
     }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (res) {
-        if (!res.ok) throw new Error(res.d && res.d.error || "שגיאה");
-        f.style.display = "none";
-        // ההתראה עלולה להיכשל בנפרד מיצירת החשבון. הבטחה למייל שלא
-        // יגיע גרועה מהודעה שאומרת את האמת: הנרשם ימתין לשווא.
-        if (res.d && res.d.notified === false) {
-          msg.className = "msg ok";
-          msg.innerHTML = "החשבון נוצר והוא ממתין לאישור, אבל ההתראה " +
-            "אליי לא נשלחה. כדי שלא תמתין לחינם — " +
-            '<a href="mailto:' + OWNER + "?subject=" +
-            encodeURIComponent("בקשת גישה ל-TLV TASE View") + "&body=" +
-            encodeURIComponent("נרשמתי בכתובת " + body.email) +
-            '">שלח לי הודעה קצרה</a> ואאשר ידנית.';
-        } else {
-          say("הבקשה נשלחה והחשבון נוצר מושבת. תקבל מייל כשהוא יופעל.", "ok");
+        // **דחייה של השרת אינה כשל שליחה.** שתיהן הגיעו לאותו catch,
+        // ולכן מי שנתקל בתקרת הבקשות או בסיסמה שנדחתה בצד השרת קיבל
+        // "השליחה האוטומטית נכשלה, שלח לי מייל" — במקום לדעת שהבקשה
+        // הגיעה ומה בדיוק לתקן. הסימון מפריד ביניהן.
+        if (!res.ok) {
+          var e = new Error((res.d && res.d.error) || "הבקשה נדחתה");
+          e.fromServer = true;
+          throw e;
         }
+        // **אישור קליטה, ולא שורת סטטוס.** מי ששלח בקשה צריך לראות
+        // בבירור שהיא הגיעה, אחרת הוא שולח שוב — ונתקל בתקרת חמש
+        // הבקשות לשעה, שנראית לו כמו תקלה.
+        //
+        // ההודעה **אינה** תלויה בשאלה אם ההתראה לבעלים נשלחה: הבקשה
+        // מופיעה אצלו ברשימה שמתרעננת מעצמה, ולכן מייל שנכשל אינו
+        // עניינו של הנרשם ואין טעם לספר לו עליו.
+        f.style.display = "none";
+        msg.className = "msg";
+        msg.innerHTML =
+          '<div class="reqdone">' +
+          '<p class="reqdone-h">הבקשה נקלטה</p>' +
+          "<p>נרשמת בכתובת <b>" + esc(body.email) + "</b>.</p>" +
+          "<p>החשבון נוצר והוא ממתין לאישור. כשהוא יאושר תקבל הודעה " +
+          "למייל, ואפשר יהיה להיכנס עם הסיסמה שבחרת.</p>" +
+          '<p class="reqdone-n">אין צורך לשלוח בקשה נוספת.</p>' +
+          "</div>";
       })
       .catch(function (err) {
-        // נפילה לאחור לתוכנת המייל של המבקר. בלי זה, תקלה בצד השרת או
-        // הגדרה חסרה משאירות אותו בלי שום דרך ליצור קשר — והוא פשוט הולך.
         document.getElementById("rsend").disabled = false;
+        // דחייה מנומקת מהשרת: הטופס נשאר על המסך עם מה שמולא, ההודעה
+        // אומרת מה לתקן, ואפשר לשלוח שוב מיד.
+        if (err && err.fromServer) { say(err.message, "err"); return; }
+        // מכאן והלאה: הבקשה כלל לא הגיעה לשרת. נפילה לאחור לתוכנת
+        // המייל, אחרת המבקר נשאר בלי שום דרך ליצור קשר ופשוט הולך.
         var subject = encodeURIComponent("בקשת גישה ל-TLV TASE View");
         // הסיסמה **אינה** נכנסת לנפילה לאחור: mailto פותח הודעה בטקסט
         // גלוי שעוברת דרך שרתי דואר. במקרה כזה אקבע סיסמה זמנית ידנית.

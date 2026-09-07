@@ -530,6 +530,21 @@ ul.ac li:hover { background: var(--accent-soft); color: var(--accent); }
 .msg.warn { color: var(--warn); }
 .msg.err  { color: var(--down); }
 
+/* אישור קליטת בקשת גישה. שורת טקסט בגודל 0.85rem אינה נראית כמו
+   אישור, ומי שאינו בטוח ששלח — שולח שוב, ונתקל בתקרת הבקשות. */
+.reqdone {
+  border: 1px solid var(--accent); border-radius: 8px;
+  padding: 1rem 1.1rem; margin: 0.4rem 0 0; font-size: 0.9rem;
+  line-height: 1.65;
+}
+.reqdone p { margin: 0 0 0.5rem; }
+.reqdone p:last-child { margin-bottom: 0; }
+.reqdone-h {
+  font-size: 1.05rem; font-weight: 700; color: var(--accent);
+}
+.reqdone-h::before { content: "✓ "; }
+.reqdone-n { color: var(--muted); font-size: 0.82rem; }
+
 .stats {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
   gap: 0.5rem; margin-bottom: 1.2rem;
