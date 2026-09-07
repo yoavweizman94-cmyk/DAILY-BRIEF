@@ -41,6 +41,15 @@ jobs:
       # ירוק בזמן ששום מייל לא הגיע בפועל — לא על בקשת גישה ולא
       # מהבדיקה עצמה. השלב הזה מראה לאן הדואר נשלח, כדי שאפשר יהיה
       # להבחין בין מפתח חסר, דומיין לא מאומת ותיבת יעד שאינה נקראת.
+      # **הרשומה נוצרת ואינה מומלצת.** בלי DMARC, Gmail סינן את כל
+      # התראות השירות — בקשות גישה כלולות — בזמן ש-Resend החזיר 200 על
+      # כל אחת מהן. הוראה ידנית להוסיף רשומת DNS נשכחת או מוקלדת לא
+      # נכון; הפעולה כאן אידמפוטנטית ומאמתת את עצמה.
+      - name: Ensure DMARC record
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: python3 scripts/ensure_dmarc.py
+
       - name: Mail configuration
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
