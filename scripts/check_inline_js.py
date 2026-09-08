@@ -29,18 +29,34 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 # בלוק script עם src חיצוני אין לו גוף לבדוק.
-BLOCK = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.S | re.I)
+BLOCK = re.compile(r"<script(?![^>]*\bsrc=)([^>]*)>(.*?)</script>", re.S | re.I)
+TYPE = re.compile(r"""\btype\s*=\s*["']?([^"'\s>]+)""", re.I)
+
+# **רק בלוקים שהדפדפן מריץ כ-JavaScript.** ‏<script type="application/json">
+# הוא מטען נתונים ולא קוד, ו-node --check מפרש אותו כ-JS ונופל על
+# הנקודתיים הראשונה. הבדיקה חסמה בגלל זה פריסה תקינה של עמוד העסקאות.
+# חוסם שגוי גרוע מבדיקה חסרה: הוא מלמד להתעלם מהבדיקה.
+JS_TYPES = {"", "module", "text/javascript", "application/javascript",
+            "text/ecmascript", "application/ecmascript", "text/jsx"}
 
 
 def check(path: Path) -> list[str]:
     problems: list[str] = []
     text = path.read_text(encoding="utf-8")
     for i, m in enumerate(BLOCK.finditer(text), 1):
-        body = m.group(1)
+        attrs, body = m.group(1), m.group(2)
+        t = TYPE.search(attrs or "")
+        kind = t.group(1).strip().lower() if t else ""
+        if kind not in JS_TYPES:
+            continue
         if not body.strip():
             continue
-        line0 = text[: m.start(1)].count("\n") + 1
-        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+        # **הסיומת קובעת איך node מפרש.** ‎--check על קובץ .js מפרש כתסריט
+        # קלאסי, ותחביר ESM שגוי עובר בו בשקט. נמדד: `import x from;`
+        # יוצא בקוד 0 מ-.js ונכשל מ-.mjs.
+        suffix = ".mjs" if kind == "module" else ".js"
+        line0 = text[: m.start(2)].count("\n") + 1
+        with tempfile.NamedTemporaryFile("w", suffix=suffix, delete=False,
                                          encoding="utf-8") as fh:
             fh.write(body)
             tmp = fh.name
@@ -53,7 +69,7 @@ def check(path: Path) -> list[str]:
             err = (r.stderr or "").strip().splitlines()
             detail = next((l for l in err if "Error" in l), err[-1] if err else "?")
             # מספר השורה בפלט של node יחסי לבלוק; מתרגמים לשורה בקובץ.
-            off = re.search(r"\.js:(\d+)", r.stderr or "")
+            off = re.search(r"\.m?js:(\d+)", r.stderr or "")
             where = f"שורה {line0 + int(off.group(1)) - 1}" if off else f"בלוק {i}"
             problems.append(f"{path.relative_to(ROOT).as_posix()} · {where} · {detail}")
     return problems
