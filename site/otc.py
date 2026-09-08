@@ -584,102 +584,198 @@ def method() -> str:
 
 
 def export_js() -> str:
-    """ציור הטבלה לקנבס והורדה כ-PNG.
+    """ציור הכרטיס לקנבס והורדה כ-PNG, ולצידו העתקת התקציר.
 
-    **מצייר מהנתונים ולא מגרד את ה-DOM.** גרידה של הטבלה הייתה יורשת
-    את רוחב המסך, את גלילת המכולה ואת ערכת הצבעים של הקורא — ותמונה
-    לציוץ צריכה להיראות זהה מכל מכשיר. המטען מוטמע כ-JSON לצד כל טבלה.
+    **הפריסה נמדדת ואינה מנוחשת.** רוחבי העמודות נגזרים מרוחב הטקסט
+    בפועל (measureText), ועמודת השם בולעת את העודף או נחתכת במכוון —
+    כך סכום הרוחבים שווה תמיד לרוחב הפנוי ושום עמודה אינה יוצאת מהמסגרת.
+    הגרסה הקודמת השתמשה ברוחבים קבועים שסכומם עלה על רוחב הקנבס, ולכן
+    התמונה יצאה חתוכה.
 
-    ללא ספריות חיצוניות: אין CDN, אין תלות שתישבר, והכל רץ אצל הקורא.
+    **הקרדיט נכתב בכיוון LTR.** בכיוון RTL מנוע הטקסט מסדר מחדש את "©"
+    ואת ה-"@" סביב הטקסט הלטיני, והתוצאה על המסך הייתה "Cigarbutthunte7@ ©".
+
+    מצייר מהמטען המוטמע ולא מגרד את ה-DOM: תמונה לציוץ צריכה להיראות
+    זהה מכל מכשיר, ולא לרשת את רוחב המסך או את ערכת הצבעים של הקורא.
+    ללא ספריות חיצוניות.
     """
     return """<script>
 (function () {
   "use strict";
-  var W = 1200, PAD = 40, ROW = 46;
 
-  function draw(d) {
-    // **סכום הרוחבים חייב להיות בדיוק W - 2*PAD.** בגרסה הקודמת הוא
-    // עלה עליו (1156 ו-1200 מול 1112 פנויים), ולכן העמודה השמאלית
-    // ביותר צוירה מחוץ לקנבס והתמונה נראתה חתוכה. הבדיקה למטה נכשלת
-    // ברעש אם מישהו ישנה רוחב ולא יאזן.
-    var cols = d.showDays
-      ? [["נייר", 420, "rtl"], ["עסקאות", 110, "ltr"], ["ימים", 90, "ltr"],
-         ["היקף", 200, "ltr"], ["% מההון", 160, "ltr"], ["מול הבסיס", 140, "ltr"]]
-      : [["נייר", 470, "rtl"], ["עסקאות", 130, "ltr"],
-         ["היקף", 220, "ltr"], ["% מההון", 170, "ltr"], ["מול הבסיס", 130, "ltr"]];
-    var sum = 0;
-    for (var q = 0; q < cols.length; q++) { sum += cols[q][1]; }
-    if (sum !== W - PAD * 2) { throw new Error("רוחב עמודות " + sum); }
-    var extra = d.more ? ROW : 0;
-    var H = PAD * 2 + 96 + ROW * (d.rows.length + 2) + extra + 54;
-    var c = document.createElement("canvas");
-    c.width = W; c.height = H;
-    var x = c.getContext("2d");
 
-    x.fillStyle = "#fbfaf7"; x.fillRect(0, 0, W, H);
-    x.fillStyle = "#0f4c63"; x.fillRect(0, 0, W, 8);
+  var W = 1080, SCALE = 2, PAD = 48;
+  var C = {
+    bg: "#0c1a21", panel: "#122730", line: "#1e3a45", hair: "#16303a",
+    text: "#eaf1f3", dim: "#8fa8b2", accent: "#4fd6bd",
+    up: "#5fd48a", down: "#f5786f", zebra: "#0f2029",
+  };
+  var F = function (w, s) {
+    return w + " " + s + "px 'Segoe UI', system-ui, Arial, sans-serif";
+  };
 
-    var right = W - PAD;
-    x.textAlign = "right"; x.direction = "rtl";
-    x.fillStyle = "#12222b";
-    x.font = "700 34px system-ui, 'Segoe UI', Arial";
-    x.fillText(d.title, right, PAD + 34);
-    x.fillStyle = "#5b6b73";
-    x.font = "400 19px system-ui, 'Segoe UI', Arial";
-    x.fillText(d.deals.toLocaleString("he-IL") + " עסקאות · " +
-               d.securities + " ניירות · " + d.total, right, PAD + 66);
-
-    var y = PAD + 104, cx = right;
-    x.font = "700 19px system-ui, 'Segoe UI', Arial";
-    x.fillStyle = "#5b6b73";
-    for (var i = 0; i < cols.length; i++) {
-      x.direction = cols[i][2];
-      x.fillText(cols[i][0], cx, y);
-      cx -= cols[i][1];
+  function ell(x, t, max) {
+    if (x.measureText(t).width <= max) { return t; }
+    var s = t;
+    while (s.length > 1 && x.measureText(s + "…").width > max) {
+      s = s.slice(0, -1);
     }
-    x.strokeStyle = "#d8d2c6"; x.lineWidth = 1;
-    x.beginPath(); x.moveTo(PAD, y + 14); x.lineTo(right, y + 14); x.stroke();
-
-    d.rows.forEach(function (r, n) {
-      var ry = y + 14 + ROW * (n + 1) - 12;
-      if (n % 2 === 1) {
-        x.fillStyle = "#f2efe8";
-        x.fillRect(PAD, ry - 26, W - PAD * 2, ROW);
-      }
-      var vals = d.showDays
-        ? [r.name, String(r.n), String(r.days), r.value, r.cap, r.prem]
-        : [r.name, String(r.n), r.value, r.cap, r.prem];
-      var vx = right;
-      for (var i = 0; i < cols.length; i++) {
-        x.direction = cols[i][2];
-        x.font = (i === 0 ? "600 21px" : "400 21px") +
-                 " system-ui, 'Segoe UI', Arial";
-        x.fillStyle = (i === cols.length - 1 && vals[i].charAt(0) === "-")
-          ? "#b3261e"
-          : (i === cols.length - 1 && vals[i].charAt(0) === "+") ? "#1a7f5a" : "#12222b";
-        x.fillText(vals[i], vx, ry);
-        vx -= cols[i][1];
-      }
-    });
-
-    if (d.more) {
-      x.direction = "rtl"; x.textAlign = "right";
-      x.fillStyle = "#5b6b73";
-      x.font = "400 19px system-ui, 'Segoe UI', Arial";
-      x.fillText("ועוד " + d.more + " ניירות",
-                 right, y + 14 + ROW * (d.rows.length + 1) - 12);
-    }
-    var fy = H - PAD + 4;
-    x.direction = "rtl"; x.textAlign = "right";
-    x.fillStyle = "#8a949a";
-    x.font = "400 17px system-ui, 'Segoe UI', Arial";
-    x.fillText("TLV TASE View · מקור: סקירת העסקאות מחוץ לבורסה של הבורסה לניירות ערך",
-               right, fy);
-    x.textAlign = "left"; x.direction = "ltr";
-    x.fillText("tlvtaseview.com", PAD, fy);
-    return c;
+    return s + "…";
   }
 
+  function roundRect(x, l, t, w, h, r) {
+    x.beginPath();
+    x.moveTo(l + r, t);
+    x.arcTo(l + w, t, l + w, t + h, r);
+    x.arcTo(l + w, t + h, l, t + h, r);
+    x.arcTo(l, t + h, l, t, r);
+    x.arcTo(l, t, l + w, t, r);
+    x.closePath();
+  }
+
+  function drawCard(d) {
+    var rows = d.rows || [];
+    var cols = d.showDays
+      ? [["נייר", "name", "rtl"], ["עסקאות", "n", "ltr"], ["ימים", "days", "ltr"],
+         ["היקף", "value", "rtl"], ["% מההון", "cap", "ltr"], ["מול הבסיס", "prem", "ltr"]]
+      : [["נייר", "name", "rtl"], ["עסקאות", "n", "ltr"],
+         ["היקף", "value", "rtl"], ["% מההון", "cap", "ltr"], ["מול הבסיס", "prem", "ltr"]];
+
+    // מדידה על קנבס זמני: רוחב עמודה נגזר מהתוכן שבה ולא מהערכה.
+    var probe = document.createElement("canvas").getContext("2d");
+    var ROWF = F(400, 21), HEADF = F(600, 16);
+    var inner = W - PAD * 2, GAP = 22;
+    var wid = cols.map(function (c) {
+      probe.font = HEADF;
+      var m = probe.measureText(c[0]).width;
+      probe.font = c[1] === "name" ? F(600, 21) : ROWF;
+      rows.forEach(function (r) {
+        m = Math.max(m, probe.measureText(String(r[c[1]])).width);
+      });
+      return Math.ceil(m) + GAP;
+    });
+    var sum = wid.reduce(function (a, b) { return a + b; }, 0);
+    // עמודת השם בולעת את העודף או נחתכת — כך הסכום תמיד שווה לרוחב הפנוי.
+    wid[0] += inner - sum;
+    var NAME_MIN = 150;
+    if (wid[0] < NAME_MIN) {
+      var need = NAME_MIN - wid[0];
+      wid[0] = NAME_MIN;
+      for (var i = 1; i < wid.length && need > 0; i++) {
+        var cut = Math.min(need, wid[i] - 60);
+        if (cut > 0) { wid[i] -= cut; need -= cut; }
+      }
+    }
+
+    var HEAD = 214, ROW = 46, FOOT = 118;
+    var H = HEAD + 40 + ROW * rows.length + (d.more ? 40 : 0) + FOOT;
+
+    var cv = document.createElement("canvas");
+    cv.width = W * SCALE; cv.height = H * SCALE;
+    var x = cv.getContext("2d");
+    x.scale(SCALE, SCALE);
+    x.textBaseline = "alphabetic";
+
+    // רקע
+    var g = x.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#0e1e26"); g.addColorStop(1, C.bg);
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.fillStyle = C.accent; x.fillRect(0, 0, W, 5);
+
+    var right = W - PAD, left = PAD;
+
+    // כותרת
+    x.direction = "rtl"; x.textAlign = "right";
+    x.fillStyle = C.accent; x.font = F(700, 15);
+    x.letterSpacing = "3px";
+    x.fillText("TLV TASE VIEW", right, PAD + 18);
+    x.letterSpacing = "0px";
+    x.fillStyle = C.text; x.font = F(700, 40);
+    x.fillText(d.title, right, PAD + 68);
+    x.fillStyle = C.dim; x.font = F(400, 19);
+    x.fillText("עסקאות מחוץ לבורסה", right, PAD + 98);
+
+    // שלוש אריחי סיכום
+    var pills = [["היקף", d.total], ["עסקאות", String(d.deals)],
+                 ["ניירות", String(d.securities)]];
+    var pw = (inner - 24) / 3, py = PAD + 118;
+    pills.forEach(function (p, i) {
+      var px = right - pw - i * (pw + 12);
+      x.fillStyle = C.panel;
+      roundRect(x, px, py, pw, 62, 10); x.fill();
+      x.strokeStyle = C.line; x.lineWidth = 1; x.stroke();
+      x.direction = "rtl"; x.textAlign = "right";
+      x.fillStyle = C.dim; x.font = F(500, 14);
+      x.fillText(p[0], px + pw - 14, py + 23);
+      x.fillStyle = C.text; x.font = F(700, 24);
+      x.fillText(p[1], px + pw - 14, py + 50);
+    });
+
+    // כותרות עמודות
+    var y = HEAD + 24, cx = right;
+    x.font = HEADF; x.fillStyle = C.dim;
+    cols.forEach(function (c, i) {
+      x.direction = c[2]; x.textAlign = "right";
+      x.fillText(c[0], cx, y);
+      cx -= wid[i];
+    });
+    x.strokeStyle = C.line; x.lineWidth = 1.5;
+    x.beginPath(); x.moveTo(left, y + 13); x.lineTo(right, y + 13); x.stroke();
+
+    // שורות
+    rows.forEach(function (r, n) {
+      var top = y + 13 + ROW * n, base = top + 30;
+      if (n % 2 === 0) {
+        x.fillStyle = C.zebra;
+        roundRect(x, left, top + 4, inner, ROW - 6, 6); x.fill();
+      }
+      var vx = right;
+      cols.forEach(function (c, i) {
+        var v = String(r[c[1]]);
+        x.direction = c[2]; x.textAlign = "right";
+        if (i === 0) {
+          x.font = F(600, 21); x.fillStyle = C.text;
+          v = ell(x, v, wid[0] - GAP);
+        } else if (c[1] === "prem") {
+          x.font = F(600, 21);
+          x.fillStyle = v.charAt(0) === "-" ? C.down
+            : v.charAt(0) === "+" ? C.up : C.dim;
+        } else if (c[1] === "value") {
+          x.font = F(600, 21); x.fillStyle = C.text;
+        } else {
+          x.font = ROWF; x.fillStyle = C.dim;
+        }
+        x.fillText(v, vx - 10, base);
+        vx -= wid[i];
+      });
+    });
+
+    var ey = y + 13 + ROW * rows.length;
+    if (d.more) {
+      x.direction = "rtl"; x.textAlign = "right";
+      x.fillStyle = C.dim; x.font = F(400, 18);
+      x.fillText("ועוד " + d.more + " ניירות", right, ey + 26);
+      ey += 40;
+    }
+
+    // כותרת תחתונה
+    x.strokeStyle = C.hair; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(left, H - FOOT + 16); x.lineTo(right, H - FOOT + 16);
+    x.stroke();
+    x.direction = "rtl"; x.textAlign = "right";
+    x.fillStyle = C.dim; x.font = F(400, 16);
+    x.fillText("מקור: סקירת העסקאות מחוץ לבורסה של הבורסה לניירות ערך בתל אביב",
+               right, H - FOOT + 44);
+    // **הקרדיט נכתב LTR.** בכיוון RTL המנוע מסדר מחדש את "©" ואת ה-"@"
+    // סביב הטקסט הלטיני, והתוצאה על המסך הייתה "Cigarbutthunte7@ ©".
+    x.direction = "ltr"; x.textAlign = "right";
+    x.fillStyle = C.accent; x.font = F(700, 17);
+    x.fillText("© @Cigarbutthunte7", right, H - FOOT + 78);
+    x.textAlign = "left";
+    x.fillStyle = C.dim; x.font = F(400, 16);
+    x.fillText("tlvtaseview.com", left, H - FOOT + 78);
+    return cv;
+  }
   function save(c, name) {
     c.toBlob(function (b) {
       var u = URL.createObjectURL(b), a = document.createElement("a");
@@ -695,18 +791,25 @@ def export_js() -> str:
       var el = document.getElementById("tw-" + b.getAttribute("data-key"));
       if (!el) { return; }
       var t = (el.textContent || "").trim(), was = b.textContent;
-      function done() { b.textContent = "הועתק"; setTimeout(function () {
-        b.textContent = was; }, 2000); }
+      function done(msg) { b.textContent = msg; setTimeout(function () {
+        b.textContent = was; }, 2200); }
+      // **דחייה של ה-clipboard חייבת ליפול אחורה ולא להיבלע.** הדפדפן
+      // דוחה את הכתיבה בהקשרים מסוימים, ואז הכפתור לא הגיב בכלל
+      // והמשתמש לא ידע אם הועתק. בחירת הטקסט מאפשרת Ctrl+C ידני.
+      function pick() {
+        try {
+          var r = document.createRange();
+          r.selectNodeContents(el);
+          var sel = window.getSelection();
+          sel.removeAllRanges(); sel.addRange(r);
+          done("סומן — Ctrl+C");
+        } catch (e) { done(was); }
+      }
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(t).then(done, function () {});
+        navigator.clipboard.writeText(t).then(function () { done("הועתק"); }, pick);
         return;
       }
-      // דפדפן בלי clipboard API: בחירת הטקסט מאפשרת העתקה ידנית.
-      var r = document.createRange();
-      r.selectNodeContents(el);
-      var sel = window.getSelection();
-      sel.removeAllRanges(); sel.addRange(r);
-      done();
+      pick();
     });
   });
 
@@ -721,7 +824,7 @@ def export_js() -> str:
       var was = b.textContent;
       b.textContent = "מייצא…";
       try {
-        save(draw(d), "otc-" + b.getAttribute("data-key") + ".png");
+        save(drawCard(d), "tlv-otc-" + b.getAttribute("data-key") + ".png");
         b.textContent = "התמונה הורדה";
       } catch (e) {
         b.textContent = was;
