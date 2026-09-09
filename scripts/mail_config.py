@@ -25,8 +25,12 @@ import urllib.request
 
 API = "https://api.cloudflare.com/client/v4"
 # שמות שהערך שלהם הוא כתובת — מוצג ממוסך. השאר: קיים / חסר בלבד.
+# **ANTHROPIC_API_KEY נדרש גם בצד Cloudflare.** סקירת הדוח נוצרת
+# בלחיצה, בתוך Function, ולכן היא קוראת למודל מסביבת Cloudflare ולא
+# מהראנר. המפתח קיים בסודות GitHub — שם רצים הברייף והסיכומים — וזה
+# אינו אותו מקום. בלעדיו הנתיב מחזיר 503 בכל לחיצה.
 MAIL_KEYS = ("OWNER_EMAIL", "FROM_EMAIL", "RESEND_API_KEY", "SCAN_KEY",
-             "APPROVAL_SECRET", "SESSION_SECRET")
+             "APPROVAL_SECRET", "SESSION_SECRET", "ANTHROPIC_API_KEY")
 ADDRESS_KEYS = ("OWNER_EMAIL", "FROM_EMAIL")
 
 
@@ -88,6 +92,12 @@ def main() -> int:
     for l in lines:
         print(f"  {l}")
     print("::notice title=הגדרות הדואר::" + "%0A".join(lines))
+
+    if "ANTHROPIC_API_KEY" not in env:
+        print("::error title=סקירת הדוחות מושבתת::ANTHROPIC_API_KEY אינו "
+              "מוגדר בסביבת Cloudflare, ולכן /api/review מחזיר 503 בכל "
+              "לחיצה. המפתח שבסודות GitHub משמש את הברייף ואינו זמין "
+              "ל-Functions.")
 
     own = (env.get("OWNER_EMAIL") or {}).get("value")
     frm = (env.get("FROM_EMAIL") or {}).get("value") or "noreply@tlvtaseview.com"
