@@ -1371,3 +1371,31 @@ button.pend-go:focus-visible {
   .legend { grid-template-columns: 1fr; gap: 0.1rem; }
   .legend dd { margin-bottom: 0.5rem; }
 }
+
+
+/* ---------- עמוד סקטור: אייטמים, לא פסקה ---------- */
+/* העמוד הציג פסקת סיכום אחת ומשפט "משמעות", וזה כל מה שהיה בו.
+   עכשיו הוא מציג אייטם לכל ידיעה, עם החברות הנוגעות וכיוון ההשפעה. */
+.topic-lead { font-size: 0.95rem; line-height: 1.75; margin: 0 0 1.1rem; }
+.topic-item {
+  border-inline-start: 3px solid var(--border);
+  padding: 0 0 0.1rem 0; padding-inline-start: 0.9rem;
+  margin: 0 0 1.15rem;
+}
+.topic-item:hover { border-inline-start-color: var(--accent); }
+.topic-item h3 {
+  font-size: 1rem; margin: 0 0 0.35rem; line-height: 1.45;
+}
+.topic-item p { margin: 0 0 0.4rem; font-size: 0.92rem; line-height: 1.75; }
+.topic-meta {
+  display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
+  font-size: 0.78rem; margin: 0;
+}
+.topic-meta .co { color: var(--muted); }
+.topic-meta .dir {
+  border-radius: 999px; padding: 0.05rem 0.5rem; border: 1px solid var(--border);
+}
+.topic-meta .dir.up { color: var(--up); border-color: var(--up); }
+.topic-meta .dir.down { color: var(--down); border-color: var(--down); }
+.topic-meta .dir.mixed { color: var(--warn); border-color: var(--warn); }
+.topic-meta .dir.flat { color: var(--faint); }

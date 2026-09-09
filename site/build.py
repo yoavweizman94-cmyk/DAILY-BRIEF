@@ -545,6 +545,14 @@ def news_items_html(rows: list[dict], limit: int | None = None) -> str:
     return "".join(out)
 
 
+# טקסט שמגיע ממודל ונכתב ל-HTML. שם חברה עם גרשיים ("אלקו בע\"מ") הוא
+# הכלל ולא היוצא מן הכלל, ולכן בריחה אינה אופציונלית.
+def esc(t) -> str:
+    return (str(t if t is not None else "")
+            .replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace('"', "&quot;"))
+
+
 def load_topic_summaries() -> tuple[dict, str]:
     """סיכומי הנושאים האחרונים + התאריך שלהם, לסימון טריות בעמוד."""
     d = ROOT / "output" / "topics"
@@ -558,16 +566,49 @@ def load_topic_summaries() -> tuple[dict, str]:
 
 
 def topic_summary_html(slug: str, summaries: dict, day: str) -> str:
+    """תמונת המצב של הסקטור — כמה אייטמים, לא פסקה אחת.
+
+    **זה היה "פסקה אחת דלה" בכל ענף.** העמוד הציג `summary` יחיד באורך
+    2–4 משפטים ומשפט "משמעות", וזה כל מה שהיה בו. עכשיו הוא מציג את
+    האייטמים שהסקירה מייצרת, כל אחד עם כותרת, גוף, החברות הנוגעות
+    וכיוון ההשפעה.
+
+    קובץ סיכום ישן מכיל רק `summary`, ולכן הוא עדיין מוצג כפי שהיה —
+    אחרת העמוד היה מתרוקן עד להרצה הבאה.
+    """
     s = summaries.get(slug) or {}
-    body = (s.get("summary") or "").strip()
-    if not body:
-        return ""
+    items = s.get("items") or []
+    lead = (s.get("lead") or s.get("summary") or "").strip()
     take = (s.get("takeaway") or "").strip()
+    if not lead and not items:
+        return ""
     stamp = f'<span class="stamp">סיכום ל-{day[8:10]}/{day[5:7]}</span>' if day else ""
-    return (f'<div class="topic-sum"><div class="topic-sum-head">תמונת מצב{stamp}</div>'
-            f'<p>{body}</p>'
-            + (f'<p class="takeaway"><b>משמעות לכיסוי:</b> {take}</p>' if take else "")
-            + "</div>")
+    out = [f'<div class="topic-sum"><div class="topic-sum-head">תמונת מצב{stamp}</div>']
+    if lead:
+        out.append(f'<p class="topic-lead">{esc(lead)}</p>')
+    for it in items:
+        title = esc((it.get("title") or "").strip())
+        body = esc((it.get("body") or "").strip())
+        if not title and not body:
+            continue
+        co = esc((it.get("companies") or "").strip())
+        dr = (it.get("direction") or "").strip()
+        cls = {"חיובי": "up", "שלילי": "down", "מעורב": "mixed"}.get(dr, "flat")
+        out.append('<div class="topic-item">')
+        if title:
+            out.append(f'<h3>{title}</h3>')
+        if body:
+            out.append(f'<p>{body}</p>')
+        if co or dr:
+            out.append('<p class="topic-meta">'
+                       + (f'<span class="co">{co}</span>' if co else "")
+                       + (f'<span class="dir {cls}">{esc(dr)}</span>' if dr else "")
+                       + '</p>')
+        out.append('</div>')
+    if take:
+        out.append(f'<p class="takeaway"><b>משמעות לכיסוי:</b> {esc(take)}</p>')
+    out.append('</div>')
+    return "".join(out)
 
 
 def load_calls() -> list[dict]:
