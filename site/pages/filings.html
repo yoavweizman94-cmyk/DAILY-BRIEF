@@ -269,16 +269,43 @@
     } else {
       box.innerHTML = '<div class="rv-load">מייצר סקירה מהדוח המלא. ' +
         'זה לוקח כדקה — אפשר להשאיר פתוח.</div>';
+      // **הסקירה נקראת כזרם.** השרת מזרים מרקדאון תוך כדי כתיבה במקום
+      // להחזיר JSON שלם בסוף: גוף JSON מחייב להמתין לתו האחרון, וסקירה
+      // של דוח מלא רצה דקה ויותר — מספיק כדי שהחיבור ייחתך בקצה ותוצג
+      // שגיאה בלי ששום דבר נכשל באמת. שגיאה אמיתית עדיין מגיעה כ-JSON,
+      // ומזוהה לפי סוג התוכן.
       got = fetch("api/review/" + id, { cache: "no-cache" })
         .then(function (r) {
-          return r.json().then(function (d) {
-            if (!r.ok) throw new Error(d.detail || d.error || "HTTP " + r.status);
-            return d;
-          });
+          var ct = r.headers.get("content-type") || "";
+          if (!r.ok || ct.indexOf("json") > -1) {
+            return r.json().then(function (d) {
+              throw new Error(d.detail || d.error || "HTTP " + r.status);
+            }, function () {
+              throw new Error("HTTP " + r.status);
+            });
+          }
+          if (!r.body || !r.body.getReader) {
+            return r.text();          // דפדפן בלי זרמים — טקסט מלא
+          }
+          var reader = r.body.getReader();
+          var dec = new TextDecoder();
+          var acc = "";
+          var live = box.querySelector(".rv-load");
+          function pump() {
+            return reader.read().then(function (res) {
+              if (res.done) { return acc; }
+              acc += dec.decode(res.value, { stream: true });
+              // תצוגה חיה: הטקסט נכנס כפי שהוא, בלי עיבוד מרקדאון
+              // באמצע — הרינדור המלא נעשה פעם אחת בסוף.
+              if (live) { live.textContent = acc.slice(-600); }
+              return pump();
+            });
+          }
+          return pump();
         })
-        .then(function (d) {
+        .then(function (md) {
           reviewed[id] = true;      // הבאה כבר מהמטמון
-          return mdToHtml(d.md);
+          return mdToHtml(md);
         });
     }
     got

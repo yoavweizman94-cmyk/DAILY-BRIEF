@@ -120,7 +120,16 @@ export async function onRequestGet(context) {
   const key = `review:${id}`;
   if (env.USERS) {
     const hit = await env.USERS.get(key);
-    if (hit) return json(200, { id, cached: true, md: hit });
+    if (hit) {
+      return new Response(hit, {
+        status: 200,
+        headers: {
+          "content-type": "text/markdown; charset=utf-8",
+          "cache-control": "no-store",
+          "x-cached": "1",
+        },
+      });
+    }
   }
 
   // 3. רשימת ההיתר — מזהה שאינו דוח כספי של חברת כיסוי אינו מגיע ל-API.
@@ -167,6 +176,12 @@ export async function onRequestGet(context) {
     },
     body: JSON.stringify({
       model: MODEL,
+      // **סטרימינג, ולא בקשה אחת ארוכה.** סקירת דוח מלא מול Opus רצה
+      // דקה ויותר, ובקשה שאינה מזרימה דבר בזמן הזה נחתכת בקצה לפני
+      // שהיא חוזרת — הקורא ראה "הסקירה לא נטענה" בלי שדבר נכשל בפועל.
+      // בסטרימינג הבתים מתחילים לזרום מיד, החיבור נשאר חי, והטקסט
+      // מופיע תוך כדי כתיבה במקום אחרי דקה של מסך ריק.
+      stream: true,
       max_tokens: 16000,
       system: SYSTEM_FINANCIAL,
       thinking: { type: "adaptive" },
@@ -199,19 +214,82 @@ export async function onRequestGet(context) {
     });
   }
 
-  const data = await res.json();
-  if (data.stop_reason === "refusal") {
-    return json(422, { error: "המודל סירב לנתח את הדוח הזה" });
-  }
-  const md = (data.content || [])
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("")
-    .trim();
-  if (!md) return json(502, { error: "התקבלה סקירה ריקה" });
+  // **המרקדאון מוזרם כטקסט, לא כ-JSON.** גוף JSON חייב להיות שלם כדי
+  // להיפרס, ולכן הוא מחייב להמתין לסוף — בדיוק מה שגרם לחיתוך. טקסט
+  // גולמי אפשר להציג תוך כדי.
+  const enc = new TextEncoder();
+  const dec = new TextDecoder();
+  let md = "";
+  let refused = false;
+  // **זרם שנקטע נראה בדיוק כמו זרם שהסתיים.** הקורא פשוט מחזיר done,
+  // בלי חריגה. בלי סימן מפורש לסיום, סקירה חצי-כתובה נשמרת למטמון
+  // ומוגשת לתמיד בכל לחיצה הבאה. `message_stop` הוא האירוע שמעיד
+  // שהמודל סיים; בלעדיו לא שומרים, והלחיצה הבאה תנסה מחדש.
+  let finished = false;
 
-  // נשמר בלי תפוגה: דוח כספי אינו משתנה אחרי פרסומו, ולכן סקירה שנוצרה
-  // פעם אחת נכונה לתמיד.
-  if (env.USERS) await env.USERS.put(key, md);
-  return json(200, { id, cached: false, md });
+  const out = new ReadableStream({
+    async start(ctrl) {
+      const reader = res.body.getReader();
+      let buf = "";
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          // SSE: אירועים מופרדים בשורה ריקה כפולה.
+          let i;
+          while ((i = buf.indexOf("\n\n")) !== -1) {
+            const chunk = buf.slice(0, i);
+            buf = buf.slice(i + 2);
+            for (const line of chunk.split("\n")) {
+              if (!line.startsWith("data:")) continue;
+              const payload = line.slice(5).trim();
+              if (!payload || payload === "[DONE]") continue;
+              let ev;
+              try { ev = JSON.parse(payload); } catch { continue; }
+              if (ev.type === "content_block_delta" &&
+                  ev.delta && ev.delta.type === "text_delta") {
+                md += ev.delta.text;
+                ctrl.enqueue(enc.encode(ev.delta.text));
+              } else if (ev.type === "message_delta" && ev.delta &&
+                         ev.delta.stop_reason) {
+                if (ev.delta.stop_reason === "refusal") { refused = true; }
+                if (ev.delta.stop_reason === "end_turn" ||
+                    ev.delta.stop_reason === "stop_sequence") { finished = true; }
+              } else if (ev.type === "message_stop") {
+                finished = true;
+              } else if (ev.type === "error") {
+                // שגיאה שמגיעה אחרי שהזרימה החלה אינה יכולה לשנות את
+                // קוד התשובה; היא נאמרת בגוף כדי שלא תיבלע.
+                ctrl.enqueue(enc.encode("\n\n_הסקירה נקטעה._"));
+              }
+            }
+          }
+        }
+      } catch (e) {
+        ctrl.enqueue(enc.encode("\n\n_הסקירה נקטעה._"));
+      }
+      if (!finished && !refused) {
+        ctrl.enqueue(enc.encode("\n\n_הסקירה נקטעה לפני סיומה. לחיצה " +
+                                "נוספת תייצר אותה מחדש._"));
+      }
+      ctrl.close();
+
+      // נשמר בלי תפוגה: דוח כספי אינו משתנה אחרי פרסומו, ולכן סקירה
+      // שנוצרה פעם אחת נכונה לתמיד. סקירה שנקטעה או שסורבה אינה נשמרת,
+      // כדי שלחיצה חוזרת תנסה מחדש במקום להגיש חצי סקירה לתמיד.
+      if (env.USERS && md.trim() && !refused && finished) {
+        try { await env.USERS.put(key, md.trim()); } catch { /* לא קריטי */ }
+      }
+    },
+  });
+
+  return new Response(out, {
+    status: 200,
+    headers: {
+      "content-type": "text/markdown; charset=utf-8",
+      "cache-control": "no-store",
+      "x-cached": "0",
+    },
+  });
 }
