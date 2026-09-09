@@ -145,6 +145,14 @@ KIND = {
 }
 
 
+# שמות של אנשים וחברות מגיעים ממאיה ונכתבים ל-HTML. גרשיים בשם חברה
+# הם הכלל ולא היוצא מן הכלל ("אלקו בע\"מ"), ולכן בריחה אינה אופציונלית.
+def esc(t) -> str:
+    return (str(t if t is not None else "")
+            .replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace('"', "&quot;"))
+
+
 def money(v) -> str:
     if not v:
         return "—"
@@ -174,6 +182,117 @@ def pct(v, digits: int = 3) -> str:
     return "—" if v in (None, "") else f"{v:.{digits}f}%"
 
 
+def holders_summary(rows: list[dict], year: str) -> str:
+    """מי צבר ומי מימש — לפי מדווח, ולא לפי עסקה.
+
+    **עסקה בודדת אינה מספרת מי זז.** אותו בעל עניין מדווח לאורך השנה
+    בעשרות הודעות קטנות, וכל אחת בנפרד היא רעש; הסכום שלהן הוא הסיפור.
+    הטבלה מצרפת לפי מדווח וחברה, ומדרגת לפי החלק המצטבר מהון החברה —
+    לא לפי היקף כספי, כי מיליון שקל בחברה קטנה משנה שליטה ובגדולה לא.
+
+    `counted: false` הוא הצד השני של עסקה שכבר נספרה, ו-`partial: true`
+    מאגד מסחר בתוך ומחוץ לבורסה בלי לפצל; שניהם יוצאים מהסכימה כדי שלא
+    ייספרו פעמיים או ייוחסו כולם למחוץ לבורסה.
+    """
+    agg: dict[tuple, dict] = {}
+    for r in rows:
+        if (r.get("date") or "")[:4] != year:
+            continue
+        if r.get("counted") is False or r.get("partial"):
+            continue
+        who = (r.get("holder") or "").strip()
+        co = (r.get("company") or "").strip()
+        if not who or not co:
+            continue
+        k = (who, co)
+        e = agg.setdefault(k, {
+            "holder": who, "company": co, "buy": 0.0, "sell": 0.0,
+            "n": 0, "pct": 0.0, "after": None, "kinds": set()})
+        e["n"] += 1
+        v = r.get("value_ils") or 0
+        if r.get("direction") == "buy":
+            e["buy"] += v
+        else:
+            e["sell"] += v
+        e["pct"] += abs(r.get("pct_of_class") or 0)
+        if r.get("holding_pct_after") is not None:
+            e["after"] = r["holding_pct_after"]
+        if r.get("kind"):
+            e["kinds"].add(r["kind"])
+    if not agg:
+        return ""
+    top = sorted(agg.values(), key=lambda e: -e["pct"])[:20]
+
+    def side(e):
+        if e["buy"] and e["sell"]:
+            return "מעורב"
+        return "רכישה" if e["buy"] else "מכירה"
+
+    body = []
+    for e in top:
+        net = e["buy"] - e["sell"]
+        body.append(
+            f'<tr><td class="city">{esc(e["holder"])}</td>'
+            f'<td>{esc(e["company"])}</td>'
+            f'<td>{side(e)}</td>'
+            f'<td dir="ltr">{e["n"]}</td>'
+            f'<td class="key" dir="ltr">{money(abs(net))}</td>'
+            f'<td dir="ltr">{e["pct"]:.2f}%</td>'
+            f'<td dir="ltr">'
+            + (f'{e["after"]:.2f}%' if e["after"] is not None else "—")
+            + '</td></tr>')
+
+    payload = json.dumps({
+        "title": f"בעלי עניין · מתחילת {year}",
+        "kicker": "עסקאות מדווחות מחוץ לבורסה",
+        "cols": [["מדווח", "name", "rtl"], ["חברה", "co", "rtl"],
+                 ["כיוון", "side", "rtl"], ["עסקאות", "n", "ltr"],
+                 ["היקף נטו", "value", "rtl"], ["% מההון", "cap", "ltr"]],
+        "pills": [["מדווחים", str(len(agg))],
+                  ["עסקאות", str(sum(e["n"] for e in agg.values()))],
+                  ["היקף", money(sum(e["buy"] + e["sell"] for e in agg.values()))]],
+        "rows": [{"name": e["holder"][:26], "co": e["company"][:18],
+                  "side": side(e), "n": e["n"],
+                  "value": money(abs(e["buy"] - e["sell"])),
+                  "cap": f'{e["pct"]:.2f}%'} for e in top[:14]],
+        "more": max(0, len(agg) - 14),
+    }, ensure_ascii=False)
+
+    lines = [f"בעלי עניין · מתחילת {year}",
+             f"{len(agg)} מדווחים, {sum(e['n'] for e in agg.values()):,} עסקאות"]
+    for e in top[:3]:
+        lines.append(f"{e['holder'][:24]} · {e['company']}: "
+                     f"{side(e)} {e['pct']:.2f}% מההון")
+    tw = ""
+    for ln in lines:
+        nxt = (tw + "\n" + ln) if tw else ln
+        if len(nxt) > 268:
+            break
+        tw = nxt
+    tw += "\ntlvtaseview.com"
+
+    return "\n".join([
+        '<h2>מי צבר ומי מימש</h2>',
+        '<p class="note">צירוף כל הדיווחים של אותו בעל עניין באותה חברה '
+        'מתחילת השנה, מדורג לפי החלק המצטבר מהון החברה. "היקף נטו" הוא '
+        'ההפרש בין רכישות למכירות.</p>',
+        f'<div class="otc-tweet" id="tw-holders"><pre>'
+        + esc(tw) + '</pre></div>',
+        f'<script type="application/json" id="otc-holders">{payload}</script>',
+        '<p class="otc-acts">'
+        '<button type="button" class="otc-png" data-key="holders">'
+        'ייצוא לתמונה</button>'
+        '<button type="button" class="otc-copy" data-key="holders">'
+        'העתקת התקציר</button></p>',
+        '<div class="tw"><table class="nadlan"><thead><tr>'
+        '<th>מדווח</th><th>חברה</th><th>כיוון</th><th>עסקאות</th>'
+        '<th>היקף נטו</th><th>% מההון מצטבר</th><th>החזקה אחרי</th>'
+        '</tr></thead><tbody>',
+        "".join(body),
+        '</tbody></table></div>',
+    ])
+
+
 def page(rows: list[dict], year: str, head: bool = True) -> str:
     """הגוף של שכבת מאיה.
 
@@ -201,6 +320,7 @@ def page(rows: list[dict], year: str, head: bool = True) -> str:
         'להיות בעל עניין — אלה העסקאות שחוצות את סף 5%, ולרוב הגדולות שבהן; '
         'ו<strong>ת085</strong> רכישה עצמית של החברה במניותיה, שבה אין צד שני '
         'מזוהה. לפי הבורסה גם עסקה תואמת מסווגת כמחוץ לבורסה.</p>')
+    out.append(holders_summary(rows, year))
     if head:
         out.append(
             '<p class="lead">מה שאינו כאן: עסקה מחוץ לבורסה שאף צד בה אינו בעל '

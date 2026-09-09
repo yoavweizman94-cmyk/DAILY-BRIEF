@@ -635,7 +635,9 @@ def export_js() -> str:
 
   function drawCard(d) {
     var rows = d.rows || [];
-    var cols = d.showDays
+    // טבלה עם עמודות משלה (למשל בעלי עניין) שולחת אותן במטען; אחרת
+    // נבחרת אחת משתי הפריסות הקבועות של טבלאות התקופה.
+    var cols = d.cols ? d.cols : d.showDays
       ? [["נייר", "name", "rtl"], ["עסקאות", "n", "ltr"], ["ימים", "days", "ltr"],
          ["היקף", "value", "rtl"], ["% מההון", "cap", "ltr"], ["מול הבסיס", "prem", "ltr"]]
       : [["נייר", "name", "rtl"], ["עסקאות", "n", "ltr"],
@@ -693,11 +695,11 @@ def export_js() -> str:
     x.fillStyle = C.text; x.font = F(700, 40);
     x.fillText(d.title, right, PAD + 68);
     x.fillStyle = C.dim; x.font = F(400, 19);
-    x.fillText("עסקאות מחוץ לבורסה", right, PAD + 98);
+    x.fillText(d.kicker || "עסקאות מחוץ לבורסה", right, PAD + 98);
 
     // שלוש אריחי סיכום
-    var pills = [["היקף", d.total], ["עסקאות", String(d.deals)],
-                 ["ניירות", String(d.securities)]];
+    var pills = d.pills || [["היקף", d.total], ["עסקאות", String(d.deals)],
+                            ["ניירות", String(d.securities)]];
     var pw = (inner - 24) / 3, py = PAD + 118;
     pills.forEach(function (p, i) {
       var px = right - pw - i * (pw + 12);
@@ -827,6 +829,9 @@ def export_js() -> str:
         save(drawCard(d), "tlv-otc-" + b.getAttribute("data-key") + ".png");
         b.textContent = "התמונה הורדה";
       } catch (e) {
+        // הכשל אינו נאמר על המסך — אבל הוא כן נאמר לקונסולה. בליעה
+        // מוחלטת הפכה באג בציור לכפתור שפשוט אינו מגיב.
+        if (window.console) { console.error("otc export", e); }
         b.textContent = was;
       }
       setTimeout(function () { b.textContent = was; }, 2500);
@@ -846,7 +851,12 @@ def page(otc_rows: list[dict], maya_body: str, year: str,
     # הייתה בה דרך לענות על "מה קרה החודש". שלוש טבלאות באותו מבנה
     # עונות על זה, ומאפשרות להשוות נייר בין התקופות בלי ללמוד מבנה חדש.
     parts = [head(a, year), tiles(a, year),
-             periods(a, year, offex_rows), method(), export_js()]
+             periods(a, year, offex_rows), method()]
     if maya_body:
         parts += ['<h2>מי עומד מאחורי העסקאות המדווחות</h2>', maya_body]
+    # **הסקריפט אחרון, אחרי כל הכפתורים.** הוא רץ בזמן פענוח העמוד
+    # וקושר מאזינים למה שכבר קיים ב-DOM; כשהוא ישב לפני שכבת מאיה,
+    # כפתורי טבלת בעלי העניין נוצרו אחריו ולא קיבלו מאזין כלל —
+    # לחיצה עליהם לא עשתה דבר, בלי שגיאה ובלי סימן.
+    parts.append(export_js())
     return "\n".join(p for p in parts if p)
