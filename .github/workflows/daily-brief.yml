@@ -182,10 +182,30 @@ jobs:
         run: |
           git config user.name "forest-brief-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # **שני יעדים, ושני כשלים שונים לגמרי.** ריפו הקוד מקבל את
+          # קובצי המצב; ריפו התוכן מקבל את הברייף עצמו. כשהשלב נפל
+          # כיחידה אחת ההודעה הייתה "exit code 1" בלבד, ולא היה אפשר
+          # לדעת אם אבד המצב או אבד הברייף — והשני חמור בהרבה, כי הוא
+          # התוצר ששולם עליו.
           git add data/state.sqlite data/calls_links.json data/offex_state.json data/nadlan_state.json data/otc_state.json
           git diff --cached --quiet || git commit -m "brief: $(date +'%F %H:%M')"
-          bash scripts/git_sync.sh
-          CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push brief
+
+          set +e
+          bash scripts/git_sync.sh 2>&1 | tee sync.log
+          sync_rc=${PIPESTATUS[0]}
+          CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' \
+            bash scripts/content_repo.sh push brief 2>&1 | tee content.log
+          content_rc=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$sync_rc" -ne 0 ]; then
+            echo "::warning title=מצב הריצה לא נשמר בריפו הקוד::קוד $sync_rc — $(tail -1 sync.log). הברייף עצמו אינו מושפע."
+          fi
+          if [ "$content_rc" -ne 0 ]; then
+            echo "::error title=הברייף לא נדחף לריפו התוכן::קוד $content_rc — $(tail -1 content.log). הברייף נכתב אך אינו באתר; ההרצה הבאה תפיק אותו מחדש."
+            exit 1
+          fi
+          if [ "$sync_rc" -ne 0 ]; then exit 1; fi
 
       # פריסה ל-Cloudflare Pages. החליף את GitHub Pages, שאינו יודע לבקש
       # הזדהות בכלל — Cloudflare Access יושב לפני האתר וחוסם כברירת מחדל.
