@@ -664,6 +664,43 @@ def topics_nav(topics: list[dict], counts: dict, current: str = "") -> str:
     return f'<nav class="topics">{"".join(links)}</nav>' if links else ""
 
 
+# הסעיפים שדרישת העומק בהוראות חלה עליהם, והמינימום לכל אחד.
+SECTOR_MIN = {
+    'נדל"ן ובנייה': 5,
+    "תעשייה וצריכה": 3,
+    "פיננסים": 3,
+    "אנרגיה ותשתיות": 3,
+    "טכנולוגיה": 3,
+}
+
+
+def sector_depth(md: str) -> list[tuple[str, int, int]]:
+    """כמה אייטמים יש בפועל בכל סעיף ענפי.
+
+    **דרישה שאי אפשר למדוד היא בקשה.** ההנחיה על עומק ענפי נכתבה
+    פעמיים ובשתי הפעמים הברייף יצא קצר, ולא הייתה שום דרך לראות זאת
+    חוץ מלקרוא את הברייף — שיושב בריפו התוכן הפרטי. שורה אחת בבנייה
+    הופכת את זה לנמדד בכל הרצה.
+
+    אייטם נספר לפי שורה שנפתחת בכותרת מודגשת, שהיא התבנית שהפורמט
+    מכתיב ושממנה נבנית גם תמצית הטלגרם.
+    """
+    out = []
+    cur, count = None, 0
+    for line in md.split("\n"):
+        h = re.match(r"^##\s+(.+?)\s*$", line)
+        if h:
+            if cur in SECTOR_MIN:
+                out.append((cur, count, SECTOR_MIN[cur]))
+            cur, count = h.group(1).strip(), 0
+            continue
+        if cur in SECTOR_MIN and re.match(r"^\s*(?:[-*]\s*)?\*\*[^*]{3,}\*\*", line):
+            count += 1
+    if cur in SECTOR_MIN:
+        out.append((cur, count, SECTOR_MIN[cur]))
+    return out
+
+
 def main() -> int:
     cfg = yaml.safe_load((ROOT / "config" / "sources.yaml").read_text(encoding="utf-8"))
     site_title = cfg.get("site", {}).get("title", "TLV TASE View")
@@ -682,6 +719,20 @@ def main() -> int:
             found.append((m.group(1), ED_ORDER.get(m.group(2) or "", 0), m.group(2) or "", f))
     found.sort(key=lambda x: (x[0], x[1]), reverse=True)
     briefs = [f for _, _, _, f in found]
+    if briefs:
+        # נמדד על הברייף העדכני ביותר בלבד — הוא זה שהקורא רואה.
+        try:
+            _depth = sector_depth(briefs[0].read_text(encoding="utf-8"))
+        except OSError:
+            _depth = []
+        if _depth:
+            _short = [f"{n} {c}/{mn}" for n, c, mn in _depth if c < mn]
+            print("::notice::עומק הסעיפים הענפיים: "
+                  + " · ".join(f"{n} {c}" for n, c, _ in _depth))
+            if _short:
+                print("::warning title=סעיפים ענפיים מתחת לרף::"
+                      + " · ".join(_short)
+                      + " — הרף בהוראות הוא 5 בנדל\"ן ובנייה ו-3 בשאר.")
     slugs = {f: (d + ("-" + e if e else "")) for d, _, e, f in found}
     ed_of = {f: ED_HE.get(e, "בוקר") for d, _, e, f in found}
 
