@@ -799,7 +799,12 @@ table.nadlan td.city { font-weight: 600; white-space: normal; }
 /* עמודת המפתח היא חציון ה-₪/מ״ר; שאר המספרים משרתים אותה */
 table.nadlan td.key { font-family: var(--mono); font-weight: 600; color: var(--accent); }
 table.nadlan td[dir="ltr"] { font-family: var(--mono); }
-table.nadlan td.trend { display: flex; align-items: center; gap: 0.45rem; font-family: var(--mono); }
+/* **display:flex על <td> מוציא אותו מפריסת הטבלה.** התא מפסיק להיות
+   table-cell, נושר מרשת העמודות, ומצטייר באותו x כמו התא שלפניו — שלושה
+   תאי מגמה נערמו זה מתחת לזה תחת כותרת אחת, והטבלה נראתה שבורה ולא
+   מיושרת. היישור הפנימי נעשה על העטיפה שבתוך התא, לא על התא עצמו. */
+table.nadlan td.trend { font-family: var(--mono); white-space: nowrap; }
+table.nadlan td.trend svg { vertical-align: middle; }
 table.nadlan td.trend.up { color: var(--up); }
 table.nadlan td.trend.down { color: var(--down); }
 table.nadlan td.trend.flat { color: var(--faint); }
@@ -1351,4 +1356,18 @@ button.pend-go {
 button.pend-go:disabled { opacity: 0.55; cursor: default; }
 button.pend-go:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+
+/* מקרא מונחים מתחת לטבלת הערים. מונח שדורש הסבר מקבל אותו במקום
+   שבו הוא נקרא, ולא בפסקת פתיחה שנקראת פעם אחת ואז מדולגת. */
+.legend {
+  margin: 0.4rem 0 1.8rem; font-size: 0.82rem; line-height: 1.6;
+  display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 0.9rem;
+}
+.legend dt { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.legend dd { margin: 0; color: var(--muted); }
+@media (max-width: 34rem) {
+  .legend { grid-template-columns: 1fr; gap: 0.1rem; }
+  .legend dd { margin-bottom: 0.5rem; }
 }
