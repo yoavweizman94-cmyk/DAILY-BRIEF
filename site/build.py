@@ -674,30 +674,63 @@ SECTOR_MIN = {
 }
 
 
-def sector_depth(md: str) -> list[tuple[str, int, int]]:
-    """כמה אייטמים יש בפועל בכל סעיף ענפי.
+def sector_depth(md: str) -> list[tuple[str, int, int, float]]:
+    """כמה אייטמים בכל סעיף ענפי, וכמה שורות גוף יש לאייטם.
 
-    **דרישה שאי אפשר למדוד היא בקשה.** ההנחיה על עומק ענפי נכתבה
-    פעמיים ובשתי הפעמים הברייף יצא קצר, ולא הייתה שום דרך לראות זאת
-    חוץ מלקרוא את הברייף — שיושב בריפו התוכן הפרטי. שורה אחת בבנייה
-    הופכת את זה לנמדד בכל הרצה.
+    **ספירת אייטמים לבדה מדדה את הדבר הלא נכון.** המדידה הקודמת החזירה
+    5–6 אייטמים לסעיף בזמן שהקורא ראה פסקה קצרה, ושניהם היו נכונים:
+    האייטמים היו שם, אבל כל אחד היה שורת תבליט אחת — כותרת מודגשת וגוף
+    באותה שורה. כמות אינה עומק, ומדד שאינו מבחין ביניהם מאשר בדיוק את
+    מה שהוא אמור לתפוס.
 
-    אייטם נספר לפי שורה שנפתחת בכותרת מודגשת, שהיא התבנית שהפורמט
-    מכתיב ושממנה נבנית גם תמצית הטלגרם.
+    נמדד עכשיו גם אורך הגוף: כמה שורות לא-ריקות יש בין כותרת אייטם
+    לכותרת הבאה. אייטם בתבנית הנדרשת הוא כותרת ואחריה שלוש עד חמש
+    שורות; שורת תבליט בודדת היא 0.
     """
     out = []
-    cur, count = None, 0
+    cur = None
+    items = 0
+    body = 0
+    bodies: list[int] = []
+
+    def flush_item():
+        nonlocal body
+        if items:
+            bodies.append(body)
+        body = 0
+
+    def flush_sec():
+        nonlocal cur, items, bodies
+        if cur in SECTOR_MIN:
+            avg = round(sum(bodies) / len(bodies), 1) if bodies else 0.0
+            out.append((cur, items, SECTOR_MIN[cur], avg))
+        cur, items, bodies = None, 0, []
+
     for line in md.split("\n"):
         h = re.match(r"^##\s+(.+?)\s*$", line)
         if h:
-            if cur in SECTOR_MIN:
-                out.append((cur, count, SECTOR_MIN[cur]))
-            cur, count = h.group(1).strip(), 0
+            flush_item()
+            flush_sec()
+            cur = h.group(1).strip()
+            items = 0
             continue
-        if cur in SECTOR_MIN and re.match(r"^\s*(?:[-*]\s*)?\*\*[^*]{3,}\*\*", line):
-            count += 1
-    if cur in SECTOR_MIN:
-        out.append((cur, count, SECTOR_MIN[cur]))
+        if cur not in SECTOR_MIN:
+            continue
+        if re.match(r"^###\s", line):
+            continue
+        # כותרת אייטם: שורה שנפתחת בהדגשה. "משמעות:" ותוויות פנימיות
+        # אחרות אינן פתיחת אייטם אלא חלק מהגוף.
+        head = re.match(r"^\s*(?:[-*]\s+)?\*\*([^*]{3,}?)\*\*", line)
+        if head and not head.group(1).strip().startswith(
+                ("משמעות", "כיוון השפעה", "מקור")):
+            flush_item()
+            items += 1
+            # גוף שנכתב באותה שורה אחרי הכותרת אינו שורת גוף נפרדת.
+            continue
+        if line.strip():
+            body += 1
+    flush_item()
+    flush_sec()
     return out
 
 
@@ -726,13 +759,18 @@ def main() -> int:
         except OSError:
             _depth = []
         if _depth:
-            _short = [f"{n} {c}/{mn}" for n, c, mn in _depth if c < mn]
-            print("::notice::עומק הסעיפים הענפיים: "
-                  + " · ".join(f"{n} {c}" for n, c, _ in _depth))
-            if _short:
+            print("::notice::עומק הסעיפים הענפיים (אייטמים · שורות גוף "
+                  "לאייטם): "
+                  + " · ".join(f"{n} {c}×{a}" for n, c, _, a in _depth))
+            _few = [f"{n} {c}/{mn} אייטמים" for n, c, mn, _ in _depth if c < mn]
+            # שלוש שורות גוף הן הרף בהוראות; מתחת לזה האייטם הוא שורה
+            # אחת שנכתבה כתבליט, וזו בדיוק התלונה החוזרת.
+            _thin = [f"{n} {a} שורות" for n, c, _, a in _depth if c and a < 3]
+            if _few or _thin:
                 print("::warning title=סעיפים ענפיים מתחת לרף::"
-                      + " · ".join(_short)
-                      + " — הרף בהוראות הוא 5 בנדל\"ן ובנייה ו-3 בשאר.")
+                      + " · ".join(_few + _thin)
+                      + " — הרף: 5 אייטמים בנדל\"ן ובנייה, 3 בשאר, "
+                        "ושלוש עד חמש שורות גוף לכל אייטם.")
     slugs = {f: (d + ("-" + e if e else "")) for d, _, e, f in found}
     ed_of = {f: ED_HE.get(e, "בוקר") for d, _, e, f in found}
 
