@@ -674,37 +674,41 @@ SECTOR_MIN = {
 }
 
 
-def sector_depth(md: str) -> list[tuple[str, int, int, float]]:
-    """כמה אייטמים בכל סעיף ענפי, וכמה שורות גוף יש לאייטם.
+def sector_depth(md: str) -> list[tuple[str, int, int, float, int]]:
+    """אייטמים בסעיף, שורות גוף לאייטם, ומילים לאייטם.
 
-    **ספירת אייטמים לבדה מדדה את הדבר הלא נכון.** המדידה הקודמת החזירה
-    5–6 אייטמים לסעיף בזמן שהקורא ראה פסקה קצרה, ושניהם היו נכונים:
-    האייטמים היו שם, אבל כל אחד היה שורת תבליט אחת — כותרת מודגשת וגוף
-    באותה שורה. כמות אינה עומק, ומדד שאינו מבחין ביניהם מאשר בדיוק את
-    מה שהוא אמור לתפוס.
+    **שורות פיזיות אינן מודדות עומק.** פסקה תקינה במרקדאון נכתבת לרוב
+    בשורה לוגית אחת, ולכן "0.8 שורות גוף" יכול לתאר גם אייטם רזה וגם
+    אייטם מלא שנכתב ברצף. שתי המדידות הקודמות כאן טעו בדיוק כך — האחת
+    ספרה כמות אייטמים, השנייה שורות — ושתיהן אישרו או פסלו בלי לגעת
+    בשאלה כמה תוכן יש בפועל.
 
-    נמדד עכשיו גם אורך הגוף: כמה שורות לא-ריקות יש בין כותרת אייטם
-    לכותרת הבאה. אייטם בתבנית הנדרשת הוא כותרת ואחריה שלוש עד חמש
-    שורות; שורת תבליט בודדת היא 0.
+    ספירת המילים כוללת את הטקסט שאחרי הכותרת באותה שורה, כי בצורת
+    התבליט הישנה שם יושב כל הגוף. אייטם בתבנית הנדרשת הוא 45–110 מילים;
+    שורת תבליט טיפוסית בברייפים הישנים היא 25–45.
     """
     out = []
     cur = None
     items = 0
-    body = 0
     bodies: list[int] = []
+    words: list[int] = []
+    body = 0
+    wc = 0
 
     def flush_item():
-        nonlocal body
+        nonlocal body, wc
         if items:
             bodies.append(body)
-        body = 0
+            words.append(wc)
+        body, wc = 0, 0
 
     def flush_sec():
-        nonlocal cur, items, bodies
+        nonlocal cur, items, bodies, words
         if cur in SECTOR_MIN:
-            avg = round(sum(bodies) / len(bodies), 1) if bodies else 0.0
-            out.append((cur, items, SECTOR_MIN[cur], avg))
-        cur, items, bodies = None, 0, []
+            avg_l = round(sum(bodies) / len(bodies), 1) if bodies else 0.0
+            avg_w = round(sum(words) / len(words)) if words else 0
+            out.append((cur, items, SECTOR_MIN[cur], avg_l, avg_w))
+        cur, items, bodies, words = None, 0, [], []
 
     for line in md.split("\n"):
         h = re.match(r"^##\s+(.+?)\s*$", line)
@@ -718,17 +722,18 @@ def sector_depth(md: str) -> list[tuple[str, int, int, float]]:
             continue
         if re.match(r"^###\s", line):
             continue
-        # כותרת אייטם: שורה שנפתחת בהדגשה. "משמעות:" ותוויות פנימיות
-        # אחרות אינן פתיחת אייטם אלא חלק מהגוף.
-        head = re.match(r"^\s*(?:[-*]\s+)?\*\*([^*]{3,}?)\*\*", line)
+        head = re.match(r"^\s*(?:[-*]\s+)?\*\*([^*]{3,}?)\*\*(.*)$", line)
         if head and not head.group(1).strip().startswith(
                 ("משמעות", "כיוון השפעה", "מקור")):
             flush_item()
             items += 1
-            # גוף שנכתב באותה שורה אחרי הכותרת אינו שורת גוף נפרדת.
+            # הטקסט שאחרי הכותרת באותה שורה הוא גוף לכל דבר, גם כשהוא
+            # נכתב בצורת התבליט שאנחנו מנסים להחליף.
+            wc = len(re.findall(r"\S+", head.group(2)))
             continue
         if line.strip():
             body += 1
+            wc += len(re.findall(r"\S+", line))
     flush_item()
     flush_sec()
     return out
@@ -759,18 +764,19 @@ def main() -> int:
         except OSError:
             _depth = []
         if _depth:
-            print("::notice::עומק הסעיפים הענפיים (אייטמים · שורות גוף "
-                  "לאייטם): "
-                  + " · ".join(f"{n} {c}×{a}" for n, c, _, a in _depth))
-            _few = [f"{n} {c}/{mn} אייטמים" for n, c, mn, _ in _depth if c < mn]
-            # שלוש שורות גוף הן הרף בהוראות; מתחת לזה האייטם הוא שורה
-            # אחת שנכתבה כתבליט, וזו בדיוק התלונה החוזרת.
-            _thin = [f"{n} {a} שורות" for n, c, _, a in _depth if c and a < 3]
+            print("::notice::עומק הסעיפים הענפיים "
+                  "(אייטמים · שורות גוף · מילים לאייטם): "
+                  + " · ".join(f"{n} {c}×{a}ש׳×{w}מ׳"
+                               for n, c, _, a, w in _depth))
+            _few = [f"{n} {c}/{mn} אייטמים" for n, c, mn, _, _w in _depth if c < mn]
+            # **המילים הן המדד, לא השורות.** אייטם בתבנית הנדרשת הוא
+            # 45 מילים ומעלה; שורת תבליט טיפוסית קצרה מזה בהרבה.
+            _thin = [f"{n} {w} מילים" for n, c, _, _a, w in _depth if c and w < 45]
             if _few or _thin:
                 print("::warning title=סעיפים ענפיים מתחת לרף::"
                       + " · ".join(_few + _thin)
                       + " — הרף: 5 אייטמים בנדל\"ן ובנייה, 3 בשאר, "
-                        "ושלוש עד חמש שורות גוף לכל אייטם.")
+                        "ו-45 מילים ומעלה לכל אייטם.")
     slugs = {f: (d + ("-" + e if e else "")) for d, _, e, f in found}
     ed_of = {f: ED_HE.get(e, "בוקר") for d, _, e, f in found}
 
