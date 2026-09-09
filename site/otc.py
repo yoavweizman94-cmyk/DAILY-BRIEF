@@ -737,7 +737,6 @@ def export_js() -> str:
         x.direction = c[2]; x.textAlign = "right";
         if (i === 0) {
           x.font = F(600, 21); x.fillStyle = C.text;
-          v = ell(x, v, wid[0] - GAP);
         } else if (c[1] === "prem") {
           x.font = F(600, 21);
           x.fillStyle = v.charAt(0) === "-" ? C.down
@@ -747,6 +746,10 @@ def export_js() -> str:
         } else {
           x.font = ROWF; x.fillStyle = C.dim;
         }
+        // **כל עמודה נחתכת לרוחב שלה, לא רק עמודת השם.** שם חברה ארוך
+        // בעמודה צרה גלש החוצה ונראה כמו תמונה חתוכה; הקיצור נעשה אחרי
+        // בחירת הגופן, כי הרוחב נמדד בגופן שבו הטקסט באמת מצויר.
+        v = ell(x, v, wid[i] - 14);
         x.fillText(v, vx - 10, base);
         vx -= wid[i];
       });

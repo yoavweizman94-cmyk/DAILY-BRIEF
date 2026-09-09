@@ -251,7 +251,10 @@ def holders_summary(rows: list[dict], year: str) -> str:
         "pills": [["מדווחים", str(len(agg))],
                   ["עסקאות", str(sum(e["n"] for e in agg.values()))],
                   ["היקף", money(sum(e["buy"] + e["sell"] for e in agg.values()))]],
-        "rows": [{"name": e["holder"][:26], "co": e["company"][:18],
+        # **בלי חיתוך לפי מספר תווים.** [:26] חתך שמות באמצע מילה ובלי
+        # שלוש נקודות ("איון פי אי רד פנדה ארל, שו"), וזה נראה בדיוק כמו
+        # תמונה שנחתכה. הקיצור נעשה בקנבס לפי הרוחב שבאמת פנוי לעמודה.
+        "rows": [{"name": e["holder"], "co": e["company"],
                   "side": side(e), "n": e["n"],
                   "value": money(abs(e["buy"] - e["sell"])),
                   "cap": f'{e["pct"]:.2f}%'} for e in top[:14]],
