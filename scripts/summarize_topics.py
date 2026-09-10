@@ -24,6 +24,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 LOOKBACK_FILES = 2        # היום ואתמול — מספיק להקשר בלי להעמיס
 MAX_ITEMS_PER_TOPIC = 22
+BATCH = 4                 # נושאים לקריאה; ראה ההערה ליד הקריאה עצמה
+TIMEOUT = 900             # שניות לאצווה
 
 PROMPT = """אתה אנליסט של קרן FOREST. לפניך כותרות חדשות מסווגות לפי נושא,
 רובן באנגלית. כתוב לכל נושא סקירה **בעברית** למנהל השקעות מקצועי.
@@ -110,19 +112,48 @@ def main() -> int:
         print("אין נושאים עם אייטמים")
         return 0
 
-    proc = subprocess.run(
-        ["claude", "-p", PROMPT.format(payload="\n\n".join(blocks)),
-         "--permission-mode", "acceptEdits", "--allowedTools", ""],
-        capture_output=True, text=True, encoding="utf-8", timeout=600)
-    if proc.returncode != 0:
-        print(f"שגיאה: claude נכשל ({proc.returncode}): {(proc.stderr or '')[:200]}",
-              file=sys.stderr)
+    # **הקריאה מפוצלת לאצוות.** קודם היא הייתה אחת, וזה עבד כשכל נושא
+    # היה פסקה: שתים-עשרה שורות קצרות. עכשיו כל שורה נושאת שלושה עד
+    # שישה גופים של 60–120 מילים — פי כמה וכמה פלט — והקריאה האחת חרגה
+    # ונפלה, בשקט, בכל ריצה. אצווה שנופלת מפילה חצי מהעמודים ולא את
+    # כולם, ולכל אצווה יש תקציב זמן משלה.
+    out_lines: list[str] = []
+    failures: list[str] = []
+    for i in range(0, len(blocks), BATCH):
+        chunk = blocks[i:i + BATCH]
+        tag = f"{i // BATCH + 1}/{(len(blocks) + BATCH - 1) // BATCH}"
+        try:
+            proc = subprocess.run(
+                ["claude", "-p", PROMPT.format(payload="\n\n".join(chunk)),
+                 "--permission-mode", "acceptEdits", "--allowedTools", ""],
+                capture_output=True, text=True, encoding="utf-8", timeout=TIMEOUT)
+        except subprocess.TimeoutExpired:
+            failures.append(f"אצווה {tag}: חריגה מ-{TIMEOUT} שניות")
+            continue
+        except OSError as e:
+            failures.append(f"אצווה {tag}: {type(e).__name__} — {e}")
+            continue
+        if proc.returncode != 0:
+            # **שגיאת ה-CLI היא האבחנה, וללוג היא אינה נקראת.** הלוגים של
+            # Actions דורשים הזדהות; יתרה שאזלה, מפתח שנדחה ומודל עמוס
+            # נראים כאן זהים בלעדיה. זו הודעת שגיאה של הכלי ולא תוכן
+            # הברייף, ולכן מותר לה לעלות לאנוטציה.
+            err = " ".join((proc.stderr or "").split())[-240:] or "בלי פלט שגיאה"
+            failures.append(f"אצווה {tag}: קוד {proc.returncode} — {err}")
+            continue
+        out_lines.extend((proc.stdout or "").splitlines())
+
+    if failures:
+        print("::warning title=אצוות סיכום שנפלו::" + " · ".join(failures))
+    if not out_lines:
+        print("::error title=סיכומי הנושאים לא נכתבו::כל האצוות נכשלו. "
+              + " · ".join(failures))
         return 1
 
     # JSONL ולא JSON יחיד: גרשיים עבריים (נדל"ן, ת"א) שוברים מסמך אחד גדול
     # ומאבדים את כל הסיכומים. כאן שורה פגומה מושמטת והשאר נשמר.
     data, bad, shapes = {}, 0, []
-    for line in (proc.stdout or "").splitlines():
+    for line in out_lines:
         line = line.strip().strip("`")
         if not line.startswith("{"):
             continue
