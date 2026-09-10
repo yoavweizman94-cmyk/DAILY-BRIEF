@@ -693,6 +693,37 @@ def calls_page(calls: list[dict], today: str) -> str:
     return body
 
 
+TOPIC_MIN_ITEMS = 3
+TOPIC_MIN_WORDS = 55
+
+
+def topic_depth(summaries: dict, topics: list[dict]) -> list[tuple[str, int, int]]:
+    """אייטמים ומילים לאייטם בכל עמוד סקטור.
+
+    **המדידה הזו חסרה כאן, ובגללה תוקן חמישה סבבים האובייקט הלא נכון.**
+    `sector_depth` מודד את הסעיפים הענפיים בברייף; יואב קרא את עמודי
+    הסקטור. שתי המדידות הראשונות אישרו שהכל תקין משום שהסתכלו על קובץ
+    אחר לגמרי. עמוד הסקטור נמדד עכשיו בפני עצמו.
+
+    נמדד מהסיכום ולא מה-HTML: זה מה שהרינדור מקבל, וכך המספר אומר אם
+    ההרצה ייצרה תוכן ולא אם התבנית עטפה אותו.
+    """
+    out = []
+    for tp in topics:
+        s = summaries.get(tp["slug"]) or {}
+        items = s.get("items") or []
+        if not items:
+            # קובץ בתבנית הישנה — פסקה אחת ותו לא. זה בדיוק המצב
+            # שמדווח כאן, ולכן הוא נספר כאפס אייטמים ולא מדולג.
+            if (s.get("summary") or s.get("lead") or "").strip():
+                out.append((tp["label"], 0, len((s.get("summary") or
+                                                 s.get("lead") or "").split())))
+            continue
+        w = [len((it.get("body") or "").split()) for it in items]
+        out.append((tp["label"], len(items), round(sum(w) / len(w)) if w else 0))
+    return out
+
+
 def topics_nav(topics: list[dict], counts: dict, current: str = "") -> str:
     links = []
     for t in topics:
@@ -843,6 +874,7 @@ def main() -> int:
         for s in r.get("topics") or []:
             counts[s] = counts.get(s, 0) + 1
     (OUT / "topics").mkdir(exist_ok=True)
+    _built_topics = []
     for tp in topics:
         rows = [r for r in news if tp["slug"] in (r.get("topics") or [])]
         if not rows:
@@ -857,6 +889,43 @@ def main() -> int:
         (OUT / "topics" / f'{tp["slug"]}.html').write_text(
             PAGE.format(title=f'{tp["label"]} · {site_title}', site_title=site_title,
                         root="../", body=body), encoding="utf-8")
+        _built_topics.append(tp)
+
+    if _built_topics:
+        _td = topic_depth(topic_sums, _built_topics)
+        print(f"::notice::עומק עמודי הסקטור (סיכום מ-{topic_sums_day or 'אין קובץ'}, "
+              f"{len(_built_topics)} עמודים): "
+              + " · ".join(f"{n} {c}×{w}מ׳" for n, c, w in _td))
+        # **קובץ סיכום ישן מרנדר בלי להיכשל.** load_topic_summaries בוחר
+        # את הקובץ החדש ביותר שקיים, ולכן כשל של summarize_topics.py
+        # מציג את הסיכום של אתמול — או של לפני חודש — בעמוד שנראה תקין
+        # לגמרי. הפער בין תאריך הסיכום להיום הוא הסימן היחיד לכך.
+        _stale = 0
+        if topic_sums_day:
+            try:
+                _stale = (date.today() - date.fromisoformat(topic_sums_day)).days
+            except ValueError:
+                _stale = 0
+        _msgs = []
+        if not topic_sums:
+            _msgs.append("אין קובץ סיכומים כלל — כל עמודי הסקטור הם רשימת "
+                         "כותרות בלי תמונת מצב")
+        elif _stale > 1:
+            _msgs.append(f"הסיכום האחרון הוא מ-{topic_sums_day}, לפני {_stale} ימים "
+                         "— summarize_topics.py לא כתב קובץ חדש")
+        _thin = [f"{n} {c} אייטמים" for n, c, _w in _td if c < TOPIC_MIN_ITEMS]
+        _short = [f"{n} {w} מילים" for n, c, w in _td
+                  if c >= TOPIC_MIN_ITEMS and w < TOPIC_MIN_WORDS]
+        _missing = [tp["label"] for tp in _built_topics
+                    if not (topic_sums.get(tp["slug"]) or {})]
+        if _missing:
+            _msgs.append("בלי סיכום: " + ", ".join(_missing))
+        if _thin or _short:
+            _msgs.append(" · ".join(_thin + _short))
+        if _msgs:
+            print("::warning title=עמודי סקטור מתחת לרף::" + " — ".join(_msgs)
+                  + f" (הרף: {TOPIC_MIN_ITEMS} אייטמים ו-{TOPIC_MIN_WORDS} "
+                    "מילים לאייטם).")
 
     entries = []
     for p in briefs:

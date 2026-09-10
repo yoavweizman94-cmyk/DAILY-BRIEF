@@ -225,8 +225,12 @@ fi
 python scripts/normalize_briefs.py output || echo "אזהרה: נורמליזציית הברייף נכשלה"
 
 python scripts/publish_status.py
-python scripts/publish_news.py || echo "אזהרה: סיווג החדשות נכשל"
-python scripts/summarize_topics.py || echo "אזהרה: סיכומי הנושאים נכשלו"
+# **כשל כאן אינו נראה בעמוד.** site/build.py בוחר את קובץ הסיכומים החדש
+# ביותר שקיים, ולכן עמוד סקטור שסיכומו נכשל מציג את הסיכום של אתמול —
+# או של לפני חודש — ונראה תקין לגמרי. שורת echo בלוג של ריצה ירוקה אינה
+# נקראת; אנוטציה כן. הבנייה מדפיסה לצידה את תאריך הסיכום שבו השתמשה.
+python scripts/publish_news.py   || echo "::warning title=סיווג החדשות נכשל::עמודי הסקטור ייבנו מהקובץ הקודם."
+python scripts/summarize_topics.py   || echo "::warning title=סיכומי הנושאים לא נכתבו::עמודי הסקטור יציגו את הסיכום הקודם. בדוק את הפלט של scripts/summarize_topics.py בשלב הזה."
 python site/build.py
 # **הטלגרם מעולם לא הוגדר.** TELEGRAM_BOT_TOKEN ו-TELEGRAM_CHAT_ID
 # נשארו ברשימת ההקמה כ"נשאר ליואב" ולא הוזנו, ולכן הקריאה הזו נכשלה
