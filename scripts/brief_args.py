@@ -18,10 +18,28 @@ from __future__ import annotations
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 TRIGGER = Path(__file__).resolve().parent.parent / ".trigger" / "daily-brief.json"
 EDITIONS = ("", "morning", "close", "night")
+TOPICS_ONLY_TTL_H = 2
+
+
+def _age_hours(stamp) -> float | None:
+    """גיל חותמת הזמן של הטריגר בשעות, או None אם אינה קריאה.
+
+    הזמן בקובץ נכתב מקומית ובלי אזור זמן, והריצה בענן היא UTC. ההשוואה
+    היא לזמן המקומי של הריצה (TZ=Asia/Jerusalem ב-workflow), ולכן שתי
+    הצדדים באותו אזור. גיל שלילי — שעון שהוזז — נחשב טרי.
+    """
+    try:
+        t = datetime.fromisoformat(str(stamp))
+    except (TypeError, ValueError):
+        return None
+    if t.tzinfo is not None:
+        t = t.astimezone().replace(tzinfo=None)
+    return max(0.0, (datetime.now() - t).total_seconds() / 3600)
 
 
 def main() -> int:
@@ -51,7 +69,23 @@ def main() -> int:
         # קריאה אחת למודל; הברייף הוא הקריאה היקרה בצינור. כשהתיקון נוגע
         # לעמודי הסקטור בלבד אין סיבה לכתוב ברייף מחדש — ובוודאי לא
         # לדרוס את זה שכבר פורסם הבוקר.
+        #
+        # **והדגל פג מעצמו.** קובץ הטריגר נשמר בגיט, ולכן דגל שנשאר בו
+        # שורד לטריגר הבא: מי שידחוף טריגר מחר יקבל ריצה ירוקה שלא
+        # הפיקה ברייף. אזהרה אחרי מעשה אינה מספיקה כאן — ברירת המחדל
+        # הבטוחה היא ברייף, ולכן הדגל תקף רק לצד חותמת זמן טרייה.
         topics_only = "1" if cfg.get("topics_only") else ""
+        if topics_only:
+            age = _age_hours(cfg.get("at"))
+            if age is None:
+                print("::warning::topics_only בלי שדה at תקין — מופק ברייף מלא",
+                      file=sys.stderr)
+                topics_only = ""
+            elif age > TOPICS_ONLY_TTL_H:
+                print(f"::notice::topics_only בקובץ הטריגר בן {age:.1f} שעות "
+                      f"(מעל {TOPICS_ONLY_TTL_H}) — נשאר משימוש קודם ומתעלמים "
+                      "ממנו; מופק ברייף מלא", file=sys.stderr)
+                topics_only = ""
         src = f"{event or 'unknown'} (.trigger)"
 
     if edition not in EDITIONS:
