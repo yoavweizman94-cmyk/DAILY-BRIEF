@@ -697,30 +697,35 @@ TOPIC_MIN_ITEMS = 3
 TOPIC_MIN_WORDS = 55
 
 
-def topic_depth(summaries: dict, topics: list[dict]) -> list[tuple[str, int, int]]:
-    """אייטמים ומילים לאייטם בכל עמוד סקטור.
+def topic_depth(pages: list[tuple[str, str]]) -> list[tuple[str, int, int]]:
+    """אייטמים ומילים לאייטם — נספרים ב-HTML שנכתב לעמוד.
 
     **המדידה הזו חסרה כאן, ובגללה תוקן חמישה סבבים האובייקט הלא נכון.**
     `sector_depth` מודד את הסעיפים הענפיים בברייף; יואב קרא את עמודי
     הסקטור. שתי המדידות הראשונות אישרו שהכל תקין משום שהסתכלו על קובץ
-    אחר לגמרי. עמוד הסקטור נמדד עכשיו בפני עצמו.
+    אחר לגמרי.
 
-    נמדד מהסיכום ולא מה-HTML: זה מה שהרינדור מקבל, וכך המספר אומר אם
-    ההרצה ייצרה תוכן ולא אם התבנית עטפה אותו.
+    **והספירה היא על ה-HTML ולא על הדאטה שהוזנה לרינדור.** אלה שני
+    דברים שונים: קובץ סיכומים מלא ורינדור שנופל עליו נראים זהים
+    למדידה שסופרת את הקובץ. הכלל שחוזר כאן כל הסבב הוא אותו כלל —
+    מודדים את מה שהקורא רואה, לא את מה שהזנו לצינור.
+
+    מקבלת (תווית, HTML של גוף העמוד).
     """
     out = []
-    for tp in topics:
-        s = summaries.get(tp["slug"]) or {}
-        items = s.get("items") or []
-        if not items:
-            # קובץ בתבנית הישנה — פסקה אחת ותו לא. זה בדיוק המצב
-            # שמדווח כאן, ולכן הוא נספר כאפס אייטמים ולא מדולג.
-            if (s.get("summary") or s.get("lead") or "").strip():
-                out.append((tp["label"], 0, len((s.get("summary") or
-                                                 s.get("lead") or "").split())))
+    for label, html in pages:
+        blocks = re.findall(r'<div class="topic-item">(.*?)</div>', html, re.S)
+        if not blocks:
+            lead = re.search(r'<p class="topic-lead">(.*?)</p>', html, re.S)
+            n = len(re.sub(r"<[^>]+>", " ", lead.group(1)).split()) if lead else 0
+            out.append((label, 0, n))
             continue
-        w = [len((it.get("body") or "").split()) for it in items]
-        out.append((tp["label"], len(items), round(sum(w) / len(w)) if w else 0))
+        words = []
+        for blk in blocks:
+            body = re.findall(r"<p>(.*?)</p>", blk, re.S)
+            words.append(len(re.sub(r"<[^>]+>", " ", " ".join(body)).split()))
+        out.append((label, len(blocks),
+                    round(sum(words) / len(words)) if words else 0))
     return out
 
 
@@ -874,7 +879,7 @@ def main() -> int:
         for s in r.get("topics") or []:
             counts[s] = counts.get(s, 0) + 1
     (OUT / "topics").mkdir(exist_ok=True)
-    _built_topics = []
+    _built_topics, _topic_pages = [], []
     for tp in topics:
         rows = [r for r in news if tp["slug"] in (r.get("topics") or [])]
         if not rows:
@@ -890,9 +895,10 @@ def main() -> int:
             PAGE.format(title=f'{tp["label"]} · {site_title}', site_title=site_title,
                         root="../", body=body), encoding="utf-8")
         _built_topics.append(tp)
+        _topic_pages.append((tp["label"], body))
 
     if _built_topics:
-        _td = topic_depth(topic_sums, _built_topics)
+        _td = topic_depth(_topic_pages)
         print(f"::notice::עומק עמודי הסקטור (סיכום מ-{topic_sums_day or 'אין קובץ'}, "
               f"{len(_built_topics)} עמודים): "
               + " · ".join(f"{n} {c}×{w}מ׳" for n, c, w in _td))
