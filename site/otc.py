@@ -737,10 +737,13 @@ def export_js() -> str:
         x.direction = c[2]; x.textAlign = "right";
         if (i === 0) {
           x.font = F(600, 21); x.fillStyle = C.text;
-        } else if (c[1] === "prem") {
+        } else if (v.charAt(0) === "+" || v.charAt(0) === "-") {
+          // **הסימן שבערך הוא מה שקובע את הצבע, לא שם העמודה.** התנאי
+          // הקודם בדק c[1] === "prem", ולכן כל עמודה חתומה אחרת —
+          // למשל שינוי נטו בהון בטבלת בעלי העניין — יצאה אפורה, ומכירה
+          // ורכישה נראו זהות בתמונה.
           x.font = F(600, 21);
-          x.fillStyle = v.charAt(0) === "-" ? C.down
-            : v.charAt(0) === "+" ? C.up : C.dim;
+          x.fillStyle = v.charAt(0) === "-" ? C.down : C.up;
         } else if (c[1] === "value") {
           x.font = F(600, 21); x.fillStyle = C.text;
         } else {

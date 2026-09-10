@@ -187,8 +187,20 @@ def holders_summary(rows: list[dict], year: str) -> str:
 
     **עסקה בודדת אינה מספרת מי זז.** אותו בעל עניין מדווח לאורך השנה
     בעשרות הודעות קטנות, וכל אחת בנפרד היא רעש; הסכום שלהן הוא הסיפור.
-    הטבלה מצרפת לפי מדווח וחברה, ומדרגת לפי החלק המצטבר מהון החברה —
-    לא לפי היקף כספי, כי מיליון שקל בחברה קטנה משנה שליטה ובגדולה לא.
+    הטבלה מצרפת לפי מדווח וחברה, ומדרגת לפי **השינוי נטו** בחלק מהון
+    החברה — לא לפי היקף כספי, כי מיליון שקל בחברה קטנה משנה שליטה
+    ובגדולה לא, ולא לפי המחזור המצטבר.
+
+    **סכימת המחזור דירגה מי שלא זז.** הגרסה הקודמת חיברה
+    `abs(pct_of_class)` של כל דיווח, ולכן מי שקנה 0.5% ומכר 0.5% הופיע
+    כמי שהזיז 1% מהחברה בזמן שהחזקתו לא השתנתה כלל — ובראש הטבלה, לפני
+    מי שצבר באמת. הסימן נלקח מ-`direction`, כי `pct_of_class` תמיד גודל
+    מוחלט. אותו תיקון חל על ההיקף הכספי: `abs(net)` הראה קונה נטו ומוכר
+    נטו באותו מספר בדיוק.
+
+    עמודת "החזקה אחרי" היא **מלאי ולא תנועה** — 60%–75% שם הם בעל שליטה
+    בחברה קטנה, לא היקף העסקה. היא נשארת כי היא ההקשר לשינוי, והכותרות
+    מפרידות בין השתיים.
 
     `counted: false` הוא הצד השני של עסקה שכבר נספרה, ו-`partial: true`
     מאגד מסחר בתוך ומחוץ לבורסה בלי לפצל; שניהם יוצאים מהסכימה כדי שלא
@@ -207,37 +219,55 @@ def holders_summary(rows: list[dict], year: str) -> str:
         k = (who, co)
         e = agg.setdefault(k, {
             "holder": who, "company": co, "buy": 0.0, "sell": 0.0,
-            "n": 0, "pct": 0.0, "after": None, "kinds": set()})
+            "n": 0, "pct_buy": 0.0, "pct_sell": 0.0,
+            "after": None, "kinds": set()})
         e["n"] += 1
         v = r.get("value_ils") or 0
+        q = abs(r.get("pct_of_class") or 0)
         if r.get("direction") == "buy":
             e["buy"] += v
+            e["pct_buy"] += q
         else:
             e["sell"] += v
-        e["pct"] += abs(r.get("pct_of_class") or 0)
+            e["pct_sell"] += q
         if r.get("holding_pct_after") is not None:
             e["after"] = r["holding_pct_after"]
         if r.get("kind"):
             e["kinds"].add(r["kind"])
     if not agg:
         return ""
-    top = sorted(agg.values(), key=lambda e: -e["pct"])[:20]
+    for e in agg.values():
+        e["pct"] = e["pct_buy"] - e["pct_sell"]
+        e["net"] = e["buy"] - e["sell"]
+    top = sorted(agg.values(), key=lambda e: -abs(e["pct"]))[:20]
 
     def side(e):
-        if e["buy"] and e["sell"]:
-            return "מעורב"
-        return "רכישה" if e["buy"] else "מכירה"
+        """הכיוון הוא של התוצאה, לא של הפעילות.
+
+        "מעורב" תיאר מי שהיו לו עסקאות לשני הכיוונים, וזה נכון אך אינו
+        עונה על השאלה — בסוף השנה הוא צבר או מימש. מי שסחר לשני הכיוונים
+        מסומן כך בסוגריים, אבל הכיוון עצמו הוא של הנטו.
+        """
+        d = "צבירה" if e["pct"] > 0 else "מימוש" if e["pct"] < 0 else "ללא שינוי"
+        return d + (" (דו-כיווני)" if e["buy"] and e["sell"] else "")
+
+    def signed(v, unit=""):
+        # מקף ASCII ולא − (MINUS SIGN): הציור בקנבס בודק
+        # v.charAt(0) === "-" כדי לצבוע שלילי באדום, וסימן טיפוגרפי
+        # יפה יותר היה יוצא מהתמונה אפור כמו ערך חסר סימן.
+        return ("+" if v > 0 else "-" if v < 0 else "") + (
+            f"{abs(v):.2f}%" if unit == "%" else money(abs(v)))
 
     body = []
     for e in top:
-        net = e["buy"] - e["sell"]
+        cls = "up" if e["pct"] > 0 else "down" if e["pct"] < 0 else ""
         body.append(
             f'<tr><td class="city">{esc(e["holder"])}</td>'
             f'<td>{esc(e["company"])}</td>'
             f'<td>{side(e)}</td>'
             f'<td dir="ltr">{e["n"]}</td>'
-            f'<td class="key" dir="ltr">{money(abs(net))}</td>'
-            f'<td dir="ltr">{e["pct"]:.2f}%</td>'
+            f'<td class="key" dir="ltr">{signed(e["net"])}</td>'
+            f'<td class="{cls}" dir="ltr">{signed(e["pct"], "%")}</td>'
             f'<td dir="ltr">'
             + (f'{e["after"]:.2f}%' if e["after"] is not None else "—")
             + '</td></tr>')
@@ -247,7 +277,7 @@ def holders_summary(rows: list[dict], year: str) -> str:
         "kicker": "עסקאות מדווחות מחוץ לבורסה",
         "cols": [["מדווח", "name", "rtl"], ["חברה", "co", "rtl"],
                  ["כיוון", "side", "rtl"], ["עסקאות", "n", "ltr"],
-                 ["היקף נטו", "value", "rtl"], ["% מההון", "cap", "ltr"]],
+                 ["היקף נטו", "value", "rtl"], ["שינוי בהון", "cap", "ltr"]],
         "pills": [["מדווחים", str(len(agg))],
                   ["עסקאות", str(sum(e["n"] for e in agg.values()))],
                   ["היקף", money(sum(e["buy"] + e["sell"] for e in agg.values()))]],
@@ -256,16 +286,18 @@ def holders_summary(rows: list[dict], year: str) -> str:
         # תמונה שנחתכה. הקיצור נעשה בקנבס לפי הרוחב שבאמת פנוי לעמודה.
         "rows": [{"name": e["holder"], "co": e["company"],
                   "side": side(e), "n": e["n"],
-                  "value": money(abs(e["buy"] - e["sell"])),
-                  "cap": f'{e["pct"]:.2f}%'} for e in top[:14]],
+                  "value": signed(e["net"]),
+                  "cap": signed(e["pct"], "%")} for e in top[:14]],
         "more": max(0, len(agg) - 14),
     }, ensure_ascii=False)
 
     lines = [f"בעלי עניין · מתחילת {year}",
              f"{len(agg)} מדווחים, {sum(e['n'] for e in agg.values()):,} עסקאות"]
-    for e in top[:3]:
+    # מי שלא זז אינו ציוץ. הוא נשאר בטבלה כהקשר, אבל שורה
+    # "ללא שינוי 0.00% מההון" בתקציר היא בזבוז של אחת משלוש השורות.
+    for e in [e for e in top if abs(e["pct"]) >= 0.005][:3]:
         lines.append(f"{e['holder'][:24]} · {e['company']}: "
-                     f"{side(e)} {e['pct']:.2f}% מההון")
+                     f"{side(e)} {abs(e['pct']):.2f}% מההון")
     tw = ""
     for ln in lines:
         nxt = (tw + "\n" + ln) if tw else ln
@@ -277,8 +309,12 @@ def holders_summary(rows: list[dict], year: str) -> str:
     return "\n".join([
         '<h2>מי צבר ומי מימש</h2>',
         '<p class="note">צירוף כל הדיווחים של אותו בעל עניין באותה חברה '
-        'מתחילת השנה, מדורג לפי החלק המצטבר מהון החברה. "היקף נטו" הוא '
-        'ההפרש בין רכישות למכירות.</p>',
+        'מתחילת השנה, מדורג לפי <b>השינוי נטו</b> בחלקו מהון החברה — '
+        'רכישות פחות מכירות, ולא סכום המחזור. מי שקנה ומכר את אותו שיעור '
+        'לא זז, ולכן אינו בראש הטבלה. "היקף נטו" הוא ההפרש הכספי באותו '
+        'חישוב. <b>"החזקה אחרי"</b> היא ההחזקה הכוללת של אותו בעל עניין '
+        'בחברה אחרי הדיווח האחרון — מלאי ולא תנועה, ולכן שיעורים של '
+        'עשרות אחוזים שם הם בעל שליטה ולא היקף העסקה.</p>',
         f'<div class="otc-tweet" id="tw-holders"><pre>'
         + esc(tw) + '</pre></div>',
         f'<script type="application/json" id="otc-holders">{payload}</script>',
@@ -289,7 +325,7 @@ def holders_summary(rows: list[dict], year: str) -> str:
         'העתקת התקציר</button></p>',
         '<div class="tw"><table class="nadlan"><thead><tr>'
         '<th>מדווח</th><th>חברה</th><th>כיוון</th><th>עסקאות</th>'
-        '<th>היקף נטו</th><th>% מההון מצטבר</th><th>החזקה אחרי</th>'
+        '<th>היקף נטו</th><th>שינוי נטו בהון</th><th>החזקה אחרי</th>'
         '</tr></thead><tbody>',
         "".join(body),
         '</tbody></table></div>',
