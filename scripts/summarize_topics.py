@@ -94,7 +94,7 @@ def main() -> int:
         print("אין חדשות מסווגות — אין מה לסכם")
         return 0
 
-    blocks = []
+    blocks, want = [], []
     for slug, t in topics.items():
         items = [r for r in rows if slug in (r.get("topics") or [])]
         if not items:
@@ -103,6 +103,7 @@ def main() -> int:
         comps = ", ".join(t.get("companies") or []) or "—"
         lines = "\n".join(f"  - [{r.get('source','')}] {r.get('title','')}"
                           for r in items[:MAX_ITEMS_PER_TOPIC])
+        want.append(slug)
         blocks.append(f"### slug={slug} · {t['label']}\n"
                       f"חברות כיסוי בנושא: {comps}\n{lines}")
     if not blocks:
@@ -143,10 +144,31 @@ def main() -> int:
                 "takeaway": obj.get("takeaway", ""),
             }
     if not data:
-        print("שגיאה: לא התקבל אף סיכום תקין מהמודל", file=sys.stderr)
+        print("::error title=לא התקבל אף סיכום::הפלט של המודל לא הכיל שורת "
+              "JSON תקינה אחת. עמודי הסקטור יציגו את הסיכום הקודם.")
         return 1
-    if bad:
-        print(f"אזהרה: {bad} שורות לא נפרסו", file=sys.stderr)
+
+    # **חוסר חלקי הוא המצב הצפוי, ולכן הוא זה שצריך להישמע.** כל נושא
+    # הוא שורת JSON אחת, וכעת היא מכילה שלושה עד שישה גופים של 60–120
+    # מילים — שורה ארוכה בהרבה מקודם. שורה שנקטעה, או גרש עברי ששבר
+    # אותה, מוחקת נושא שלם, והסקריפט היה מסיים 0 בלי לומר מילה. ההרצה
+    # נשארת ירוקה — היא הפיקה את מה שאפשר — אבל החוסר נראה.
+    missing = [k for k in want if k not in data]
+    thin = [k for k in data if len(data[k]["items"]) < 3]
+    counts = [len(v["items"]) for v in data.values()]
+    print(f"::notice::סיכומי נושא: {len(data)}/{len(want)} נושאים, "
+          f"{sum(counts)} אייטמים, ממוצע {sum(counts) / len(counts):.1f} לנושא")
+    if bad or missing or thin:
+        parts = []
+        if bad:
+            parts.append(f"{bad} שורות לא נפרסו")
+        if missing:
+            parts.append("בלי סיכום: " + ", ".join(missing))
+        if thin:
+            parts.append("פחות משלושה אייטמים: " + ", ".join(thin))
+        print("::warning title=סיכומי נושא חלקיים::" + " · ".join(parts)
+              + " — עמוד סקטור בלי סיכום מציג את הקובץ הקודם ואינו "
+                "מתרוקן, ולכן החוסר אינו נראה באתר.")
 
     out_dir = ROOT / "output" / "topics"
     out_dir.mkdir(parents=True, exist_ok=True)
