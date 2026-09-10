@@ -1376,7 +1376,11 @@ button.pend-go:focus-visible {
 /* ---------- עמוד סקטור: אייטמים, לא פסקה ---------- */
 /* העמוד הציג פסקת סיכום אחת ומשפט "משמעות", וזה כל מה שהיה בו.
    עכשיו הוא מציג אייטם לכל ידיעה, עם החברות הנוגעות וכיוון ההשפעה. */
-.topic-lead { font-size: 0.95rem; line-height: 1.75; margin: 0 0 1.1rem; }
+/* **מסולסל תחת .topic-sum בכוונה.** `.topic-sum p` שלמעלה קובע
+   margin ו-font-size לכל פסקה בקופסה, וסלקטור של מחלקה בלבד (0,1,0)
+   מפסיד לו (0,1,1). בלי ההידוק הזה הליד קיבל את המרווח הכללי במקום
+   את שלו, והרווח בינו לאייטם הראשון נעלם. */
+.topic-sum .topic-lead { font-size: 0.95rem; line-height: 1.75; margin: 0 0 1.1rem; }
 .topic-item {
   border-inline-start: 3px solid var(--border);
   padding: 0 0 0.1rem 0; padding-inline-start: 0.9rem;
@@ -1387,7 +1391,7 @@ button.pend-go:focus-visible {
   font-size: 1rem; margin: 0 0 0.35rem; line-height: 1.45;
 }
 .topic-item p { margin: 0 0 0.4rem; font-size: 0.92rem; line-height: 1.75; }
-.topic-meta {
+.topic-sum .topic-meta {
   display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
   font-size: 0.78rem; margin: 0;
 }
