@@ -121,7 +121,7 @@ def main() -> int:
 
     # JSONL ולא JSON יחיד: גרשיים עבריים (נדל"ן, ת"א) שוברים מסמך אחד גדול
     # ומאבדים את כל הסיכומים. כאן שורה פגומה מושמטת והשאר נשמר.
-    data, bad = {}, 0
+    data, bad, shapes = {}, 0, []
     for line in (proc.stdout or "").splitlines():
         line = line.strip().strip("`")
         if not line.startswith("{"):
@@ -133,6 +133,14 @@ def main() -> int:
             continue
         slug = obj.get("slug")
         if slug in topics:
+            # **צורת התשובה היא האבחנה.** כשעמוד סקטור יוצא בלי אייטמים
+            # יש שתי סיבות שונות לגמרי: המודל ענה בסכימה הישנה
+            # (summary בלבד), או שענה בחדשה אבל items יצא ריק. בלי
+            # ההבחנה הזו התיקון הוא ניחוש. שמות המפתחות בלבד — לא תוכן,
+            # כי האנוטציות ציבוריות.
+            shapes.append(slug + ":" + "".join(
+                c for c, k in (("s", "summary"), ("l", "lead"), ("i", "items"))
+                if obj.get(k)))
             # **תאימות לאחור בכוונה.** קובצי סיכום ישנים מכילים רק
             # summary/takeaway, והרינדור חייב להמשיך להציג אותם עד
             # שהקובץ הבא ייכתב.
@@ -157,7 +165,8 @@ def main() -> int:
     thin = [k for k in data if len(data[k]["items"]) < 3]
     counts = [len(v["items"]) for v in data.values()]
     print(f"::notice::סיכומי נושא: {len(data)}/{len(want)} נושאים, "
-          f"{sum(counts)} אייטמים, ממוצע {sum(counts) / len(counts):.1f} לנושא")
+          f"{sum(counts)} אייטמים, ממוצע {sum(counts) / len(counts):.1f} לנושא "
+          f"· צורות (s=summary l=lead i=items): {' '.join(shapes)}")
     if bad or missing or thin:
         parts = []
         if bad:

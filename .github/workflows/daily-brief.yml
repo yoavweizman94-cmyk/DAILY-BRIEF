@@ -122,6 +122,9 @@ jobs:
           BRIEF_EDITION: ${{ steps.ed.outputs.edition }}
           # הרצה ידנית תמיד מפיקה מחדש; מתוזמנת מדלגת אם כבר יש ברייף טרי
           BRIEF_FORCE: ${{ env.BRIEF_FORCE_IN }}
+          # קובץ טריגר עם "topics_only": 1 מדלג על כתיבת הברייף ומרענן
+          # רק חדשות, סיכומי סקטור והאתר. ראה scripts/brief_args.py.
+          TOPICS_ONLY: ${{ env.BRIEF_TOPICS_ONLY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS }}
           TRADINGECONOMICS_KEY: ${{ secrets.TRADINGECONOMICS_KEY }}

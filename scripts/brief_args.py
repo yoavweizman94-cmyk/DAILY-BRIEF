@@ -27,6 +27,7 @@ EDITIONS = ("", "morning", "close", "night")
 def main() -> int:
     event = os.environ.get("GITHUB_EVENT_NAME", "")
 
+    topics_only = ""
     if event == "workflow_dispatch":
         edition = (os.environ.get("IN_EDITION") or "").strip()
         reviews = (os.environ.get("IN_REVIEWS") or "").strip()
@@ -46,6 +47,11 @@ def main() -> int:
         edition = str(cfg.get("edition") or "").strip()
         reviews = str(cfg.get("reviews") or "").strip()
         force = "1"
+        # **רענון עמודי הסקטור בלי לשלם על ברייף.** סיכומי הנושאים הם
+        # קריאה אחת למודל; הברייף הוא הקריאה היקרה בצינור. כשהתיקון נוגע
+        # לעמודי הסקטור בלבד אין סיבה לכתוב ברייף מחדש — ובוודאי לא
+        # לדרוס את זה שכבר פורסם הבוקר.
+        topics_only = "1" if cfg.get("topics_only") else ""
         src = f"{event or 'unknown'} (.trigger)"
 
     if edition not in EDITIONS:
@@ -61,6 +67,7 @@ def main() -> int:
     print(f"BRIEF_REVIEWS={reviews or 0}")
     print(f"BRIEF_FORCE_IN={force}")
     print(f"BRIEF_SRC={src}")
+    print(f"BRIEF_TOPICS_ONLY={topics_only}")
     return 0
 
 
