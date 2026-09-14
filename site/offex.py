@@ -212,8 +212,10 @@ def holders_summary(rows: list[dict], year: str) -> str:
             continue
         if r.get("counted") is False or r.get("partial"):
             continue
-        who = (r.get("holder") or "").strip()
-        co = (r.get("company") or "").strip()
+        # מאיה משאירה לעיתים קווים תחתונים מתבנית הטופס בקצה השם
+        # ("שותפות מוגבלת _"), והם הופיעו כך גם בטבלה וגם בתמונה.
+        who = (r.get("holder") or "").strip(" _")
+        co = (r.get("company") or "").strip(" _")
         if not who or not co:
             continue
         k = (who, co)
@@ -258,38 +260,49 @@ def holders_summary(rows: list[dict], year: str) -> str:
         return ("+" if v > 0 else "-" if v < 0 else "") + (
             f"{abs(v):.2f}%" if unit == "%" else money(abs(v)))
 
+    # **טבלה אחת, שני פלטים** — כמו ב-otc.period_table. העמוד הראה 20
+    # שורות בשבע עמודות והתמונה 14 בשש: "החזקה אחרי" פשוט לא הייתה בה,
+    # ושורת ה"ועוד" ספרה מדווחים וקראה להם "ניירות".
+    cols = [["מדווח", "name", "rtl"], ["חברה", "co", "rtl"],
+            ["כיוון", "side", "rtl"], ["עסקאות", "n", "ltr"],
+            ["היקף נטו", "value", "ltr"], ["שינוי נטו בהון", "cap", "ltr"],
+            ["החזקה אחרי", "after", "ltr"]]
+    cells = [{
+        "name": e["holder"], "co": e["company"], "side": side(e),
+        "n": str(e["n"]), "value": signed(e["net"]),
+        "cap": signed(e["pct"], "%"),
+        "after": f'{e["after"]:.2f}%' if e["after"] is not None else "—",
+        "_cls": "up" if e["pct"] > 0 else "down" if e["pct"] < 0 else "",
+    } for e in top]
+    rest = len(agg) - len(top)
+    more = f"ועוד {rest} מדווחים עם שינוי נטו קטן יותר." if rest > 0 else ""
+
     body = []
-    for e in top:
-        cls = "up" if e["pct"] > 0 else "down" if e["pct"] < 0 else ""
+    for r in cells:
         body.append(
-            f'<tr><td class="city">{esc(e["holder"])}</td>'
-            f'<td>{esc(e["company"])}</td>'
-            f'<td>{side(e)}</td>'
-            f'<td dir="ltr">{e["n"]}</td>'
-            f'<td class="key" dir="ltr">{signed(e["net"])}</td>'
-            f'<td class="{cls}" dir="ltr">{signed(e["pct"], "%")}</td>'
-            f'<td dir="ltr">'
-            + (f'{e["after"]:.2f}%' if e["after"] is not None else "—")
-            + '</td></tr>')
+            f'<tr><td class="city">{esc(r["name"])}</td>'
+            f'<td>{esc(r["co"])}</td>'
+            f'<td>{esc(r["side"])}</td>'
+            f'<td dir="ltr">{r["n"]}</td>'
+            f'<td class="key" dir="ltr">{esc(r["value"])}</td>'
+            f'<td class="{r["_cls"]}" dir="ltr">{esc(r["cap"])}</td>'
+            f'<td dir="ltr">{esc(r["after"])}</td></tr>')
+    if more:
+        body.append(f'<tr><td colspan="{len(cols)}" class="note">{more}</td></tr>')
 
     payload = json.dumps({
         "title": f"בעלי עניין · מתחילת {year}",
         "kicker": "עסקאות מדווחות מחוץ לבורסה",
-        "cols": [["מדווח", "name", "rtl"], ["חברה", "co", "rtl"],
-                 ["כיוון", "side", "rtl"], ["עסקאות", "n", "ltr"],
-                 ["היקף נטו", "value", "rtl"], ["שינוי בהון", "cap", "ltr"]],
+        "cols": cols,
         "pills": [["מדווחים", str(len(agg))],
                   ["עסקאות", str(sum(e["n"] for e in agg.values()))],
                   ["היקף", money(sum(e["buy"] + e["sell"] for e in agg.values()))]],
-        # **בלי חיתוך לפי מספר תווים.** [:26] חתך שמות באמצע מילה ובלי
-        # שלוש נקודות ("איון פי אי רד פנדה ארל, שו"), וזה נראה בדיוק כמו
-        # תמונה שנחתכה. הקיצור נעשה בקנבס לפי הרוחב שבאמת פנוי לעמודה.
-        "rows": [{"name": e["holder"], "co": e["company"],
-                  "side": side(e), "n": e["n"],
-                  "value": signed(e["net"]),
-                  "cap": signed(e["pct"], "%")} for e in top[:14]],
-        "more": max(0, len(agg) - 14),
-    }, ensure_ascii=False)
+        "rows": [{k: v for k, v in r.items() if not k.startswith("_")}
+                 for r in cells],
+        "moreText": more,
+        # הטבלה הזו ממאיה ולא מסקירת הבורסה — הכותרת התחתונה אמרה אחרת.
+        "source": "מקור: דיווחי בעלי עניין במערכת מאיה של הבורסה לניירות ערך",
+    }, ensure_ascii=False).replace("</", "<" + chr(92) + "/")
 
     lines = [f"בעלי עניין · מתחילת {year}",
              f"{len(agg)} מדווחים, {sum(e['n'] for e in agg.values()):,} עסקאות"]
@@ -324,9 +337,8 @@ def holders_summary(rows: list[dict], year: str) -> str:
         '<button type="button" class="otc-copy" data-key="holders">'
         'העתקת התקציר</button></p>',
         '<div class="tw"><table class="nadlan"><thead><tr>'
-        '<th>מדווח</th><th>חברה</th><th>כיוון</th><th>עסקאות</th>'
-        '<th>היקף נטו</th><th>שינוי נטו בהון</th><th>החזקה אחרי</th>'
-        '</tr></thead><tbody>',
+        + "".join(f"<th>{c[0]}</th>" for c in cols)
+        + '</tr></thead><tbody>',
         "".join(body),
         '</tbody></table></div>',
     ])

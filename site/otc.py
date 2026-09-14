@@ -21,6 +21,7 @@
 פי אחד וחצי מכל המסחר הרגיל באותו נייר באותו יום.
 """
 import json
+from html import escape as _esc_html
 import statistics
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -433,6 +434,34 @@ def tweet_block(text: str, key: str) -> str:
     return (f'<div class="otc-tweet" id="tw-{key}">'
             f'<pre>{esc}</pre></div>')
 
+def _payload(d: dict) -> str:
+    """JSON למטען שמוטמע בעמוד.
+
+    רצף הסגירה של תגית נשבר בלוכסן הפוך, כדי ששם נייר או מדווח לא יסגור
+    את תגית ה-script שהמטען יושב בתוכה. התוצאה עדיין JSON תקין.
+    """
+    return json.dumps(d, ensure_ascii=False).replace("</", "<" + chr(92) + "/")
+
+
+def _public(r: dict) -> dict:
+    """תא בלי שדות העזר (קו תחתון) — מה שנשלח לציור."""
+    return {k: v for k, v in r.items() if not k.startswith("_")}
+
+
+def _td(key: str, v: str, trend: str, bold: bool = False) -> str:
+    """תא אחד בטבלת התקופה, באותו עיצוב שהיה לה קודם."""
+    t = _esc_html(str(v), quote=False)
+    if key == "name":
+        return f'<td class="city">{"<b>" + t + "</b>" if bold and t else t}</td>'
+    if bold and not t:
+        return "<td></td>"
+    if key == "value":
+        return f'<td class="key" dir="ltr">{"<b>" + t + "</b>" if bold else t}</td>'
+    if key == "prem":
+        return f'<td class="trend {trend}" dir="ltr">{t}</td>'
+    return f'<td dir="ltr">{t}</td>'
+
+
 def period_table(title: str, sub: str, rows: list[dict],
                  show_days: bool, key: str = "", label: str = "",
                  stat: str = "median", extra: str = "", limit: int = 30) -> str:
@@ -440,32 +469,52 @@ def period_table(title: str, sub: str, rows: list[dict],
 
     אותן עמודות בשלושתן בכוונה: כך אפשר להשוות נייר בין יום, חודש ושנה
     בלי ללמוד מבנה חדש בכל סעיף.
+
+    **הטבלה נבנית פעם אחת, והיא גם ה-HTML וגם התמונה.** קודם העמוד חתך
+    30 שורות והמטען לייצוא חתך 16, בלי שורת הסך ועם כותרות עמודות אחרות
+    — ולכן התמונה הראתה חצי טבלה, ואיש לא החליט על כך. שני חיתוכים
+    שמתוחזקים בנפרד נפרדים עם הזמן; חיתוך אחד אינו יכול.
     """
     if not rows:
         return (f'<h2>{title}</h2><p class="note">{sub}</p>'
                 '<p class="note">אין עסקאות בתקופה הזו.</p>')
     agg = aggregate(rows)
     total = sum(e["value"] for e in agg)
-    head = ('<th>נייר</th><th>עסקאות</th>'
-            + ('<th>ימים</th>' if show_days else '')
-            + '<th>היקף</th><th>% מהון החברה</th>'
-            + (f'<th>{"ממוצע" if stat == "mean" else "חציון"} מול הבסיס</th>'))
     fld = "mean_prem" if stat == "mean" else "median_prem"
+
+    cols = [["נייר", "name", "rtl"], ["עסקאות", "n", "ltr"]]
+    if show_days:
+        cols.append(["ימים", "days", "ltr"])
+    cols += [["היקף", "value", "ltr"], ["% מהון החברה", "cap", "ltr"],
+             [("ממוצע" if stat == "mean" else "חציון") + " מול הבסיס",
+              "prem", "ltr"]]
+
+    shown = agg[:limit]
+    cells = [{
+        "name": e["name"], "n": str(e["n"]), "days": str(e["days"]),
+        "value": money(e["value"]),
+        "cap": (num(e["pct_capital"], 2) + "%"
+                if e["pct_capital"] is not None else "—"),
+        "prem": signed(e[fld]),
+        "_cls": cls(e[fld]),
+    } for e in shown]
+    rest = len(agg) - len(shown)
+    more = (f'ועוד {rest} ניירות בהיקף '
+            f'{money(sum(e["value"] for e in agg[len(shown):]))}.'
+            if rest > 0 else "")
+    # סכום אחוזי הון של ניירות שונים אינו מספר בעל משמעות, ולכן התא ריק.
+    total_row = {"name": "סך הכל", "n": str(sum(e["n"] for e in agg)),
+                 "days": "", "value": money(total), "cap": "", "prem": ""}
+
     # מטען לייצוא: הכפתור מצייר מהנתונים ולא מגרד את ה-DOM, כך
     # שהתמונה אינה תלויה בעיצוב העמוד או ברוחב המסך.
-    payload = json.dumps({
-        "title": title, "sub": sub, "showDays": show_days,
+    payload = _payload({
+        "title": title, "sub": sub,
         "total": money(total), "deals": sum(e["n"] for e in agg),
-        "securities": len(agg),
-        "rows": [{
-            "name": e["name"], "n": e["n"], "days": e["days"],
-            "value": money(e["value"]),
-            "cap": (f'{e["pct_capital"]:.2f}%'
-                    if e["pct_capital"] is not None else "—"),
-            "prem": signed(e[fld]),
-        } for e in agg[:16]],
-        "more": max(0, len(agg) - 16),
-    }, ensure_ascii=False)
+        "securities": len(agg), "cols": cols,
+        "rows": [_public(r) for r in cells],
+        "moreText": more, "totalRow": total_row,
+    })
     out = [f'<h2>{title}</h2>',
            f'<p class="note">{sub}</p>',
            review(rows, label or title),
@@ -477,29 +526,15 @@ def period_table(title: str, sub: str, rows: list[dict],
            f'<button type="button" class="otc-copy" data-key="{key}">'
            'העתקת התקציר</button></p>',
            '<div class="tw"><table class="nadlan"><thead><tr>'
-           + head + '</tr></thead><tbody>']
-    for e in agg[:limit]:
-        pc = e["pct_capital"]
-        out.append(
-            f'<tr><td class="city">{e["name"]}</td>'
-            f'<td dir="ltr">{e["n"]}</td>'
-            + (f'<td dir="ltr">{e["days"]}</td>' if show_days else '')
-            + f'<td class="key" dir="ltr">{money(e["value"])}</td>'
-            f'<td dir="ltr">{num(pc, 2) + "%" if pc is not None else "—"}</td>'
-            f'<td class="trend {cls(e[fld])}" dir="ltr">'
-            f'{signed(e[fld])}</td></tr>')
-    cols = 6 if show_days else 5
-    rest = len(agg) - limit
-    if rest > 0:
-        hidden = sum(e["value"] for e in agg[limit:])
-        out.append(f'<tr><td colspan="{cols}" class="note">'
-                   f'ועוד {rest} ניירות בהיקף {money(hidden)}.</td></tr>')
-    # סכום אחוזי הון של ניירות שונים אינו מספר בעל משמעות, ולכן התא ריק.
-    out.append(f'<tr><td class="city"><b>סך הכל</b></td>'
-               f'<td dir="ltr">{sum(e["n"] for e in agg)}</td>'
-               + ('<td></td>' if show_days else '')
-               + f'<td class="key" dir="ltr"><b>{money(total)}</b></td>'
-               f'<td></td><td></td></tr>')
+           + "".join(f"<th>{c[0]}</th>" for c in cols)
+           + '</tr></thead><tbody>']
+    for r in cells:
+        out.append("<tr>" + "".join(_td(c[1], r[c[1]], r["_cls"]) for c in cols)
+                   + "</tr>")
+    if more:
+        out.append(f'<tr><td colspan="{len(cols)}" class="note">{more}</td></tr>')
+    out.append("<tr>" + "".join(_td(c[1], total_row[c[1]], "", bold=True)
+                                for c in cols) + "</tr>")
     out.append('</tbody></table></div>')
     return "\n".join(out)
 
@@ -586,11 +621,13 @@ def method() -> str:
 def export_js() -> str:
     """ציור הכרטיס לקנבס והורדה כ-PNG, ולצידו העתקת התקציר.
 
-    **הפריסה נמדדת ואינה מנוחשת.** רוחבי העמודות נגזרים מרוחב הטקסט
-    בפועל (measureText), ועמודת השם בולעת את העודף או נחתכת במכוון —
-    כך סכום הרוחבים שווה תמיד לרוחב הפנוי ושום עמודה אינה יוצאת מהמסגרת.
-    הגרסה הקודמת השתמשה ברוחבים קבועים שסכומם עלה על רוחב הקנבס, ולכן
-    התמונה יצאה חתוכה.
+    **הטבלה בתמונה היא הטבלה שבעמוד, במלואה.** אותן שורות, אותן עמודות,
+    שורת "ועוד" ושורת הסך — הכל מגיע מאותו מטען שממנו נבנה ה-HTML, כך
+    ששני הפלטים אינם יכולים להיפרד. רוחבי העמודות נמדדים בגופן האמיתי
+    (measureText); הקנבס מתרחב עד 1600 פיקסלים לפני שנשברת שורה אחת,
+    ומעבר לכך עמודות הטקסט נשברות לכמה שורות. **שום תא אינו מקוצר.**
+    הגרסה הקודמת קיצרה עם "…" כל תא שלא נכנס ברוחב קבוע של 1080 פיקסלים,
+    והציגה 16 מתוך 30 שורות ו-6 מתוך 7 עמודות — חתוכה בשני הצירים.
 
     **הקרדיט נכתב בכיוון LTR.** בכיוון RTL מנוע הטקסט מסדר מחדש את "©"
     ואת ה-"@" סביב הטקסט הלטיני, והתוצאה על המסך הייתה "Cigarbutthunte7@ ©".
@@ -604,7 +641,7 @@ def export_js() -> str:
   "use strict";
 
 
-  var W = 1080, SCALE = 2, PAD = 48;
+  var W0 = 1080, WMAX = 1600, PAD = 48;
   var C = {
     bg: "#0c1a21", panel: "#122730", line: "#1e3a45", hair: "#16303a",
     text: "#eaf1f3", dim: "#8fa8b2", accent: "#4fd6bd",
@@ -613,15 +650,6 @@ def export_js() -> str:
   var F = function (w, s) {
     return w + " " + s + "px 'Segoe UI', system-ui, Arial, sans-serif";
   };
-
-  function ell(x, t, max) {
-    if (x.measureText(t).width <= max) { return t; }
-    var s = t;
-    while (s.length > 1 && x.measureText(s + "…").width > max) {
-      s = s.slice(0, -1);
-    }
-    return s + "…";
-  }
 
   function roundRect(x, l, t, w, h, r) {
     x.beginPath();
@@ -633,49 +661,128 @@ def export_js() -> str:
     x.closePath();
   }
 
+  function add(a, b) { return a + b; }
+
+  // **שבירת שורות, לא קיצור.** תא שרחב מהעמודה נשבר לפי מילים, בגופן
+  // שבו הוא מצויר; מילה בודדת שרחבה מהעמודה נשברת לפי תווים. בשום מקרה
+  // לא נזרק תו — הקיצור עם שלוש נקודות הוא מה שנראה כתמונה חתוכה.
+  function wrap(x, text, max) {
+    var words = String(text).split(" "), lines = [], cur = "";
+    words.forEach(function (w) {
+      var t = cur ? cur + " " + w : w;
+      if (!cur || x.measureText(t).width <= max) {
+        cur = t;
+      } else {
+        lines.push(cur);
+        cur = w;
+      }
+      while (cur.length > 1 && x.measureText(cur).width > max) {
+        var k = cur.length - 1;
+        while (k > 1 && x.measureText(cur.slice(0, k)).width > max) { k--; }
+        lines.push(cur.slice(0, k));
+        cur = cur.slice(k);
+      }
+    });
+    lines.push(cur);
+    return lines;
+  }
+
+  function cellFont(c, i, v, bold) {
+    if (bold) { return F(700, 21); }
+    if (i === 0 || c[1] === "value") { return F(600, 21); }
+    if (v.charAt(0) === "+" || v.charAt(0) === "-") { return F(600, 21); }
+    return F(400, 21);
+  }
+
+  // הסימן שבערך קובע את הצבע, לא שם העמודה — כך גם שינוי נטו בהון
+  // והיקף נטו בטבלת בעלי העניין נצבעים.
+  function cellColor(c, i, v, bold) {
+    if (bold || i === 0) { return C.text; }
+    if (v.charAt(0) === "-") { return C.down; }
+    if (v.charAt(0) === "+") { return C.up; }
+    if (c[1] === "value") { return C.text; }
+    return C.dim;
+  }
+
   function drawCard(d) {
     var rows = d.rows || [];
-    // טבלה עם עמודות משלה (למשל בעלי עניין) שולחת אותן במטען; אחרת
-    // נבחרת אחת משתי הפריסות הקבועות של טבלאות התקופה.
-    var cols = d.cols ? d.cols : d.showDays
-      ? [["נייר", "name", "rtl"], ["עסקאות", "n", "ltr"], ["ימים", "days", "ltr"],
-         ["היקף", "value", "rtl"], ["% מההון", "cap", "ltr"], ["מול הבסיס", "prem", "ltr"]]
-      : [["נייר", "name", "rtl"], ["עסקאות", "n", "ltr"],
-         ["היקף", "value", "rtl"], ["% מההון", "cap", "ltr"], ["מול הבסיס", "prem", "ltr"]];
-
-    // מדידה על קנבס זמני: רוחב עמודה נגזר מהתוכן שבה ולא מהערכה.
+    var cols = d.cols || [["נייר", "name", "rtl"], ["עסקאות", "n", "ltr"],
+      ["היקף", "value", "ltr"], ["% מההון", "cap", "ltr"],
+      ["מול הבסיס", "prem", "ltr"]];
+    var all = d.totalRow ? rows.concat([d.totalRow]) : rows;
+    var last = d.totalRow ? all.length - 1 : -1;
+    var HEADF = F(600, 16), GAP = 26, LINE = 28;
     var probe = document.createElement("canvas").getContext("2d");
-    var ROWF = F(400, 21), HEADF = F(600, 16);
-    var inner = W - PAD * 2, GAP = 22;
-    var wid = cols.map(function (c) {
+
+    function val(r, c) { var v = r[c[1]]; return v == null ? "" : String(v); }
+
+    // 1. רוחב טבעי לכל עמודה, ורוחב מינימלי לעמודות טקסט — בגופן האמיתי.
+    var nat = [], min = [];
+    cols.forEach(function (c, i) {
       probe.font = HEADF;
-      var m = probe.measureText(c[0]).width;
-      probe.font = c[1] === "name" ? F(600, 21) : ROWF;
-      rows.forEach(function (r) {
-        m = Math.max(m, probe.measureText(String(r[c[1]])).width);
+      var head = probe.measureText(c[0]).width, full = head, word = head;
+      all.forEach(function (r, n) {
+        var v = val(r, c);
+        probe.font = cellFont(c, i, v, n === last);
+        full = Math.max(full, probe.measureText(v).width);
+        v.split(" ").forEach(function (w) {
+          word = Math.max(word, probe.measureText(w).width);
+        });
       });
-      return Math.ceil(m) + GAP;
+      nat.push(Math.ceil(full) + GAP);
+      // עמודת מספרים לעולם אינה נשברת. עמודת טקסט נשברת עד המילה הרחבה
+      // בה, ומעבר ל-340 פיקסלים גם מילה נשברת — לפי תווים, בלי לאבד תו.
+      min.push(c[2] === "rtl"
+        ? Math.max(Math.ceil(head) + GAP, Math.min(Math.ceil(word) + GAP, 340))
+        : Math.ceil(full) + GAP);
     });
-    var sum = wid.reduce(function (a, b) { return a + b; }, 0);
-    // עמודת השם בולעת את העודף או נחתכת — כך הסכום תמיד שווה לרוחב הפנוי.
-    wid[0] += inner - sum;
-    var NAME_MIN = 150;
-    if (wid[0] < NAME_MIN) {
-      var need = NAME_MIN - wid[0];
-      wid[0] = NAME_MIN;
-      for (var i = 1; i < wid.length && need > 0; i++) {
-        var cut = Math.min(need, wid[i] - 60);
-        if (cut > 0) { wid[i] -= cut; need -= cut; }
-      }
+
+    // 2. רוחב הקנבס. הוא מתרחב עד WMAX לפני שנשברת שורה אחת; ואם גם
+    //    המינימום רחב מזה, הוא מתרחב עוד. הטבלה קובעת את הרוחב, לא להפך.
+    var sumNat = nat.reduce(add, 0), sumMin = min.reduce(add, 0);
+    var inner = Math.max(W0 - PAD * 2, Math.min(sumNat, WMAX - PAD * 2), sumMin);
+    var W = inner + PAD * 2;
+    var wid;
+    if (sumNat <= inner) {
+      wid = nat.slice();
+      wid[0] += inner - sumNat;
+    } else {
+      // רק עמודות הטקסט מתכווצות, כל אחת לפי המרווח שלה מעל המינימום.
+      var over = sumNat - inner;
+      var slack = nat.map(function (w, i) { return w - min[i]; });
+      var sumSlack = slack.reduce(add, 0);
+      wid = nat.map(function (w, i) { return w - over * slack[i] / sumSlack; });
     }
 
-    var HEAD = 214, ROW = 46, FOOT = 118;
-    var H = HEAD + 40 + ROW * rows.length + (d.more ? 40 : 0) + FOOT;
+    // 3. פירוק כל תא לשורות; גובה שורה לפי התא הגבוה בה.
+    var layout = all.map(function (r, n) {
+      var bold = n === last;
+      var cells = cols.map(function (c, i) {
+        var v = val(r, c);
+        probe.font = cellFont(c, i, v, bold);
+        return { v: v, lines: c[2] === "rtl" ? wrap(probe, v, wid[i] - GAP) : [v] };
+      });
+      var tall = cells.reduce(function (m, c) { return Math.max(m, c.lines.length); }, 1);
+      return { cells: cells, bold: bold, h: 18 + LINE * tall };
+    });
+
+    probe.font = F(400, 18);
+    var more = d.moreText ? wrap(probe, d.moreText, inner) : [];
+    var HEAD = 242, FOOT = 118;
+    var bodyH = layout.reduce(function (s, r) { return s + r.h; }, 0);
+    var H = HEAD + 40 + bodyH + (d.totalRow ? 10 : 0)
+      + (more.length ? 18 + 26 * more.length : 0) + FOOT;
+
+    // **קנבס גדול מדי יוצא ריק, בלי שגיאה.** iOS Safari מגביל את שטח
+    // הקנבס לכ-16.7 מיליון פיקסלים, ומעבר לכך toBlob מחזיר null. טבלה
+    // מלאה יכולה לחצות את זה ברזולוציה כפולה, ולכן הרזולוציה יורדת
+    // במקום שהתמונה תיעלם.
+    var S = Math.min(2, Math.sqrt(16e6 / (W * H)), 16000 / W, 16000 / H);
 
     var cv = document.createElement("canvas");
-    cv.width = W * SCALE; cv.height = H * SCALE;
+    cv.width = Math.round(W * S); cv.height = Math.round(H * S);
     var x = cv.getContext("2d");
-    x.scale(SCALE, SCALE);
+    x.scale(S, S);
     x.textBaseline = "alphabetic";
 
     // רקע
@@ -686,18 +793,23 @@ def export_js() -> str:
 
     var right = W - PAD, left = PAD;
 
-    // כותרת
+    // כותרת. כותרת שרחבה מהקנבס מקטינה גופן במקום לגלוש.
     x.direction = "rtl"; x.textAlign = "right";
     x.fillStyle = C.accent; x.font = F(700, 15);
     x.letterSpacing = "3px";
     x.fillText("TLV TASE VIEW", right, PAD + 18);
     x.letterSpacing = "0px";
-    x.fillStyle = C.text; x.font = F(700, 40);
+    var ts = 40;
+    x.font = F(700, ts);
+    while (ts > 22 && x.measureText(d.title).width > inner) {
+      ts -= 2; x.font = F(700, ts);
+    }
+    x.fillStyle = C.text;
     x.fillText(d.title, right, PAD + 68);
     x.fillStyle = C.dim; x.font = F(400, 19);
     x.fillText(d.kicker || "עסקאות מחוץ לבורסה", right, PAD + 98);
 
-    // שלוש אריחי סיכום
+    // שלושה אריחי סיכום
     var pills = d.pills || [["היקף", d.total], ["עסקאות", String(d.deals)],
                             ["ניירות", String(d.securities)]];
     var pw = (inner - 24) / 3, py = PAD + 118;
@@ -709,62 +821,65 @@ def export_js() -> str:
       x.direction = "rtl"; x.textAlign = "right";
       x.fillStyle = C.dim; x.font = F(500, 14);
       x.fillText(p[0], px + pw - 14, py + 23);
-      x.fillStyle = C.text; x.font = F(700, 24);
-      x.fillText(p[1], px + pw - 14, py + 50);
+      var ps = 24;
+      x.font = F(700, ps);
+      while (ps > 14 && x.measureText(String(p[1])).width > pw - 28) {
+        ps -= 1; x.font = F(700, ps);
+      }
+      x.fillStyle = C.text;
+      x.fillText(String(p[1]), px + pw - 14, py + 50);
     });
 
     // כותרות עמודות
     var y = HEAD + 24, cx = right;
     x.font = HEADF; x.fillStyle = C.dim;
     cols.forEach(function (c, i) {
-      x.direction = c[2]; x.textAlign = "right";
-      x.fillText(c[0], cx, y);
+      // כותרת עמודה היא טקסט עברי גם כשהערכים בה LTR. בכיוון LTR
+      // "% מהון החברה" צוירה הפוכה מהעמוד, עם האחוז בצד השמאלי.
+      x.direction = "rtl"; x.textAlign = "right";
+      x.fillText(c[0], cx - 10, y);
       cx -= wid[i];
     });
     x.strokeStyle = C.line; x.lineWidth = 1.5;
     x.beginPath(); x.moveTo(left, y + 13); x.lineTo(right, y + 13); x.stroke();
 
-    // שורות
-    rows.forEach(function (r, n) {
-      var top = y + 13 + ROW * n, base = top + 30;
-      if (n % 2 === 0) {
-        x.fillStyle = C.zebra;
-        roundRect(x, left, top + 4, inner, ROW - 6, 6); x.fill();
-      }
-      var vx = right;
-      cols.forEach(function (c, i) {
-        var v = String(r[c[1]]);
-        x.direction = c[2]; x.textAlign = "right";
-        if (i === 0) {
-          x.font = F(600, 21); x.fillStyle = C.text;
-        } else if (v.charAt(0) === "+" || v.charAt(0) === "-") {
-          // **הסימן שבערך הוא מה שקובע את הצבע, לא שם העמודה.** התנאי
-          // הקודם בדק c[1] === "prem", ולכן כל עמודה חתומה אחרת —
-          // למשל שינוי נטו בהון בטבלת בעלי העניין — יצאה אפורה, ומכירה
-          // ורכישה נראו זהות בתמונה.
-          x.font = F(600, 21);
-          x.fillStyle = v.charAt(0) === "-" ? C.down : C.up;
-        } else if (c[1] === "value") {
-          x.font = F(600, 21); x.fillStyle = C.text;
-        } else {
-          x.font = ROWF; x.fillStyle = C.dim;
-        }
-        // **כל עמודה נחתכת לרוחב שלה, לא רק עמודת השם.** שם חברה ארוך
-        // בעמודה צרה גלש החוצה ונראה כמו תמונה חתוכה; הקיצור נעשה אחרי
-        // בחירת הגופן, כי הרוחב נמדד בגופן שבו הטקסט באמת מצויר.
-        v = ell(x, v, wid[i] - 14);
-        x.fillText(v, vx - 10, base);
-        vx -= wid[i];
-      });
-    });
-
-    var ey = y + 13 + ROW * rows.length;
-    if (d.more) {
+    // שורות; אחריהן שורת ה"ועוד", ורק אז שורת הסך — הסדר שבעמוד. הסך
+    // כולל גם את מה שלא הוצג, וכשצויר לפני ה"ועוד" הוא נקרא כסכום של
+    // השורות שמעליו בלבד.
+    var top = y + 13, moreDone = false;
+    function drawMore() {
+      moreDone = true;
+      if (!more.length) { return; }
       x.direction = "rtl"; x.textAlign = "right";
       x.fillStyle = C.dim; x.font = F(400, 18);
-      x.fillText("ועוד " + d.more + " ניירות", right, ey + 26);
-      ey += 40;
+      more.forEach(function (ln, k) { x.fillText(ln, right, top + 26 + k * 26); });
+      top += 18 + 26 * more.length;
     }
+    layout.forEach(function (row, n) {
+      if (row.bold) {
+        drawMore();
+        top += 10;
+        x.strokeStyle = C.line; x.lineWidth = 1.5;
+        x.beginPath(); x.moveTo(left, top); x.lineTo(right, top); x.stroke();
+      } else if (n % 2 === 0) {
+        x.fillStyle = C.zebra;
+        roundRect(x, left, top + 4, inner, row.h - 6, 6); x.fill();
+      }
+      var vx = right;
+      row.cells.forEach(function (cell, i) {
+        var c = cols[i];
+        x.direction = c[2]; x.textAlign = "right";
+        x.font = cellFont(c, i, cell.v, row.bold);
+        x.fillStyle = cellColor(c, i, cell.v, row.bold);
+        cell.lines.forEach(function (ln, k) {
+          x.fillText(ln, vx - 10, top + 30 + k * LINE);
+        });
+        vx -= wid[i];
+      });
+      top += row.h;
+    });
+
+    if (!moreDone) { drawMore(); }
 
     // כותרת תחתונה
     x.strokeStyle = C.hair; x.lineWidth = 1;
@@ -772,7 +887,8 @@ def export_js() -> str:
     x.stroke();
     x.direction = "rtl"; x.textAlign = "right";
     x.fillStyle = C.dim; x.font = F(400, 16);
-    x.fillText("מקור: סקירת העסקאות מחוץ לבורסה של הבורסה לניירות ערך בתל אביב",
+    x.fillText(d.source ||
+               "מקור: סקירת העסקאות מחוץ לבורסה של הבורסה לניירות ערך בתל אביב",
                right, H - FOOT + 44);
     // **הקרדיט נכתב LTR.** בכיוון RTL המנוע מסדר מחדש את "©" ואת ה-"@"
     // סביב הטקסט הלטיני, והתוצאה על המסך הייתה "Cigarbutthunte7@ ©".
@@ -784,8 +900,15 @@ def export_js() -> str:
     x.fillText("tlvtaseview.com", left, H - FOOT + 78);
     return cv;
   }
-  function save(c, name) {
+  // חשוף לבדיקה: מציירים את הכרטיס ומשווים אותו לטבלה שבעמוד, בלי
+  // ללחוץ על הכפתור ולהוריד קובץ.
+  window.tlvDrawCard = drawCard;
+
+  function save(c, name, fail) {
+    // toBlob מחזיר null כשהקנבס גדול מדי לדפדפן. בלי הבדיקה הכפתור אמר
+    // "התמונה הורדה" ושום קובץ לא נוצר.
     c.toBlob(function (b) {
+      if (!b) { fail(); return; }
       var u = URL.createObjectURL(b), a = document.createElement("a");
       a.href = u; a.download = name; document.body.appendChild(a); a.click();
       document.body.removeChild(a);
@@ -832,7 +955,11 @@ def export_js() -> str:
       var was = b.textContent;
       b.textContent = "מייצא…";
       try {
-        save(drawCard(d), "tlv-otc-" + b.getAttribute("data-key") + ".png");
+        save(drawCard(d), "tlv-otc-" + b.getAttribute("data-key") + ".png",
+          function () {
+            if (window.console) { console.error("otc export: toBlob returned null"); }
+            b.textContent = "הייצוא נכשל";
+          });
         b.textContent = "התמונה הורדה";
       } catch (e) {
         // הכשל אינו נאמר על המסך — אבל הוא כן נאמר לקונסולה. בליעה
