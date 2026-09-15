@@ -18,6 +18,7 @@ from pathlib import Path
 import markdown
 import yaml
 
+import coverlist
 import nadlan
 import otc
 import offex
@@ -53,7 +54,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a><a href="{root}reports.html">דיווחים</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a><a href="{root}reports.html">דיווחים</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
   <a class="brand" href="{root}index.html">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
 </header>
 <main>
@@ -1095,6 +1096,24 @@ def main() -> int:
                 PAGE.format(title=f"{title} · {site_title}", site_title=site_title,
                             root="", body=frag.read_text(encoding="utf-8")),
                 encoding="utf-8")
+
+    # רשימת הכיסוי. הרשימה עצמה היא HTML מלא ונקראת גם בלי JS; עמודת
+    # החשיבות נטענת בדפדפן מ-/api/importance ומוצגת לבעלים בלבד.
+    _cov = coverlist.load()
+    (OUT / "coverage.html").write_text(
+        PAGE.format(title=f"רשימת הכיסוי · {site_title}", site_title=site_title,
+                    root="", body=coverlist.page(_cov)),
+        encoding="utf-8")
+    _cos = _cov.get("companies") or []
+    _nomaya = [c.get("name_he") or "?" for c in _cos if not c.get("maya_company_id")]
+    print(f"::notice::רשימת הכיסוי: {len(_cos)} חברות")
+    if _nomaya:
+        # maya_pull ו-maya_watch מדלגים בשקט על חברה בלי מזהה מאיה, ולכן
+        # החוסר נאמר כאן — אחרת חברה חדשה פשוט אינה מקבלת דיווחים.
+        print("::warning title=חברות כיסוי בלי מזהה מאיה::"
+              + ", ".join(_nomaya[:15])
+              + (f" ועוד {len(_nomaya) - 15}" if len(_nomaya) > 15 else "")
+              + " — הדיווחים שלהן אינם נמשכים. להריץ ingest/resolve_tase_ids.py.")
 
     (OUT / "nadlan.html").write_text(
         PAGE.format(title=f"שוק הדיור · {site_title}", site_title=site_title,
