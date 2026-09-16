@@ -119,6 +119,8 @@ what_happened, macro, micro, caveats, watch_next, terms).
   change — עד 12 מילים; period — עד 8 מילים. הסבר מונח שייך ל-terms, לא לשדות האלה.
 - what_happened: שתיים-שלוש פסקאות. מה פורסם, מה הניע את התוצאה לפי ההודעה,
   ומה השתנה מול הפרסום הקודם (הניתוחים הקודמים באותו נושא מופיעים למטה).
+  מקם את הנתון בהקשר כשההיסטוריה שלמטה מאפשרת — "הגבוה מאז", "שלישי ברציפות" —
+  ורק ממה שמופיע בה. בסדרה מקורית (לא מנוכה עונתיות) אל תסיק מגמה משינוי חודשי.
 - macro: שניים עד ארבעה אייטמים, **נושא אחד לכל אייטם** — אינפלציה וריבית בנק
   ישראל, תשואות אג"ח ושקל, צמיחה וצריכה, שוק העבודה, פיסקלי — מה שרלוונטי.
   body של 80–150 מילים: המנגנון, הכיוון, הגודל כשאפשר לכמת, ומה יאשר או יפריך.
@@ -156,6 +158,10 @@ what_happened, macro, micro, caveats, watch_next, terms).
 
 סדרות מדדי מחירים (13 חודשים אחרונים; ערך המדד · שינוי חודשי % · שינוי שנתי %):
 {series}
+
+היסטוריה של המדדים העיקריים (13 תצפיות אחרונות; [תדירות · יחידה · סוג הנתון]; ברבעונים
+התקופה היא חודש סוף הרבעון):
+{history}
 
 === לוח פרסומים קרוב (21 יום) ===
 {calendar}
@@ -230,12 +236,23 @@ def context(snap: dict, rel: dict, analyses: list[dict]) -> dict:
     cal = "\n".join(
         f"- {c['date']}{' ' + c['time'] if c.get('time') else ''} · {c['title']} ({c.get('interval') or '—'})"
         for c in (snap.get("calendar") or []) if c.get("relevant")) or "—"
+    # ההיסטוריה מאפשרת למקם נתון ("הגבוה מאז...") מתוך נתוני הלמ"ס עצמם,
+    # במקום לכתוב "גבוה" בלי בסיס או להשלים מהזיכרון.
+    names = {str(i.get("series")): (i.get("label") or i.get("title") or "")
+             for i in snap.get("indicators") or []}
+    hist = []
+    for sid, h in (snap.get("history") or {}).items():
+        pts = (h.get("points") or [])[-13:]
+        if pts:
+            hist.append(f"- {names.get(sid) or sid} [{h.get('time') or '—'} · {h.get('unit') or '—'} · "
+                        f"{h.get('adj') or '—'}]: " + "; ".join(f"{p['period']} {p['value']:g}" for p in pts))
     prev = [a for a in analyses
             if a.get("topic") == rel.get("topic") and not a.get("skip")
             and (a.get("date") or "") < (rel.get("date") or "9999")]
     prev.sort(key=lambda a: a.get("date") or "", reverse=True)
     prv = "\n".join(f"- {a.get('date')} · {a.get('title')}: {a.get('headline')}" for a in prev[:2]) or "—"
-    return {"indicators": ind, "series": "\n".join(ser) or "—", "calendar": cal, "previous": prv}
+    return {"indicators": ind, "series": "\n".join(ser) or "—", "history": "\n".join(hist) or "—",
+            "calendar": cal, "previous": prv}
 
 
 def parse(out: str) -> dict | None:

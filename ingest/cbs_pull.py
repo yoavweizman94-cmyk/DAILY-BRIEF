@@ -436,6 +436,53 @@ def pull_price_series() -> dict:
     return out
 
 
+# **היסטוריה לכל מדד עיקרי, לא רק ערך וקודם.** דף הבית של הלמ"ס נותן שני
+# מספרים לכל מדד, ומהם אי אפשר לדעת אם 3.1% אבטלה הוא שיא או שגרה. ממשק
+# הסדרות מחזיר לכל מזהה (CbsIndicatorsSerie) את התצפיות האחרונות, עם יחידה,
+# תדירות וסוג הנתון (מקורי או מנוכה עונתיות) — וסוג הנתון קובע איזה שינוי
+# בכלל מותר להציג: בסדרה מקורית השינוי החודשי הוא בעיקר עונתיות.
+# מדדי המחירים אינם כאן: הם נמשכים מממשק המחירים, שנותן גם שינוי חודשי ושנתי.
+HISTORY_LAST = 40
+
+
+def pull_indicator_history(indicators: list[dict]) -> dict:
+    price_codes = {str(c) for c in PRICE_SERIES}
+    ids = [sid for sid in dict.fromkeys(str(i.get("series") or "").strip() for i in indicators)
+           if sid.isdigit() and sid not in price_codes]
+    out, failed = {}, []
+    for sid in ids:
+        try:
+            d = _get_json(f"https://apis.cbs.gov.il/series/data/list?id={sid}"
+                          f"&format=json&download=false&last={HISTORY_LAST}")
+        except Exception as e:  # noqa: BLE001 — סדרה אחת שנכשלה אינה מפילה את השאר
+            failed.append(f"{sid} ({type(e).__name__})")
+            continue
+        series = (((d or {}).get("DataSet") or {}).get("Series") or [None])[0]
+        if not isinstance(series, dict):
+            failed.append(f"{sid} (ריק)")
+            continue
+        pts = []
+        for o in series.get("obs") or []:
+            try:
+                v = float(o.get("Value"))
+            except (TypeError, ValueError):
+                continue
+            tp = str(o.get("TimePeriod") or "")
+            if re.fullmatch(r"\d{4}-\d{2}", tp):
+                pts.append({"period": tp, "value": v})
+        pts.sort(key=lambda x: x["period"])
+        out[sid] = {"time": (series.get("time") or {}).get("name"),
+                    "unit": (series.get("unit") or {}).get("name"),
+                    "adj": (series.get("data") or {}).get("name"),
+                    "points": pts}
+    if ids and not out:
+        raise RuntimeError("כל סדרות ההיסטוריה נכשלו: " + ", ".join(failed[:6]))
+    if failed:
+        print("::warning title=היסטוריית מדדי הלמ\"ס חלקית::" + ", ".join(failed[:10])
+              + " — לסדרות האלה נשמרת ההיסטוריה מהריצה הקודמת.")
+    return out
+
+
 # --------------------------------------------------------------------------
 # כתיבה
 
@@ -512,6 +559,18 @@ def main() -> int:
     indicators = attempt("מדדים ואינדיקטורים", pull_indicators, None)
     series = attempt("סדרות מדדי מחירים", pull_price_series, None)
 
+    snap_path = OUT / "snapshot.json"
+    prev = {}
+    if snap_path.exists():
+        try:
+            prev = json.loads(snap_path.read_text(encoding="utf-8"))
+        except ValueError:
+            prev = {}
+    history = attempt("היסטוריית מדדים",
+                      lambda: pull_indicator_history(
+                          indicators if indicators is not None else prev.get("indicators") or []),
+                      None)
+
     if releases is None and calendar is None and indicators is None and series is None:
         print("::error title=הלמ\"ס לא זמין::כל המקורות נכשלו. אם השגיאה היא "
               "RemoteDisconnected, בדוק שה-User-Agent עדיין נשלח כדפדפן מלא.")
@@ -522,14 +581,13 @@ def main() -> int:
 
     changed_rows = upsert_releases(releases) if releases is not None else 0
 
-    snap_path = OUT / "snapshot.json"
-    prev = {}
-    if snap_path.exists():
-        try:
-            prev = json.loads(snap_path.read_text(encoding="utf-8"))
-        except ValueError:
-            prev = {}
     now = datetime.now(IL).isoformat(timespec="minutes")
+    # סדרה שנכשלה בריצה הזו שומרת את ההיסטוריה הקודמת שלה; סדרה של מדד שירד
+    # מדף הבית של הלמ"ס נמחקת, כדי שהקובץ לא יצבור שאריות.
+    live_ids = {str(i.get("series") or "") for i in
+                (indicators if indicators is not None else prev.get("indicators") or [])}
+    merged_history = {k: v for k, v in (prev.get("history") or {}).items() if k in live_ids}
+    merged_history.update(history or {})
     # מקור שנכשל אינו מוחק את מה שנמשך בהצלחה בריצה קודמת: עדיף לוח פרסומים
     # של הבוקר על עמוד ריק. מועד המשיכה נשמר לכל מקור בנפרד.
     snap = {
@@ -537,13 +595,14 @@ def main() -> int:
         "calendar": calendar if calendar is not None else prev.get("calendar", []),
         "indicators": indicators if indicators is not None else prev.get("indicators", []),
         "series": series if series is not None else prev.get("series", {}),
+        "history": merged_history,
         "source_at": {
             k: (now if v is not None else (prev.get("source_at") or {}).get(k))
             for k, v in (("calendar", calendar), ("indicators", indicators), ("series", series),
-                         ("releases", releases))},
+                         ("history", history), ("releases", releases))},
         "errors": errors,
     }
-    body_changed = any(snap[k] != prev.get(k) for k in ("calendar", "indicators", "series"))
+    body_changed = any(snap[k] != prev.get(k) for k in ("calendar", "indicators", "series", "history"))
     snap_path.write_text(json.dumps(snap, ensure_ascii=False, indent=1), encoding="utf-8")
 
     # **פרסום שבלוח ואינו ברשימות הוא אתר-משנה שאינו נסרק.** כך בדיוק נמצא
@@ -575,7 +634,7 @@ def main() -> int:
     print(f"::notice::הלמ\"ס: {n_rel} הודעות ב-{LOOKBACK_DAYS} ימים ({n_ok} רלוונטיות, "
           f"{n_pdf} עם גוף מ-PDF), {changed_rows} חדשות או מעודכנות · {len(pending)} ממתינות "
           f"לניתוח · לוח פרסומים {len(snap['calendar'])} · מדדים {len(snap['indicators'])} · "
-          f"סדרות {len(snap['series'])}")
+          f"סדרות {len(snap['series'])} · היסטוריה ל-{len(snap['history'])} מדדים")
 
     gh = os.environ.get("GITHUB_OUTPUT")
     if gh:
