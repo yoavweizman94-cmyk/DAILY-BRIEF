@@ -445,32 +445,46 @@ def pull_price_series() -> dict:
 HISTORY_LAST = 40
 
 
+def _history_points(series: dict) -> list[dict]:
+    pts = []
+    for o in series.get("obs") or []:
+        try:
+            v = float(o.get("Value"))
+        except (TypeError, ValueError):
+            continue
+        tp = str(o.get("TimePeriod") or "")
+        if re.fullmatch(r"\d{4}-\d{2}", tp):
+            pts.append({"period": tp, "value": v})
+    pts.sort(key=lambda x: x["period"])
+    return pts
+
+
 def pull_indicator_history(indicators: list[dict]) -> dict:
     price_codes = {str(c) for c in PRICE_SERIES}
     ids = [sid for sid in dict.fromkeys(str(i.get("series") or "").strip() for i in indicators)
            if sid.isdigit() and sid not in price_codes]
     out, failed = {}, []
     for sid in ids:
-        try:
-            d = _get_json(f"https://apis.cbs.gov.il/series/data/list?id={sid}"
-                          f"&format=json&download=false&last={HISTORY_LAST}")
-        except Exception as e:  # noqa: BLE001 — סדרה אחת שנכשלה אינה מפילה את השאר
-            failed.append(f"{sid} ({type(e).__name__})")
-            continue
-        series = (((d or {}).get("DataSet") or {}).get("Series") or [None])[0]
-        if not isinstance(series, dict):
-            failed.append(f"{sid} (ריק)")
-            continue
-        pts = []
-        for o in series.get("obs") or []:
+        series, pts, why = None, [], ""
+        # **תשובה בלי תצפיות היא כשל, ומנוסה שוב.** בריצה הראשונה ב-CI
+        # (16/09/2026) סדרת האוכלוסייה חזרה עם obs ריק — מקומית, דקות אחר כך,
+        # אותה בקשה החזירה 40 תצפיות — והרשומה הריקה דרסה היסטוריה ומחקה
+        # את קו המגמה מהעמוד.
+        for _ in range(2):
             try:
-                v = float(o.get("Value"))
-            except (TypeError, ValueError):
+                d = _get_json(f"https://apis.cbs.gov.il/series/data/list?id={sid}"
+                              f"&format=json&download=false&last={HISTORY_LAST}")
+            except Exception as e:  # noqa: BLE001 — סדרה אחת שנכשלה אינה מפילה את השאר
+                why = type(e).__name__
                 continue
-            tp = str(o.get("TimePeriod") or "")
-            if re.fullmatch(r"\d{4}-\d{2}", tp):
-                pts.append({"period": tp, "value": v})
-        pts.sort(key=lambda x: x["period"])
+            series = (((d or {}).get("DataSet") or {}).get("Series") or [None])[0]
+            pts = _history_points(series) if isinstance(series, dict) else []
+            if pts:
+                break
+            why = "בלי תצפיות"
+        if not pts:
+            failed.append(f"{sid} ({why or 'ריק'})")
+            continue
         out[sid] = {"time": (series.get("time") or {}).get("name"),
                     "unit": (series.get("unit") or {}).get("name"),
                     "adj": (series.get("data") or {}).get("name"),
@@ -586,7 +600,8 @@ def main() -> int:
     # מדף הבית של הלמ"ס נמחקת, כדי שהקובץ לא יצבור שאריות.
     live_ids = {str(i.get("series") or "") for i in
                 (indicators if indicators is not None else prev.get("indicators") or [])}
-    merged_history = {k: v for k, v in (prev.get("history") or {}).items() if k in live_ids}
+    merged_history = {k: v for k, v in (prev.get("history") or {}).items()
+                      if k in live_ids and v.get("points")}
     merged_history.update(history or {})
     # מקור שנכשל אינו מוחק את מה שנמשך בהצלחה בריצה קודמת: עדיף לוח פרסומים
     # של הבוקר על עמוד ריק. מועד המשיכה נשמר לכל מקור בנפרד.
