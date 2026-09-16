@@ -18,6 +18,7 @@ from pathlib import Path
 import markdown
 import yaml
 
+import cbsdata
 import coverlist
 import nadlan
 import otc
@@ -54,7 +55,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a><a href="{root}reports.html">דיווחים</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a><a href="{root}reports.html">דיווחים</a><a href="{root}cbs.html">למ"ס</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
   <a class="brand" href="{root}index.html">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
 </header>
 <main>
@@ -1096,6 +1097,17 @@ def main() -> int:
                 PAGE.format(title=f"{title} · {site_title}", site_title=site_title,
                             root="", body=frag.read_text(encoding="utf-8")),
                 encoding="utf-8")
+
+    # נתוני הלמ"ס: מדדים, לוח פרסומים, הודעות והניתוחים שלהן. הנתונים
+    # מגיעים מצנרת cbs-watch; העמוד נבנה בכל בנייה, כך שכל צנרת שפורסת
+    # מציגה את הגרסה האחרונה שנשמרה בריפו התוכן.
+    _cbs = cbsdata.load()
+    (OUT / "cbs.html").write_text(
+        PAGE.format(title=f'נתוני הלמ"ס · {site_title}', site_title=site_title,
+                    root="", body=cbsdata.page(_cbs)),
+        encoding="utf-8")
+    for _line in cbsdata.report(_cbs):
+        print(_line)
 
     # רשימת הכיסוי. הרשימה עצמה היא HTML מלא ונקראת גם בלי JS; עמודת
     # החשיבות נטענת בדפדפן מ-/api/importance ומוצגת לבעלים בלבד.

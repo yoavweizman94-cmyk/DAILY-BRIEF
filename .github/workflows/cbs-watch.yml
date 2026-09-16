@@ -1,0 +1,135 @@
+name: CBS Watch
+
+# נתוני הלמ"ס: הודעות לתקשורת, לוח פרסומים ומדדים עיקריים — ולכל הודעה
+# רלוונטית ניתוח השלכות מאקרו ומיקרו ברמת חברות הבורסה. העמוד: cbs.html.
+#
+# **שלוש ריצות ביום, לפי מועדי הפרסום של הלמ"ס.** רוב ההודעות יוצאות
+# ב-13:00 שעון ישראל, ומדד המחירים לצרכן ב-18:30. cron של GitHub הוא UTC,
+# וישראל מזיזה שעון פעמיים בשנה, ולכן השעות נבחרו כך שכל ריצה נופלת אחרי
+# מועד הפרסום בשתי העונות:
+#   06:00 UTC — 09:00 קיץ / 08:00 חורף: לוח פרסומים ומדדים לפני יום העבודה
+#   11:15 UTC — 14:15 קיץ / 13:15 חורף: אחרי פרסומי 13:00
+#   16:45 UTC — 19:45 קיץ / 18:45 חורף: אחרי מדד המחירים לצרכן
+#
+# **ריצה בלי הודעה חדשה אינה נוגעת במודל.** היא אינה מתקינה את ה-CLI, ובונה
+# ופורסת רק אם משהו בנתונים השתנה — לוח הפרסומים או המדדים.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+    - cron: "15 11 * * *"
+    - cron: "45 16 * * *"
+  # הפעלה בדחיפת קובץ טריגר, כמו בשאר הצנרת — שיגור workflow מרחוק דורש
+  # אסימון GitHub שאינו קיים בסביבת העבודה.
+  push:
+    paths:
+      - ".trigger/cbs-watch.json"
+  workflow_dispatch: {}
+
+# אין כתיבה לריפו הציבורי: הנתונים והניתוחים נשמרים בריפו התוכן הפרטי.
+permissions:
+  contents: read
+
+concurrency:
+  group: cbs-watch
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Jerusalem
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Install collector dependencies
+        run: pip install pyyaml truststore certifi pypdf
+
+      # כשל מלא (כל המקורות) מפיל את הריצה באדום עם הסיבה באנוטציה. כשל
+      # חלקי — מקור אחד, או PDF שלא נקרא — נאמר כאזהרה, והשאר ממשיך.
+      - name: Collect CBS data
+        id: collect
+        run: python ingest/cbs_pull.py
+
+      - name: Nothing changed
+        if: steps.collect.outputs.new != 'yes' && steps.collect.outputs.changed != 'yes'
+        run: echo "אין הודעה חדשה ולא השתנה דבר בנתונים — יוצאים בלי מודל ובלי פריסה."
+
+      - uses: actions/setup-node@v7
+        if: steps.collect.outputs.new == 'yes' || steps.collect.outputs.changed == 'yes'
+        with:
+          node-version: "20"
+
+      - name: Install analyzer
+        if: steps.collect.outputs.new == 'yes'
+        run: npm install -g @anthropic-ai/claude-code
+
+      # כישלון בניתוח אינו מפיל את הריצה: הנתונים עצמם עדיין שווים שמירה
+      # ופריסה, והודעה שלא נותחה מוצגת בעמוד כממתינה. הסיבה עולה לאנוטציה.
+      # **עלות.** נמדד 16/09/2026: ברירת המחדל של ה-CLI עלתה 2.09 דולר ו-525
+      # שניות להודעה אחת (רובן חשיבה פנימית); Sonnet במאמץ בינוני עם פלט מובנה
+      # — 0.60 עד 0.81 דולר ו-4–7 דקות, כשליש. בקצב של כהודעה רלוונטית ביום
+      # זה ההפרש בין כ-80 לכ-25–30 דולר בחודש. CBS_MAX_USD הוא תקרה לקריאה
+      # בודדת: ניתוח שחורג ממנה נקטע, נרשם ככשל, ומנוסה שוב בריצה הבאה.
+      - name: Analyze new releases
+        if: steps.collect.outputs.new == 'yes'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL: claude-sonnet-5
+          CBS_EFFORT: medium
+          CBS_MAX_USD: "1.5"
+          CBS_MAX_ANALYSES: "6"
+          CBS_RUN_BUDGET_SEC: "1500"
+        run: |
+          set +e
+          python scripts/analyze_cbs.py 2>&1 | tee analyze.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            echo "::warning title=ניתוח הלמ\"ס נכשל (קוד $rc)::הנתונים נשמרים ונפרסים; הניתוח ינוסה שוב בריצה הבאה."
+          fi
+          exit 0
+
+      - name: Save content
+        if: steps.collect.outputs.new == 'yes' || steps.collect.outputs.changed == 'yes'
+        run: CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push cbs
+
+      # **התוכן נמשך שוב לפני הבנייה.** מאז המשיכה בתחילת הריצה צינור אחר
+      # עשוי היה לדחוף, ובנייה על עותק ישן הייתה דורסת באתר תוכן חדש יותר.
+      - name: Refresh content before build
+        if: steps.collect.outputs.new == 'yes' || steps.collect.outputs.changed == 'yes'
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Build site
+        if: steps.collect.outputs.new == 'yes' || steps.collect.outputs.changed == 'yes'
+        run: |
+          pip install -r requirements.txt
+          python site/build.py
+
+      - name: Check inline JS
+        if: steps.collect.outputs.new == 'yes' || steps.collect.outputs.changed == 'yes'
+        run: python scripts/check_inline_js.py
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.collect.outputs.new == 'yes' || steps.collect.outputs.changed == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # pipefail: בלי זה קוד היציאה הוא של tee, ופריסה שנכשלה נראית ירוקה
+          set -o pipefail
+          (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
+          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
+            echo "::error::הפריסה לא החזירה כתובת"; exit 1; }
