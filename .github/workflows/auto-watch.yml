@@ -1,0 +1,129 @@
+name: Auto Watch
+
+# גיליון ענף הרכב (auto.html): כותרות מישראל ומהעולם — יבואניות, מיסוי, מכסים,
+# חשמלי, יצרנים סיניים, שרשרת אספקה, ליסינג וביטוח — וסקירת מגמות דרך החברות
+# הנסחרות בשרשרת. מקורות ונושאים: config/auto.yaml.
+#
+# **שלוש ריצות ביום**, בבוקר, בצהריים ובערב. השעות מוזזות מצנרת הלמ"ס (06:00,
+# 11:15, 16:45 UTC) כדי ששתי פריסות של האתר לא ירוצו באותן דקות:
+#   05:10 UTC — 08:10 קיץ / 07:10 חורף
+#   10:40 UTC — 13:40 קיץ / 12:40 חורף
+#   15:50 UTC — 18:50 קיץ / 17:50 חורף
+#
+# **הסקירה אינה נכתבת בכל ריצה.** auto_pull מחליט: לפחות 6 כותרות חדשות מאז
+# הסקירה הקודמת, ולפחות 5 שעות אחריה. ריצה בלי כותרת חדשה אינה בונה ואינה פורסת.
+on:
+  schedule:
+    - cron: "10 5 * * *"
+    - cron: "40 10 * * *"
+    - cron: "50 15 * * *"
+  # הפעלה בדחיפת קובץ טריגר, כמו בשאר הצנרת. "force": true בקובץ כופה סקירה.
+  push:
+    paths:
+      - ".trigger/auto-watch.json"
+  workflow_dispatch: {}
+
+# אין כתיבה לריפו הציבורי: הכותרות והסקירות נשמרות בריפו התוכן הפרטי.
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-watch
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Jerusalem
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Install collector dependencies
+        run: pip install pyyaml truststore certifi curl_cffi
+
+      # כשל של כל המקורות מפיל את הריצה באדום; מקור בודד שנכשל — אזהרה.
+      - name: Collect auto headlines
+        id: collect
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && grep -q '"force": *true' .trigger/auto-watch.json; then
+            export AUTO_FORCE=1
+          fi
+          python ingest/auto_pull.py
+
+      - name: Nothing changed
+        if: steps.collect.outputs.changed != 'yes'
+        run: echo "אין כותרת חדשה ואין סקירה לכתוב — יוצאים בלי מודל ובלי פריסה."
+
+      - uses: actions/setup-node@v7
+        if: steps.collect.outputs.analyze == 'yes'
+        with:
+          node-version: "20"
+
+      - name: Install analyzer
+        if: steps.collect.outputs.analyze == 'yes'
+        run: npm install -g @anthropic-ai/claude-code
+
+      # כישלון בסקירה אינו מפיל את הריצה: הכותרות עצמן שוות שמירה ופריסה, והעמוד
+      # אומר כשהסקירה ישנה. **עלות:** קריאה אחת לסקירה, Sonnet במאמץ בינוני,
+      # עם תקרה של דולר לקריאה.
+      - name: Analyze trends
+        if: steps.collect.outputs.analyze == 'yes'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL: claude-sonnet-5
+          AUTO_EFFORT: medium
+          AUTO_MAX_USD: "1"
+        run: |
+          set +e
+          python scripts/analyze_auto.py 2>&1 | tee analyze.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            echo "::warning title=סקירת הרכב נכשלה (קוד $rc)::הכותרות נשמרות ונפרסות; הסקירה תנוסה שוב בריצה הבאה."
+          fi
+          exit 0
+
+      - name: Save content
+        if: steps.collect.outputs.changed == 'yes'
+        run: CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push auto
+
+      # התוכן נמשך שוב לפני הבנייה: צנרת אחרת עשויה הייתה לדחוף מאז, ובנייה על
+      # עותק ישן הייתה דורסת באתר תוכן חדש יותר.
+      - name: Refresh content before build
+        if: steps.collect.outputs.changed == 'yes'
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Build site
+        if: steps.collect.outputs.changed == 'yes'
+        run: |
+          pip install -r requirements.txt
+          python site/build.py
+
+      - name: Check inline JS
+        if: steps.collect.outputs.changed == 'yes'
+        run: python scripts/check_inline_js.py
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.collect.outputs.changed == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
+          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
+            echo "::error::הפריסה לא החזירה כתובת"; exit 1; }

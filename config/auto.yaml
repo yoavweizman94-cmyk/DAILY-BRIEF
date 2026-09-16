@@ -1,0 +1,185 @@
+# ---------------------------------------------------------------------------
+# גיליון ענף הרכב (auto.html) — מקורות, נושאים וחברות.
+#
+# נאסף ע"י ingest/auto_pull.py ומנותח ע"י scripts/analyze_auto.py, בצנרת
+# auto-watch שלוש פעמים ביום. הכותרות נשמרות בריפו התוכן תחת output/auto/.
+#
+# **למה גיליון נפרד ולא עוד נושא בחדשות.** הנושא auto-ev בעמודי הנושאים
+# נשען על הפידים הכלליים, ובשבוע שנמדד (08–16/09/2026) 82 הכותרות שלו היו
+# ברובן טעינה ואוטובוסים חשמליים באירופה — וכמעט שום דבר על שוק הרכב
+# בישראל, על היבואניות או על שרשרת האספקה. כאן המקורות נבחרו לשאלה הזו.
+# ---------------------------------------------------------------------------
+
+# region: il | world — באיזו עמודה הכותרת מוצגת ואיך היא מוצגת למודל.
+# business_only: פיד צרכני (השקות דגמים, מבחני דרכים) — נכנסת ממנו רק
+# כותרת שיש בה מילה עסקית מ-business_words.
+# auto_only: אתר אנרגיה נקייה שמכסה גם סולארי, פחם ורכבות — נכנסת ממנו רק
+# כותרת שיש בה מילה מ-auto_words. בלי זה "בית משפט חסם פתיחת תחנת כוח פחמית"
+# נכנס לגיליון הרכב דרך המילה plant.
+feeds:
+  - {name: "ynet רכב",          url: "https://www.ynet.co.il/Integration/StoryRss550.xml", region: il}
+  - {name: "מעריב רכב",         url: "https://www.maariv.co.il/Rss/RssFeedsRechev", region: il}
+  - {name: "Automotive World",  url: "https://www.automotiveworld.com/feed/", region: world}
+  - {name: "Just Auto",         url: "https://www.just-auto.com/feed/", region: world}
+  - {name: "CnEVPost",          url: "https://cnevpost.com/feed/", region: world, business_only: true}
+  - {name: "Electrek",          url: "https://electrek.co/feed/", region: world, business_only: true, auto_only: true}
+  - {name: "InsideEVs",         url: "https://insideevs.com/rss/articles/all/", region: world, business_only: true, auto_only: true}
+  - {name: "Electrive",         url: "https://www.electrive.com/feed/", region: world, business_only: true, auto_only: true}
+
+# Google News: כותרות מאתרים שאין להם RSS פתוח — כלכליסט, גלובס, TheMarker,
+# אוטו, אתר הרכב של ישראל, רויטרס. "when:" קובע את חלון החיפוש, והכפילויות
+# בין ריצות נופלות בדה-דופ לפי כתובת וכותרת.
+google_news:
+  il:
+    - "שוק הרכב when:2d"
+    - "יבואני רכב when:3d"
+    - "מסירות רכב when:3d"
+    - "רכב חשמלי when:2d"
+    - "רכב סיני when:3d"
+    - "מס קנייה רכב when:7d"
+    - "ליסינג רכב when:3d"
+    - "\"דלק רכב\" when:7d"
+    - "\"קרסו מוטורס\" when:7d"
+    - "\"יוניברסל מוטורס\" when:7d"
+    - "\"אלדן תחבורה\" when:7d"
+  world:
+    - "site:reuters.com automakers when:2d"
+    - "automakers tariffs when:2d"
+    - "auto industry supply chain when:2d"
+    - "auto parts suppliers when:3d"
+    - "car registrations europe when:7d"
+    - "china car exports when:7d"
+    - "EV battery costs automakers when:3d"
+
+# מקורות שחוזרים בתוצאות החיפוש בעברית ואינם חדשות רכב: אתר וייטנאמי
+# שמתרגם כתבות, ספורט, חדשות מקומיות ואגרגטורים שמשכפלים כותרות.
+exclude_sources: ["Vietnam.vn", "Sport5", "ספורט 5", "kikar.co.il", "כיכר השבת", "מיינט", "mynet"]
+
+# **חיפוש העולם מוגבל למוציאים לאור מוכרים.** בלי הרשימה הזו, מתוך 185
+# כותרות עולם בריצה הראשונה (16/09/2026) עשרות היו מאתרי השקעות אוטומטיים,
+# אתרי צרכנות הודיים ו"שרשרת אספקה" קוונטית — כל מה שמכיל את מילות החיפוש.
+# ההתאמה היא על שם המקור כפי ש-Google News מחזיר אותו, בלי תלות ברישיות.
+world_sources: ["Reuters", "Bloomberg", "Financial Times", "Wall Street Journal", "WSJ", "CNBC",
+                "Automotive News", "Automotive World", "Just Auto", "Automotive Logistics",
+                "Automotive Dive", "Supply Chain Dive", "Gasgoo", "CnEVPost", "electrive", "Electrek",
+                "InsideEVs", "S&P Global", "Nikkei", "AP News", "Associated Press", "BBC",
+                "The Guardian", "Politico", "Fortune", "Forbes", "Business Insider", "Yahoo Finance",
+                "MarketWatch", "Barron's", "The Economist", "Detroit Free Press", "The Detroit News",
+                "Autocar", "TechCrunch", "The Verge", "JATO", "ICCT", "theicct", "SMMT", "ACEA",
+                "Benchmark", "Fastmarkets", "South China Morning Post", "Caixin", "JoongAng",
+                "Handelsblatt", "DW", "Euronews", "Axios", "New York Times", "Washington Post",
+                "FreightWaves", "Mining.com", "Argus", "Kallanish", "Nikkei Asia", "Japan Times",
+                "Korea Herald", "Korea Times", "Economic Times"]
+
+# מבחני דרכים, השוואות, השקות וטורי צרכנות — חומר לקונה, לא לשוק.
+exclude_title: ["מבחן דרכים", "מבחן שטח", "נהגנו", "השוואת", "השוואה:", "סקירה:", "חוות דעת",
+                "רכב השבוע", "מדריך", "טיפים", "חשפה", "נחשפת", "חושפת", "המבוך", "מירוצי",
+                "מומלצ", "לא תאמינו", "review:", "first drive", "test drive", "first look"]
+
+auto_words: ["car", "cars", "vehicle", "vehicles", "EV", "EVs", "automaker", "automakers", "carmaker",
+             "carmakers", "auto", "automotive", "truck", "trucks", "van", "vans", "SUV", "sedan",
+             "Tesla", "BYD", "Geely", "Toyota", "Volkswagen", "Hyundai", "Kia", "Ford", "GM",
+             "Stellantis", "Renault", "Nissan", "BMW", "Mercedes", "CATL", "battery", "batteries"]
+
+# **כל כותרת עולם צריכה מילה עסקית**, לא רק פידים צרכניים: חיפוש "EV" מחזיר
+# גם השקות דגמים ואחריות סוללה בהודו, שאינן נוגעות לשרשרת בישראל.
+business_words: ["sales", "sold", "deliveries", "registrations", "tariff", "price", "prices", "production",
+                 "plant", "factory", "supplier", "supply", "earnings", "profit", "revenue",
+                 "guidance", "layoffs", "jobs", "recall", "investment", "invest", "subsidy",
+                 "incentive", "market share", "exports", "imports", "lithium", "merger",
+                 "acquisition", "stake", "bankruptcy", "restructuring", "quota", "regulation",
+                 "emissions", "policy", "forecast", "demand", "inventory", "shortage", "chip",
+                 "capacity", "IPO", "shares", "stock", "insurance", "lease", "leasing", "loan",
+                 "tax", "excise", "consolidation", "reorganise", "reorganize", "partnership",
+                 "joint venture", "orders", "market share", "cost", "costs", "margin", "outlook",
+                 "ban", "probe", "investigation", "strike", "cuts", "units", "slump", "surge",
+                 "decline", "record", "quarter", "trade"]
+
+# נושאים לתיוג הכותרות. התאמה בעברית מתחילת מילה (עם תחיליות ו/ה/ב/ל/מ/ש/כ)
+# ובלי גבול בסוף, כדי ש"יבואנ" יתפוס יבואנית ויבואנים; באנגלית — מילה שלמה.
+# כותרת בלי אף נושא אינה נשמרת: היא כמעט תמיד השקת דגם או מבחן.
+themes:
+  - slug: il-market
+    label: "שוק הרכב בישראל"
+    keywords: ["מסירות", "יבואנ", "רישוי", "נתח שוק", "נתחי שוק", "מכירות רכב", "מכירות הרכב",
+               "שוק הרכב", "איגוד יבואני", "רכב חדש", "רכבים חדשים"]
+  - slug: tax-reg
+    label: "מיסוי ורגולציה"
+    keywords: ["מס קנייה", "מיסוי", "שווי שימוש", "הטבת מס", "תקנות", "רגולצ", "משרד התחבורה",
+               "משרד האוצר", "רשות המסים", "תמריצ", "regulation", "regulator", "emissions", "CO2",
+               "mandate", "subsidy", "subsidies", "incentive", "incentives", "tax credit"]
+  - slug: tariffs
+    label: "מכסים וסחר"
+    # לא "duty" לבדו: heavy-duty (משאיות כבדות) תייג כל סוללת משאית כמכס.
+    keywords: ["tariff", "tariffs", "import duty", "import duties", "customs", "trade war", "trade deal", "quota",
+               "anti-subsidy", "מכס", "מכסים", "הסכם סחר", "מלחמת סחר"]
+  - slug: ev
+    label: "חשמלי וסוללות"
+    keywords: ["electric vehicle", "electric vehicles", "EV", "EVs", "BEV", "PHEV", "hybrid",
+               "battery", "batteries", "lithium", "charging", "solid-state", "חשמלי", "חשמליים",
+               "חשמליות", "היברידי", "סוללה", "סוללות", "טעינה", "ליתיום"]
+  - slug: china
+    label: "יצרנים סיניים"
+    keywords: ["China", "Chinese", "BYD", "Geely", "Chery", "SAIC", "Xpeng", "Nio", "Leapmotor",
+               "Zeekr", "Great Wall", "GAC", "Changan", "Xiaomi", "סין", "סיני", "סינית", "סיניים",
+               "סיניות", "ביוואיידי", "צ'רי", "ג'ילי", "אקספנג", "זיקר", "ליפמוטור"]
+  - slug: makers
+    label: "יצרנים ותוצאות"
+    keywords: ["Toyota", "Volkswagen", "VW", "Stellantis", "General Motors", "GM", "Ford", "Hyundai",
+               "Kia", "Tesla", "Nissan", "Renault", "Honda", "Mercedes", "BMW", "Volvo", "earnings",
+               "profit", "revenue", "guidance", "production", "output", "plant", "factory", "layoffs",
+               "recall", "טויוטה", "פולקסווגן", "יונדאי", "קיה", "טסלה", "ניסאן", "רנו", "הונדה",
+               "מרצדס", "סקודה", "מאזדה", "פורד", "שברולט", "סוזוקי", "מיצובישי", "פיג'ו", "סיטרואן"]
+  - slug: supply
+    label: "שרשרת אספקה ורכיבים"
+    keywords: ["supplier", "suppliers", "supply chain", "parts", "components", "chip", "chips",
+               "semiconductor", "rare earth", "rare earths", "shortage", "Bosch", "Continental",
+               "ZF", "Magna", "Aptiv", "Denso", "Valeo", "Forvia", "Lear", "רכיבים", "ספקים",
+               "שרשרת אספקה", "חלקי חילוף", "מחסור", "שבבים"]
+  - slug: finance
+    label: "ליסינג, מימון וביטוח"
+    keywords: ["ליסינג", "השכרה", "השכרת רכב", "מימון", "הלוואה", "הלוואות", "אשראי", "ביטוח רכב",
+               "ביטוח חובה", "ביטוח מקיף", "יד שנייה", "משומש", "משומשים", "leasing", "lease",
+               "rental", "auto loan", "auto loans", "car loan", "car loans", "insurance", "used car",
+               "used cars", "residual"]
+  - slug: fuel
+    label: "דלק ותחנות"
+    keywords: ["מחירי הדלק", "מחיר הדלק", "בנזין", "סולר", "תחנות דלק", "gasoline", "fuel prices"]
+
+# חברות הכיסוי בשרשרת. השמות בדיוק כמו ב-companies.yaml — הם נבדקים מולו
+# בכל ריצה. why הוא המנגנון, לא תיאור החברה: אין כאן טענה על מותגים או על
+# תמהיל עסקי שאינה מופיעה בדיווחי החברות.
+chain:
+  - role: "יבואניות רכב"
+    why: "מחירי רכב, מס קנייה, שערי המטבע ותחרות המותגים הסיניים עוברים ישירות למסירות ולשולי הרווח."
+    companies:
+      - {name: "יוניברסל מוטורס", aliases: ["Universal Motors"]}
+      - {name: "קרסו מוטורס", aliases: ["Carasso Motors"]}
+      - {name: "דלק רכב", aliases: ["דלק מוטורס", "Delek Motors", "Delek Automotive"]}
+  - role: "רכיבי רכב"
+    why: "היקף הייצור העולמי והמעבר לחשמלי קובעים את הביקוש לרכיבים, ורכיבי מערכות דלק חשופים לירידת חלקם של רכבי הבנזין."
+    companies:
+      - {name: "רבל", aliases: ["Raval"]}
+  - role: "ליסינג והשכרה"
+    why: "מחירי רכב חדש, מחירי יד שנייה (שקובעים את ערך הצי בסוף תקופה) ועלות המימון קובעים את רווחיות הצי."
+    companies:
+      - {name: "אלדן תחבורה", aliases: ["אלדן"]}
+  - role: "אשראי צרכני"
+    why: "ביקוש לרכב ומחירי רכב קובעים את היקף ההלוואות לרכישת רכב בשוק האשראי הצרכני."
+    companies:
+      - {name: "מימון ישיר", aliases: []}
+  - role: "ביטוח"
+    why: "ביטוח רכב (חובה ורכוש) הוא ענף מרכזי אצל המבטחות, ועלויות חלקים ותיקונים מזיזות את התביעות."
+    companies:
+      - {name: "הפניקס", aliases: []}
+      - {name: "הראל השקעות", aliases: ["הראל ביטוח"]}
+      - {name: "מגדל ביטוח", aliases: []}
+      - {name: "מנורה מב החז", aliases: ["מנורה מבטחים"]}
+      - {name: "כלל עסקי ביטוח", aliases: ["כלל ביטוח"]}
+      # "איילון" לבדו בכותרת רכב הוא כמעט תמיד הנתיבים, לא המבטחת.
+      - {name: "איילון", match: ["איילון ביטוח", "איילון אחזקות"]}
+      - {name: "ווישור גלובלטק", aliases: ["ווישור", "Wesure"]}
+  - role: "דלק"
+    why: "קצב המעבר לרכב חשמלי קובע את הביקוש לבנזין ולסולר בתחנות."
+    companies:
+      - {name: "פז אנרגיה", aliases: []}

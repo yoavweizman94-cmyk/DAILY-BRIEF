@@ -1779,3 +1779,87 @@ ul.cbs-sum li { break-inside: avoid; margin: 0 0 0.15rem; }
   .cbs-terms dd { margin-bottom: 0.45rem; }
   .rl-links { margin-inline-start: 0; }
 }
+
+/* ---------- גיליון ענף הרכב ---------- */
+/* נשען על רכיבי עמוד הלמ"ס — כרטיסים (.cbs-card), תגיות כיוון, צ'יפים, תוכן
+   עניינים וצבעי הנושאים — כדי שלשני העמודים תהיה אותה שפה. כאן רק מה
+   שייחודי לגיליון. */
+.au-now {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  padding: 1rem 1.1rem 0.8rem;
+}
+p.au-headline {
+  font-family: var(--serif); font-size: 1.25rem; font-weight: 700; line-height: 1.45;
+  max-width: 50rem; margin: 0 0 0.6rem; text-wrap: balance;
+}
+.au-overview p { font-size: 0.95rem; line-height: 1.8; max-width: var(--measure); margin: 0 0 0.5rem; }
+p.au-meta { font-size: 0.74rem; color: var(--faint); margin: 0.6rem 0 0; }
+.au-watch { margin-top: 0.9rem; padding-top: 0.7rem; border-top: 1px solid var(--border); }
+.au-watch h3 {
+  font-size: 0.8rem; font-weight: 700; letter-spacing: 0.03em; color: var(--muted); margin: 0 0 0.45rem;
+}
+.au-trend .cc-head h3 { margin: 0; font-size: 0.95rem; font-weight: 700; line-height: 1.4; }
+p.au-channel {
+  font-size: 0.84rem; line-height: 1.6; margin: 0.45rem 0; padding: 0.4rem 0.6rem;
+  background: var(--accent-soft); border-radius: 4px;
+}
+p.au-src { font-size: 0.74rem; line-height: 1.6; color: var(--faint); margin: 0.5rem 0 0.25rem; }
+p.au-src a { color: var(--muted); }
+
+.au-chain {
+  display: grid; gap: 0.7rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+}
+.au-role {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  padding: 0.75rem 0.85rem 0.4rem;
+}
+.au-role h3 { margin: 0; font-size: 0.95rem; }
+.au-role p.why { font-size: 0.8rem; line-height: 1.55; color: var(--muted); margin: 0.25rem 0 0.5rem; }
+.au-role ul { list-style: none; margin: 0; padding: 0; }
+.au-role li { padding: 0.45rem 0; border-top: 1px solid var(--border); }
+.au-co { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.au-co b { font-size: 0.88rem; }
+.au-cnt { font-size: 0.72rem; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.au-cnt.none { font-weight: 400; color: var(--faint); }
+a.au-latest { display: block; font-size: 0.8rem; line-height: 1.5; color: var(--muted); margin-top: 0.15rem; }
+.au-note { font-size: 0.8rem; line-height: 1.55; margin-top: 0.3rem; }
+p.au-quiet {
+  font-size: 0.8rem; line-height: 1.6; color: var(--muted); margin: 0; padding: 0.45rem 0 0.2rem;
+  border-top: 1px solid var(--border);
+}
+p.au-quiet span { color: var(--faint); }
+
+.au-cols {
+  display: grid; gap: 1.2rem 2.2rem; margin-top: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+}
+.au-col > h3 {
+  display: flex; align-items: baseline; gap: 0.45rem; margin: 0 0 0.2rem;
+  padding-bottom: 0.35rem; border-bottom: 2px solid var(--border-strong); font-size: 0.95rem;
+}
+.au-n { font-family: var(--mono); font-size: 0.72rem; font-weight: 500; color: var(--faint); }
+.cbs-chips button[aria-pressed="true"] .au-n { color: var(--on-accent); }
+ul.au-list { list-style: none; margin: 0; padding: 0; }
+li.au-day { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.03em; color: var(--muted); padding: 0.8rem 0 0.25rem; }
+li.au-item {
+  display: grid; grid-template-columns: 2.7rem 1fr; gap: 0.5rem;
+  padding: 0.45rem 0; border-top: 1px solid var(--border);
+}
+.au-time { font-family: var(--mono); font-size: 0.72rem; color: var(--faint); padding-top: 0.15rem; }
+a.au-title {
+  font-size: 0.9rem; font-weight: 500; line-height: 1.45; color: var(--fg); text-decoration: none;
+  overflow-wrap: anywhere;
+}
+a.au-title:hover { color: var(--accent); text-decoration: underline; }
+.au-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.15rem 0.55rem; margin-top: 0.2rem; font-size: 0.7rem; }
+.au-srcname { color: var(--faint); }
+.au-tag { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--tc); }
+.au-tag .tdot { width: 0.4rem; height: 0.4rem; }
+.au-tags .co, .au-role .co {
+  font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 3px; padding: 0 0.35rem;
+}
+.au-more > summary { cursor: pointer; font-size: 0.84rem; font-weight: 600; color: var(--accent); padding: 0.6rem 0; }
+.au-prev ul li { display: flex; align-items: baseline; gap: 0.6rem; }
+.au-prev details > summary { cursor: pointer; color: var(--fg); }
+.au-prev details p { font-size: 0.85rem; line-height: 1.7; margin: 0.35rem 0; }
