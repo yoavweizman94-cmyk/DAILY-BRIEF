@@ -122,10 +122,10 @@ def now_html(a: dict | None) -> str:
     watch = [w for w in a.get("watch") or [] if isinstance(w, dict) and w.get("what")]
     watch_html = ('<div class="au-watch"><h3>מה לעקוב</h3><ul class="cbs-watch">'
                   + "".join(f'<li><span class="wn">{escape(an._t(w.get("when")) or "—")}</span>'
-                            f'<span>{escape(an._t(w["what"]))}</span></li>' for w in watch)
+                            f'<span>{an._txt(w["what"])}</span></li>' for w in watch)
                   + '</ul></div>') if watch else ""
     return ('<h2 id="cm-now">תמונת מצב</h2>' + stale + '<div class="au-now">'
-            f'<p class="au-headline">{escape(an._t(a.get("headline")))}</p>'
+            f'<p class="au-headline">{an._txt(a.get("headline"))}</p>'
             f'<div class="au-overview">{an._para(a.get("overview"))}</div>'
             f'<p class="au-meta">סקירה מ-{an._stamp(a.get("analyzed_at"))}, על מחירים מ-{an._stamp(a.get("prices_at"))} '
             f'ו-{a.get("n_items", 0)} כותרות. ניתוח השפעה, לא המלצת השקעה.</p>' + watch_html + '</div>')
@@ -140,7 +140,7 @@ def sections_html(a: dict | None, cfg: dict) -> str:
     for m in a["sections"]:
         badge = '<span class="au-data">נתוני מחירים</span>' if m.get("data") else ""
         cards.append(f'<div class="cbs-card au-trend"><div class="cm-kicker">{escape(labels.get(m.get("group"), ""))}</div>'
-                     f'<div class="cc-head"><h3>{escape(an._t(m.get("title")))}</h3>{an._dir(m.get("direction"))}</div>'
+                     f'<div class="cc-head"><h3>{an._txt(m.get("title"))}</h3>{an._dir(m.get("direction"))}</div>'
                      f'{an._para(m.get("body"))}{an._cos_html(m.get("companies"))}'
                      f'<div class="au-foot">{badge}{an._sources_html(m.get("sources"), refs)}</div></div>')
     return ('<h2 id="cm-groups">מה זז, לפי קבוצה</h2>'
@@ -311,7 +311,7 @@ def deals_html(a: dict | None) -> str:
     if not deals:
         return ""
     refs = (a or {}).get("refs") or {}
-    cards = "".join(f'<div class="cbs-card au-trend"><div class="cc-head"><h3>{escape(an._t(d.get("title")))}</h3></div>'
+    cards = "".join(f'<div class="cbs-card au-trend"><div class="cc-head"><h3>{an._txt(d.get("title"))}</h3></div>'
                     f'{an._para(d.get("body"))}{an._cos_html(d.get("companies"))}'
                     f'<div class="au-foot">{an._sources_html(d.get("sources"), refs)}</div></div>' for d in deals)
     return ('<h2 id="cm-deals">עסקאות וחוזים</h2>'
@@ -353,7 +353,7 @@ def companies_html(cfg: dict, te: dict, wb: dict, a: dict | None) -> str:
     note_cards = []
     for name, c in notes.items():
         note_cards.append(f'<li><div class="au-co"><b>{escape(name)}</b>{an._dir(c.get("direction"))}</div>'
-                          f'<div class="au-note">{escape(an._t(c.get("note")))}{an._sources_html(c.get("sources"), refs)}</div></li>')
+                          f'<div class="au-note">{an._txt(c.get("note"))}{an._sources_html(c.get("sources"), refs)}</div></li>')
     blocks = []
     for e in cfg.get("exposures") or []:
         sig = " ".join(x for x in (_signal(k, te, wb, ins) for k in e.get("commodities") or []) if x)

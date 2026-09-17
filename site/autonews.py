@@ -109,10 +109,25 @@ def _t(v) -> str:
     return _REFS.sub("", str(v or "")).strip()
 
 
+# **מספר חתום בתוך משפט עברי.** "(חודש +15.0%)" נראה על המסך "(חודש +%15.0)": האחוז
+# נודד אל בין הסימן למספר. נמדד בסקירת הסחורות (17/09/2026). מספר שבא אחרי רווח או
+# סוגר נעטף ב-bdi; "ב-104.67" (תחילית ומקף) וטווח "25%-30%" אינם נוגעים.
+_SIGNED = re.compile(r"(?:(?<=\s)|(?<=\())([+\-−]\d[\d.,]*%?)")
+
+
+def _bidi(escaped: str) -> str:
+    return _SIGNED.sub(r'<bdi dir="ltr">\1</bdi>', escaped)
+
+
+def _txt(v) -> str:
+    """טקסט מהסקירה: escape, ניקוי מספור ובידוד מספרים חתומים."""
+    return _bidi(escape(_t(v)))
+
+
 def _para(text) -> str:
     if not text:
         return ""
-    t = escape(_t(text))
+    t = _txt(text)
     t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
     return "".join(f"<p>{p.strip()}</p>" for p in re.split(r"\n\s*\n|\n", t) if p.strip())
 
@@ -161,11 +176,11 @@ def now_html(a: dict | None, state: dict) -> str:
     watch = [w for w in a.get("watch") or [] if isinstance(w, dict) and w.get("what")]
     watch_html = ('<div class="au-watch"><h3>מה לעקוב</h3><ul class="cbs-watch">'
                   + "".join(f'<li><span class="wn">{escape(_t(w.get("when")) or "—")}</span>'
-                            f'<span>{escape(_t(w["what"]))}</span></li>' for w in watch)
+                            f'<span>{_txt(w["what"])}</span></li>' for w in watch)
                   + '</ul></div>') if watch else ""
     return ('<h2 id="au-now">תמונת מצב</h2>' + stale
             + '<div class="au-now">'
-            f'<p class="au-headline">{escape(_t(a.get("headline")))}</p>'
+            f'<p class="au-headline">{_txt(a.get("headline"))}</p>'
             f'<div class="au-overview">{_para(a.get("overview"))}</div>'
             f'<p class="au-meta">סקירה מ-{_stamp(a.get("analyzed_at"))}, על בסיס {a.get("n_il", 0)} כותרות '
             f'מישראל ו-{a.get("n_world", 0)} מהעולם מ-{a.get("window_h", 72)} השעות שקדמו לה. '
@@ -181,9 +196,9 @@ def trends_html(a: dict | None, key: str, title: str, anchor: str, sub: str) -> 
     for m in a.get(key) or []:
         if not isinstance(m, dict):
             continue
-        channel = (f'<p class="au-channel"><b>איך זה מגיע לכאן:</b> {escape(_t(m["channel"]))}</p>'
+        channel = (f'<p class="au-channel"><b>איך זה מגיע לכאן:</b> {_txt(m["channel"])}</p>'
                    if m.get("channel") else "")
-        cards.append(f'<div class="cbs-card au-trend"><div class="cc-head"><h3>{escape(_t(m.get("title")))}</h3>'
+        cards.append(f'<div class="cbs-card au-trend"><div class="cc-head"><h3>{_txt(m.get("title"))}</h3>'
                      f'{_dir(m.get("direction"))}</div>{_para(m.get("body"))}{channel}'
                      f'{_cos_html(m.get("companies"))}{_sources_html(m.get("sources"), refs)}</div>')
     if not cards:
@@ -212,7 +227,7 @@ def chain_html(cfg: dict, items: list[dict], a: dict | None) -> str:
             count = (f'<span class="au-cnt">{len(mentions)} כותרות ב-{DAYS} ימים</span>' if mentions else "")
             link = (f'<a class="au-latest" href="{escape(latest.get("url") or "#")}" target="_blank" '
                     f'rel="noopener" dir="auto">{escape(latest["title"])}</a>' if latest else "")
-            note = (f'<div class="au-note">{_dir(n.get("direction"))} {escape(_t(n.get("note")))}'
+            note = (f'<div class="au-note">{_dir(n.get("direction"))} {_txt(n.get("note"))}'
                     f'{_sources_html(n.get("sources"), refs)}</div>' if n else "")
             rows.append(f'<li><div class="au-co"><b>{escape(name)}</b>{count}</div>{link}{note}</li>')
         # **חברה בלי אזכור היא שורה אחת לכל התפקיד, לא שורה לכל חברה.** בגרסה
@@ -491,7 +506,7 @@ def leasing_html(data: dict, a: dict | None) -> str:
         cards = []
         for m in lz_a.get("points") or []:
             badge = '<span class="au-data">נתוני רשם</span>' if m.get("data") else ""
-            cards.append(f'<div class="cbs-card au-trend"><div class="cc-head"><h3>{escape(_t(m.get("title")))}</h3>'
+            cards.append(f'<div class="cbs-card au-trend"><div class="cc-head"><h3>{_txt(m.get("title"))}</h3>'
                          f'{_dir(m.get("direction"))}</div>{_para(m.get("body"))}{_cos_html(m.get("companies"))}'
                          f'<div class="au-foot">{badge}{_sources_html(m.get("sources"), refs)}</div></div>')
         reg_m = (a or {}).get("registry_month")
@@ -581,7 +596,7 @@ def previous_html(analyses: list[dict]) -> str:
     if not older:
         return ""
     lis = "".join(f'<li><span class="rl-date" dir="ltr">{_stamp(a.get("analyzed_at"))}</span>'
-                  f'<details><summary>{escape(_t(a.get("headline")))}</summary>'
+                  f'<details><summary>{_txt(a.get("headline"))}</summary>'
                   f'{_para(a.get("overview"))}</details></li>' for a in older)
     return (f'<details class="cbs-others au-prev"><summary>סקירות קודמות ({len(older)})</summary>'
             f'<ul>{lis}</ul></details>')
