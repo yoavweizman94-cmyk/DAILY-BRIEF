@@ -31,7 +31,7 @@ DIR_CLASS = {"חיובי": "up", "שלילי": "down", "מעורב": "mixed"}
 # צבע לכל נושא — אותם גוונים כמו נושאי הלמ"ס, כדי שלאתר תהיה שפת צבע אחת.
 THEME_CLASS = {"il-market": "t-accounts", "tax-reg": "t-surveys", "tariffs": "t-trade",
                "ev": "t-labor", "china": "t-tourism", "makers": "t-industry",
-               "supply": "t-prices", "finance": "t-housing", "fuel": "t-business"}
+               "supply": "t-prices", "leasing": "t-housing", "finance": "t-other", "fuel": "t-business"}
 
 
 def _tz():
@@ -70,13 +70,19 @@ def load() -> dict:
     for p in sorted((AUTO / "analyses").glob("*.jsonl"))[-2:]:
         analyses += _jsonl(p)
     analyses.sort(key=lambda a: a.get("analyzed_at") or "")
+    registry = {}
+    for name in ("registrations", "disposals"):
+        try:
+            registry[name] = json.loads((AUTO / "registry" / f"{name}.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            registry[name] = {}
     state = {}
     if (AUTO / "state.json").exists():
         try:
             state = json.loads((AUTO / "state.json").read_text(encoding="utf-8"))
         except ValueError:
             state = {}
-    return {"cfg": cfg, "items": items, "analyses": analyses, "state": state}
+    return {"cfg": cfg, "items": items, "analyses": analyses, "state": state, "registry": registry}
 
 
 # --------------------------------------------------------------------------
@@ -223,6 +229,293 @@ def chain_html(cfg: dict, items: list[dict], a: dict | None) -> str:
             f'<div class="au-chain">{"".join(blocks)}</div>')
 
 
+# --------------------------------------------------------------------------
+# ליסינג והשכרה — נתוני רשם כלי הרכב
+
+def _n(v) -> str:
+    return f"{v:,.0f}" if isinstance(v, (int, float)) else "—"
+
+
+def _p(a, b, digits: int = 1) -> float | None:
+    return round(a / b * 100, digits) if b else None
+
+
+def _mm(k: str) -> str:
+    return f"{k[5:7]}/{k[:4]}"
+
+
+HE_MONTHS = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר",
+             "אוקטובר", "נובמבר", "דצמבר"]
+
+
+def _mon(k: str) -> str:
+    return f"{HE_MONTHS[int(k[5:7]) - 1]} {k[:4]}"
+
+
+def _mrange(a: str, b: str) -> str:
+    """"יוני–אוגוסט 2026" ולא "06/2026–08/2026": טווח מספרי בתוך משפט עברי
+    מתהפך, וקורא לא יודע אם הוא נקרא מימין או משמאל."""
+    if a[:4] == b[:4]:
+        return f"{HE_MONTHS[int(a[5:7]) - 1]}–{HE_MONTHS[int(b[5:7]) - 1]} {a[:4]}"
+    return f"{_mon(a)}–{_mon(b)}"
+
+
+def _yago(k: str) -> str:
+    return f"{int(k[:4]) - 1}-{k[5:]}"
+
+
+def _change_words(now: float, before: float, when: str) -> str:
+    """"עלייה של 12.1% מול 08/2025" ולא "+12.1%": סימן לפני מספר בתוך משפט
+    עברי נודד לצד השני ("12.1%+")."""
+    if not before:
+        return "אין השוואה שנתית"
+    d = (now - before) / before * 100
+    if abs(d) < 0.05:
+        return f"ללא שינוי מול {when}"
+    return f"{'עלייה' if d > 0 else 'ירידה'} של {abs(d):.1f}% מול {when}"
+
+
+def _share_series(months: dict, keys: list[str], field: str, owner: str, key: str) -> list[float | None]:
+    out = []
+    for k in keys:
+        v = months[k]
+        base = (v.get("own") or {}).get(owner, 0)
+        if field == "fuel":
+            num = ((v.get("fuel") or {}).get(owner) or {}).get(key, 0)
+        else:
+            num = dict((v.get("country") or {}).get(owner) or []).get(key, 0)
+        out.append(_p(num, base))
+    return out
+
+
+def _ticks_n(hi: float) -> list[float]:
+    step = 1000
+    for cand in (1000, 2000, 2500, 4000, 5000, 10000):
+        if hi / cand <= 5:
+            step = cand
+            break
+    top = step * (int(hi // step) + 1)
+    return [step * i for i in range(int(top // step) + 1)]
+
+
+def _lease_bars(months: dict, keys: list[str]) -> str:
+    """רכישות ציי הליסינג לפי חודש. החודש הנוכחי חלקי ומסומן בהיר."""
+    W, H, L, R, T, B = 440.0, 180.0, 40.0, 8.0, 10.0, 22.0
+    vals = [(months[k].get("own") or {}).get("ליסינג", 0) for k in keys]
+    ticks = _ticks_n(max(vals) or 1)
+    hi = ticks[-1] or 1
+    pw, ph = W - L - R, H - T - B
+    slot = pw / len(keys)
+    parts = []
+    for t in ticks:
+        y = T + (hi - t) / hi * ph
+        parts.append(f'<line class="{"zero" if t == 0 else "grid"}" x1="{L:.0f}" x2="{W - R:.0f}" y1="{y:.1f}" y2="{y:.1f}"/>')
+        parts.append(f'<text class="ax" x="{L - 6:.0f}" y="{y + 3.5:.1f}" text-anchor="end">{t / 1000:g}K</text>')
+    last_full = max((i for i, k in enumerate(keys) if not months[k].get("partial")), default=-1)
+    for i, (k, v) in enumerate(zip(keys, vals)):
+        x = L + slot * i
+        if i and k.endswith("-01"):
+            parts.append(f'<line class="yr" x1="{x:.1f}" x2="{x:.1f}" y1="{T:.0f}" y2="{T + ph:.0f}"/>')
+            parts.append(f'<text class="ax" x="{x + 4:.1f}" y="{H - 7:.0f}">{k[:4]}</text>')
+        y = T + (hi - v) / hi * ph
+        cls = "bar" + (" last" if i == last_full else "") + (" partial" if months[k].get("partial") else "")
+        parts.append(f'<rect class="{cls}" x="{x + slot * 0.19:.1f}" y="{y:.1f}" width="{slot * 0.62:.1f}" '
+                     f'height="{max(T + ph - y, 0.9):.1f}"/>')
+        share = _p(v, months[k].get("n") or 0)
+        note = " · חודש חלקי" if months[k].get("partial") else (" · חושב באיחור" if months[k].get("late") else "")
+        parts.append(f'<rect class="hit" x="{x:.1f}" y="{T:.0f}" width="{slot:.1f}" height="{ph:.0f}">'
+                     f'<title>{_mm(k)} · {_n(v)} רכבים לליסינג ·{share if share is not None else "—"}% מהרכב החדש{note}</title></rect>')
+    return (f'<svg class="cbs-ch au-ch" viewBox="0 0 {W:.0f} {H:.0f}" role="img" '
+            f'aria-label="רכישות ציי הליסינג לפי חודש">{"".join(parts)}</svg>')
+
+
+def _share_lines(months: dict, keys: list[str]) -> str:
+    """חלק התוצרת הסינית והחשמליים בציי הליסינג — אחוזים, חודשים שלמים."""
+    W, H, L, R, T, B = 440.0, 180.0, 34.0, 8.0, 10.0, 22.0
+    china = _share_series(months, keys, "country", "ליסינג", "סין")
+    ev = _share_series(months, keys, "fuel", "ליסינג", "ev")
+    top = max([x for x in china + ev if x is not None] + [10.0])
+    hi = 20.0 * (int(top // 20) + 1)
+    ticks = [hi * i / 4 for i in range(5)]
+    pw, ph = W - L - R, H - T - B
+    slot = pw / len(keys)
+
+    def X(i):
+        return L + slot * (i + 0.5)
+
+    def Y(v):
+        return T + (hi - v) / hi * ph
+
+    parts = []
+    for t in ticks:
+        parts.append(f'<line class="{"zero" if t == 0 else "grid"}" x1="{L:.0f}" x2="{W - R:.0f}" y1="{Y(t):.1f}" y2="{Y(t):.1f}"/>')
+        parts.append(f'<text class="ax" x="{L - 6:.0f}" y="{Y(t) + 3.5:.1f}" text-anchor="end">{t:g}%</text>')
+    for i, k in enumerate(keys):
+        if i and k.endswith("-01"):
+            x = L + slot * i
+            parts.append(f'<line class="yr" x1="{x:.1f}" x2="{x:.1f}" y1="{T:.0f}" y2="{T + ph:.0f}"/>')
+            parts.append(f'<text class="ax" x="{x + 4:.1f}" y="{H - 7:.0f}">{k[:4]}</text>')
+    for cls, series in (("l-china", china), ("l-ev", ev)):
+        pts = [f"{X(i):.1f},{Y(v):.1f}" for i, v in enumerate(series) if v is not None]
+        if len(pts) >= 2:
+            parts.append(f'<polyline class="{cls}" points="{" ".join(pts)}"/>')
+            i_last = max(i for i, v in enumerate(series) if v is not None)
+            parts.append(f'<circle class="{cls}-end" cx="{X(i_last):.1f}" cy="{Y(series[i_last]):.1f}" r="3.2"/>')
+    for i, k in enumerate(keys):
+        parts.append(f'<rect class="hit" x="{L + slot * i:.1f}" y="{T:.0f}" width="{slot:.1f}" height="{ph:.0f}">'
+                     f'<title>{_mm(k)} · תוצרת סין {china[i]}% · חשמלי {ev[i]}%</title></rect>')
+    return (f'<svg class="cbs-ch au-ch" viewBox="0 0 {W:.0f} {H:.0f}" role="img" '
+            f'aria-label="חלק התוצרת הסינית והחשמליים בציי הליסינג">{"".join(parts)}</svg>')
+
+
+def _sum_top(months: dict, keys: list[str], field: str, owner: str) -> dict:
+    out: dict = {}
+    for k in keys:
+        for name, cnt in ((months.get(k) or {}).get(field) or {}).get(owner) or []:
+            out[name] = out.get(name, 0) + cnt
+    return out
+
+
+def leasing_html(data: dict, a: dict | None) -> str:
+    reg = (data.get("registry") or {}).get("registrations") or {}
+    disp = (data.get("registry") or {}).get("disposals") or {}
+    months = reg.get("months") or {}
+    keys = sorted(months)
+    full = [k for k in keys if not months[k].get("partial")]
+    if not full:
+        return ""
+    cfg = data.get("cfg") or {}
+    imap = (cfg.get("registry") or {}).get("importers") or {}
+    last, v = full[-1], months[full[-1]]
+    ya = months.get(_yago(last)) or {}
+    n, own = v.get("n") or 0, v.get("own") or {}
+    lease = own.get("ליסינג", 0)
+    ya_n, ya_lease = ya.get("n") or 0, (ya.get("own") or {}).get("ליסינג", 0)
+    china = dict((v.get("country") or {}).get("ליסינג") or []).get("סין", 0)
+    ya_china = dict((ya.get("country") or {}).get("ליסינג") or []).get("סין", 0)
+    ev_l = ((v.get("fuel") or {}).get("ליסינג") or {}).get("ev", 0)
+    ev_p = ((v.get("fuel") or {}).get("פרטי") or {}).get("ev", 0)
+
+    tiles = [
+        (f"רכב פרטי חדש · {_mon(last)}", _n(n), _change_words(n, ya_n, _mon(_yago(last)))),
+        ("לציי הליסינג", _n(lease),
+         f"{_p(lease, n)}% מהרכב החדש" + (f" · אשתקד {_p(ya_lease, ya_n)}%" if ya_n else "")),
+        ("תוצרת סין בליסינג", f"{_p(china, lease)}%",
+         f"אשתקד {_p(ya_china, ya_lease)}%" if ya_lease else ""),
+        ("חשמלי בליסינג", f"{_p(ev_l, lease)}%",
+         f"בקנייה פרטית {_p(ev_p, own.get('פרטי', 0))}%"),
+    ]
+    dm = disp.get("months") or {}
+    if dm:
+        dk = sorted(dm)[-1]
+        f = dm[dk].get("flows") or {}
+        out = sum(x for key, x in f.items() if key.startswith("ליסינג>"))
+        held = (dm[dk].get("held_median") or {}).get("ליסינג")
+        tiles.append((f"יצאו מציי הליסינג · {_mon(dk)}", _n(out),
+                      (f"חציון {held} חודשים בצי · " if held else "")
+                      + f"{_p(f.get('ליסינג>סוחר', 0), out, 0)}% לסוחרים"))
+    strip = ('<section class="strip wide au-kpi">' + "".join(
+        f'<div class="tile"><span class="lbl">{escape(l)}</span><span class="val" dir="ltr">{escape(val)}</span>'
+        f'<span class="chg txt">{escape(c)}</span></div>' for l, val, c in tiles) + '</section>')
+
+    charts = ('<div class="au-charts">'
+              f'<figure><figcaption>רכבים חדשים שנרשמו לליסינג, לפי חודש</figcaption>{_lease_bars(months, keys)}'
+              '<p class="au-legend"><i class="sw bar"></i>חודש שלם <i class="sw partial"></i>החודש הנוכחי, חלקי</p></figure>'
+              f'<figure><figcaption>מה נכנס לציי הליסינג: תוצרת סין וחשמליים</figcaption>{_share_lines(months, full)}'
+              '<p class="au-legend"><i class="sw l-china"></i>תוצרת סין <i class="sw l-ev"></i>חשמלי מלא</p></figure>'
+              '</div>')
+
+    last3 = full[-3:]
+    prev3 = [_yago(k) for k in last3]
+    tot, lz, dl, before = (_sum_top(months, last3, "importer", "all"), _sum_top(months, last3, "importer", "ליסינג"),
+                           _sum_top(months, last3, "importer", "סוחר"), _sum_top(months, prev3, "importer", "all"))
+    order = sorted(tot, key=lambda x: -tot[x])[:12]
+    order += [x for x in imap if x in tot and x not in order]
+    rows = []
+    for name in order:
+        t = tot[name]
+        chip = f' <span class="co">{escape(imap[name])}</span>' if name in imap else ""
+        yoy = _p(t - before.get(name, 0), before.get(name, 0), 0) if before.get(name, 0) >= 300 else None
+        cls = "up" if (yoy or 0) > 0 else ("down" if (yoy or 0) < 0 else "flat")
+        tr = '<tr class="listed">' if name in imap else "<tr>"
+        rows.append(f'{tr}<td class="city">{escape(name)}{chip}</td>'
+                    f'<td dir="ltr">{_n(t)}</td><td class="key" dir="ltr">{_n(lz.get(name, 0))}</td>'
+                    f'<td dir="ltr">{_p(lz.get(name, 0), t, 0)}%</td><td dir="ltr">{_n(dl.get(name, 0))}</td>'
+                    f'<td class="trend {cls}" dir="ltr">{("0%" if abs(yoy) < 0.5 else f"{yoy:+.0f}%") if yoy is not None else "—"}</td></tr>')
+    importers = (f'<h3 class="au-h3">היבואניות: רכב חדש ב{_mrange(last3[0], last3[-1])}, ומה ממנו לליסינג</h3>'
+                 '<div class="tw"><table class="nadlan au-tbl"><thead><tr><th>יבואנית</th><th>רכב חדש</th>'
+                 '<th>לליסינג</th><th>% לליסינג</th><th>לסוחרים</th><th>מול אשתקד</th></tr></thead><tbody>'
+                 + "".join(rows) + '</tbody></table></div>'
+                 '<p class="cbs-note">"לסוחרים" — רכב חדש שנרשם על שם סוחר; לרוב רישום מוקדם לפני מכירה. '
+                 'השוואה שנתית מוצגת רק ליבואנית עם 300 רכבים לפחות אשתקד, ושינוי חד בה יכול לשקף מותג '
+                 'שעבר בין יבואניות — השם נלקח ממחירון משרד התחבורה לכל שנת דגם.</p>')
+
+    brands, bprev = _sum_top(months, last3, "brand", "ליסינג"), _sum_top(months, prev3, "brand", "ליסינג")
+    bsum, bpsum = sum(brands.values()) or 1, sum(bprev.values()) or 1
+    bc = {}
+    for k in last3:
+        bc.update(months[k].get("brand_country") or {})
+    brows = []
+    for name in sorted(brands, key=lambda x: -brands[x])[:12]:
+        sh, ps = brands[name] / bsum * 100, bprev.get(name, 0) / bpsum * 100
+        d = sh - ps
+        cls = "up" if d > 0.05 else ("down" if d < -0.05 else "flat")
+        brows.append(f'<tr><td class="city">{escape(name)}</td><td>{escape(bc.get(name, "—"))}</td>'
+                     f'<td dir="ltr">{_n(brands[name])}</td><td class="key" dir="ltr">{sh:.1f}%</td>'
+                     f'<td dir="ltr">{ps:.1f}%</td><td class="trend {cls}" dir="ltr">{d:+.1f}</td></tr>')
+    brand_tbl = (f'<h3 class="au-h3">מה קונים הציים: המותגים שנרשמו לליסינג ב{_mrange(last3[0], last3[-1])}</h3>'
+                 '<div class="tw"><table class="nadlan au-tbl"><thead><tr><th>מותג</th><th>ארץ תוצר</th>'
+                 '<th>רכבים</th><th>חלק מהליסינג</th><th>אשתקד</th><th>שינוי (נק׳)</th></tr></thead><tbody>'
+                 + "".join(brows) + '</tbody></table></div>')
+
+    drows = []
+    for k in sorted(dm)[-12:]:
+        f = dm[k].get("flows") or {}
+        out = sum(x for key, x in f.items() if key.startswith("ליסינג>"))
+        held = (dm[k].get("held_median") or {}).get("ליסינג")
+        drows.append(f'<tr><td class="city">{_mm(k)}</td><td class="key" dir="ltr">{_n(out)}</td>'
+                     f'<td dir="ltr">{_n(f.get("ליסינג>סוחר", 0))}</td><td dir="ltr">{_n(f.get("ליסינג>פרטי", 0))}</td>'
+                     f'<td dir="ltr">{_n(f.get("ליסינג>חברה", 0))}</td><td dir="ltr">{held if held is not None else "—"}</td></tr>')
+    disp_tbl = ('<h3 class="au-h3">מה יוצא מהציים: רכבים שנמכרו מבעלות ליסינג</h3>'
+                '<div class="tw"><table class="nadlan au-tbl"><thead><tr><th>חודש</th><th>יצאו מליסינג</th>'
+                '<th>לסוחר</th><th>לפרטי</th><th>לחברה</th><th>חציון חודשים בצי</th></tr></thead><tbody>'
+                + "".join(drows) + '</tbody></table></div>'
+                '<p class="cbs-note">רכב שבעלות חדשה עליו התחילה באותו חודש, אחרי תקופה בבעלות ליסינג. אלה הרכבים '
+                'שנכנסים לשוק היד השנייה — היצע שמזיז את מחירי הרכב המשומש, ואיתם את ערך הצי בסוף התקופה.</p>'
+                ) if drows else ""
+
+    ai = ""
+    lz_a = (a or {}).get("leasing") or {}
+    if lz_a.get("summary") or lz_a.get("points"):
+        refs = (a or {}).get("refs") or {}
+        cards = []
+        for m in lz_a.get("points") or []:
+            badge = '<span class="au-data">נתוני רשם</span>' if m.get("data") else ""
+            cards.append(f'<div class="cbs-card au-trend"><div class="cc-head"><h3>{escape(_t(m.get("title")))}</h3>'
+                         f'{_dir(m.get("direction"))}</div>{_para(m.get("body"))}{_cos_html(m.get("companies"))}'
+                         f'<div class="au-foot">{badge}{_sources_html(m.get("sources"), refs)}</div></div>')
+        reg_m = (a or {}).get("registry_month")
+        ai = ((f'<div class="au-lease-sum">{_para(lz_a.get("summary"))}'
+               f'<p class="au-meta">ניתוח מ-{_stamp((a or {}).get("analyzed_at"))}'
+               + (f", על נתוני הרשם עד {_mon(reg_m)}" if reg_m else "")
+               + '. ניתוח השפעה, לא המלצת השקעה.</p></div>' if lz_a.get("summary") else "")
+              + (f'<div class="cbs-cards">{"".join(cards)}</div>' if cards else ""))
+
+    late = [k for k in full[-13:] if months[k].get("late")]
+    method = ('<p class="cbs-note"><strong>מקור ושיטה.</strong> משרד התחבורה ב-data.gov.il: רשם כלי הרכב (בעלות, '
+              'חודש עלייה לכביש, תוצר, דלק), מחירון היבואנים (יבואנית ומחיר מחירון לכל דגם ושנה), טבלת התוצרים (ארץ '
+              'תוצר) והיסטוריית הבעלויות. רכב פרטי בלבד. <b>הבעלות ברשם היא הנוכחית</b>: רכב שנמכר מאז רישומו נספר '
+              'לפי הבעלות החדשה, ולכן כל חודש נשמר כפי שחושב כשהיה קרוב לרישום'
+              + (f'. חודשים שנכנסו למאגר באיחור ({_mrange(late[0], late[-1])}) חושבו כשחלק מהרכבים כבר נמכרו, '
+                 'וחלק הליסינג בהם נמוך מבפועל' if late else "")
+              + f'. עודכן {_stamp(reg.get("updated"))}.</p>')
+
+    return ('<h2 id="au-lease">ליסינג והשכרה</h2>'
+            '<p class="cbs-sub">שתי הזרימות שקובעות את כלכלת הצי — מה הציים קונים ומה הם מוכרים — מנתוני רשם כלי '
+            'הרכב, ומה זה אומר לחברות: חברות הליסינג, היבואניות שמוכרות להן, האשראי לרכב והמבטחות.</p>'
+            + ai + strip + charts + importers + brand_tbl + disp_tbl + method)
+
+
 def _item_html(r: dict, labels: dict) -> str:
     d = _local(r.get("ts"))
     tags = "".join(f'<span class="au-tag {THEME_CLASS.get(t, "t-other")}">'
@@ -342,20 +635,24 @@ def page(data: dict) -> str:
                  if fails and len(fails) * 3 >= (state.get("sources_total") or 99) else "")
 
     il = trends_html(a, "israel", "מגמות בשוק הישראלי", "au-il",
-                     "מחירים והשקות, מותגים סיניים, מיסוי, ליסינג ומימון — ומי מהחברות מושפע.")
+                     "מחירים והשקות, מותגים סיניים, מיסוי ומימון — ומי מהחברות מושפע.")
     world = trends_html(a, "world", "מגמות בעולם", "au-world",
                         "מכסים, ייצור ושרשרת אספקה, סוללות ויצרנים סיניים — ואיך כל אחת מגיעה לחברות בישראל.")
-    toc = [("au-now", "תמונת מצב", True), ("au-il", "ישראל", il), ("au-world", "עולם", world),
+    lease = leasing_html(data, a)
+    toc = [("au-now", "תמונת מצב", True), ("au-lease", "ליסינג והשכרה", lease),
+           ("au-il", "ישראל", il), ("au-world", "עולם", world),
            ("au-chain", "החברות בשרשרת", True), ("au-news", "כותרות", True)]
     return "\n".join(x for x in [
         '<div class="dash-head"><h1>ענף הרכב</h1>'
         f'<span class="stamp">{stamp}</span></div>',
         '<p class="lead">כותרות ומגמות מענף הרכב בישראל ובעולם, דרך החברות הנסחרות בשרשרת: '
-        'יבואניות, רכיבים, ליסינג, אשראי, ביטוח ודלק. מתעדכן שלוש פעמים ביום.</p>',
+        'יבואניות, רכיבים, ליסינג, אשראי, ביטוח ודלק — ולצידן נתוני רשם כלי הרכב על מה שציי הליסינג '
+        'קונים ומוכרים. מתעדכן שלוש פעמים ביום.</p>',
         '<nav class="cbs-toc" aria-label="בעמוד הזה">'
         + "".join(f'<a href="#{i}">{l}</a>' for i, l, present in toc if present) + '</nav>',
         fail_html,
         now_html(a, state),
+        lease,
         il,
         world,
         chain_html(cfg, items, a),

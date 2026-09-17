@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -30,6 +31,7 @@ OUT = ROOT / "output" / "auto"
 CFG = ROOT / "config" / "auto.yaml"
 COMPANIES = ROOT / "config" / "companies.yaml"
 FAILED = OUT / "failed"
+REGISTRY = OUT / "registry"
 
 WINDOW_H = 72
 MAX_IL = 90
@@ -70,6 +72,11 @@ SCHEMA = _obj({
         "sources": _ARR_INT})},
     "companies": {"type": "array", "items": _obj({
         "name": _STR, "note": _STR, "direction": _STR, "sources": _ARR_INT})},
+    "leasing": _obj({
+        "summary": _STR,
+        "points": {"type": "array", "items": _obj({
+            "title": _STR, "body": _STR, "direction": _STR, "companies": _ARR_STR,
+            "sources": _ARR_INT, "data": {"type": "boolean"}})}}),
     "watch": {"type": "array", "items": _obj({"what": _STR, "when": _STR})},
     "terms": {"type": "array", "items": _obj({"term": _STR, "explain": _STR})},
 })
@@ -101,7 +108,7 @@ PROMPT = """אתה אנליסט ענף הרכב של TLV TASE View, שירות �
 - overview: שלושה עד חמישה משפטים. מה קורה בשוק הרכב בישראל, מה זז בעולם, ומה מחבר
   ביניהם. אם יש סקירה קודמת למטה — מה השתנה מאז, ואם לא השתנה דבר מהותי, אמור זאת.
 - israel: שתיים עד חמש מגמות בשוק המקומי — מחירים והשקות, מותגים סיניים, מסירות,
-  מיסוי ורגולציה, ליסינג ויד שנייה, מימון. **נושא אחד לכל פריט.** body של 60–120
+  מיסוי ורגולציה, מימון. (ליסינג, השכרה ויד שנייה — בשדה leasing, לא כאן.) **נושא אחד לכל פריט.** body של 60–120
   מילים: מה קרה, המנגנון, ומי מהחברות מושפע ובאיזה כיוון. כשהפריטים אינם מקשרים
   מותג ליבואנית מסוימת, כתוב את ההשפעה על היבואניות כקבוצה — בלי להסביר בכל פריט
   מחדש למה אין שיוך.
@@ -116,6 +123,20 @@ PROMPT = """אתה אנליסט ענף הרכב של TLV TASE View, שירות �
 - direction: אחד מ-חיובי / שלילי / מעורב / ניטרלי, ביחס לחברות הרלוונטיות בבורסה
   בתל אביב.
 - sources: מספרי הפריטים שעליהם נשען הפריט — אחד עד שישה.
+- leasing: ענף הליסינג וההשכרה, מנקודת המבט של החברות: חברות הליסינג (אלדן תחבורה),
+  היבואניות שמוכרות להן (קרסו מוטורס, דלק רכב, יוניברסל מוטורס), האשראי לרכב (מימון ישיר)
+  והמבטחות. נשען על נתוני הרשם שלמטה ועל הכותרות.
+  · summary: שלושה עד חמישה משפטים — מה מצב הענף לפי הנתונים: היקף הרכישות של הציים
+    ושיעורן מהרכב החדש מול אשתקד, תמהיל התוצרים והחשמלי, המכירות מהצי לשוק היד השנייה.
+  · points: שלוש עד חמש תובנות, **נושא אחד לכל אחת**. body של 60–120 מילים: מה הנתון
+    אומר, המנגנון (עלות רכישה, ערך שייר בסוף התקופה, ביקוש ליד שנייה, מרווח היבואנית
+    במכירות צי, עלות מימון), ומי מושפע ובאיזה כיוון. **מספר מהרשם — בדיוק כפי שהוא
+    כתוב בבלוק**, עם החודש שלו; אל תחשב שיעורים חדשים שאינם בבלוק. data=true כשהתובנה
+    נשענת על נתוני הרשם; sources — מספרי כותרות, כשיש (יכול להיות ריק בתובנה מהנתונים).
+  · יבואנית ששמה בבלוק מסומן "(נסחרת: X)" — מותר לכתוב את X ב-companies ולייחס לה את
+    המספר. לגבי שאר היבואניות — שמן בטקסט בלבד, לא ב-companies.
+  · **הבעלות ברשם היא הנוכחית**: בחודש שמסומן "חושב באיחור" חלק מהרכבים כבר נמכרו מהצי,
+    ולכן חלק הליסינג בו נמוך מבפועל. אל תציג ירידה מול חודש כזה כמגמה.
 - watch: אחד עד ארבעה אירועים קרובים שמוזכרים בפריטים ויכולים להזיז את החברות
   בישראל — נתוני מסירות, החלטת מיסוי או מכס, דוחות, כניסת מותג. לא השקת דגם בחו״ל.
   מועד רק אם הוא כתוב בפריט; אחרת when ריק.
@@ -126,6 +147,9 @@ PROMPT = """אתה אנליסט ענף הרכב של TLV TASE View, שירות �
 
 === החברות בשרשרת: תפקיד · המנגנון · חברות ===
 {chain}
+
+=== נתוני רשם כלי הרכב (משרד התחבורה, data.gov.il) ===
+{registry}
 
 === כותרות מישראל ({n_il}) ===
 {il}
@@ -171,6 +195,90 @@ def chain_text(cfg: dict) -> tuple[str, list[str]]:
         names += cos
         lines.append(f"- {g['role']} · {g.get('why') or ''} · {', '.join(cos)}")
     return "\n".join(lines), names
+
+
+def _pct(a: float, b: float) -> float:
+    return a / b * 100 if b else 0.0
+
+
+def registry_text(cfg: dict) -> tuple[str, str | None]:
+    """נתוני הרשם כטקסט לפרומפט, והחודש השלם האחרון שבו.
+
+    **המספרים מחושבים כאן ולא אצל המודל.** שיעור ליסינג, חלק התוצרת הסינית
+    ושינוי שנתי ליבואנית — כל אחד נכתב בבלוק כמספר מוגמר, כדי שהמודל יצטט
+    ולא יחשב. חישוב בתוך הניסוח הוא המקום שבו מספרים נשברים.
+    """
+    try:
+        reg = json.loads((REGISTRY / "registrations.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "— (אין נתוני רשם בריצה הזו)", None
+    try:
+        disp = json.loads((REGISTRY / "disposals.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        disp = {}
+    months = reg.get("months") or {}
+    full = [k for k in sorted(months) if not months[k].get("partial")]
+    if not full:
+        return "— (אין חודש שלם)", None
+    imap = (cfg.get("registry") or {}).get("importers") or {}
+    lines = ["הבעלות היא זו הרשומה היום. רכב שנמכר מאז נספר לפי הבעלות החדשה, ולכן בחודש "
+             "שמסומן \"חושב באיחור\" חלק הליסינג וההשכרה נמוך מבפועל.",
+             "", "רכב פרטי חדש שעלה לכביש, לפי חודש:"]
+    for k in full[-13:]:
+        v = months[k]
+        n, own = v.get("n") or 0, v.get("own") or {}
+        lease, priv = own.get("ליסינג", 0), own.get("פרטי", 0)
+        lf = (v.get("fuel") or {}).get("ליסינג") or {}
+        pf = (v.get("fuel") or {}).get("פרטי") or {}
+        lc = dict((v.get("country") or {}).get("ליסינג") or [])
+        pr = v.get("price") or {}
+        lines.append(
+            f"- {k}{' (חושב באיחור)' if v.get('late') else ''}: סה\"כ {n:,} · ליסינג {lease:,} "
+            f"({_pct(lease, n):.1f}%) · השכרה {own.get('השכרה', 0):,} · חברה {own.get('חברה', 0):,} · "
+            f"סוחר {own.get('סוחר', 0):,} · פרטי {priv:,} · חשמלי בליסינג {_pct(lf.get('ev', 0), lease):.1f}% "
+            f"(בפרטי {_pct(pf.get('ev', 0), priv):.1f}%) · תוצרת סין בליסינג {_pct(lc.get('סין', 0), lease):.1f}% · "
+            f"חציון מחיר מחירון בליסינג {pr.get('ליסינג', {}).get('median', '—'):,} ₪ "
+            f"(בפרטי {pr.get('פרטי', {}).get('median', '—'):,} ₪)")
+
+    last3 = full[-3:]
+    prev3 = [f"{int(k[:4]) - 1}-{k[5:]}" for k in last3]
+
+    def total(keys: list[str], owner: str, field: str = "importer") -> Counter:
+        c: Counter = Counter()
+        for k in keys:
+            for name, cnt in ((months.get(k) or {}).get(field) or {}).get(owner) or []:
+                c[name] += cnt
+        return c
+
+    tot, lease, dealer, before = total(last3, "all"), total(last3, "ליסינג"), total(last3, "סוחר"), total(prev3, "all")
+    lines += ["", f"יבואניות — רכב פרטי חדש ב-{last3[0]} עד {last3[-1]} (שינוי מול אותם חודשים אשתקד). "
+              "זהירות: שם היבואנית נלקח ממחירון משרד התחבורה לכל שנת דגם, ושינוי שנתי חד (מעל ±50%) "
+              "יכול לשקף מותג שעבר בין יבואניות או שם שנרשם אחרת — ולא שינוי במכירות:"]
+    shown = [name for name, _ in tot.most_common(12)]
+    shown += [name for name in imap if name in tot and name not in shown]
+    for name in shown:
+        t = tot[name]
+        yoy = f"{_pct(t - before[name], before[name]):+.0f}%" if before.get(name) else "אין השוואה"
+        listed = f" (נסחרת: {imap[name]})" if name in imap else ""
+        lines.append(f"- {name}{listed}: {t:,} · לליסינג {lease[name]:,} ({_pct(lease[name], t):.0f}%) · "
+                     f"לסוחרים {dealer[name]:,} · שנתי {yoy}")
+
+    brands, bprev = total(last3, "ליסינג", "brand"), total(prev3, "ליסינג", "brand")
+    lsum, lprev = sum(brands.values()), sum(bprev.values())
+    lines += ["", f"המותגים שנרשמו לליסינג ב-{last3[0]} עד {last3[-1]} (חלק מהליסינג; אשתקד):"]
+    for name, cnt in brands.most_common(10):
+        lines.append(f"- {name}: {cnt:,} ({_pct(cnt, lsum):.1f}%; אשתקד {_pct(bprev.get(name, 0), lprev):.1f}%)")
+
+    dm = disp.get("months") or {}
+    if dm:
+        lines += ["", "רכבים שיצאו מציי הליסינג (תקופת בעלות חדשה שהתחילה בחודש, אחרי בעלות ליסינג):"]
+        for k in sorted(dm)[-6:]:
+            f = dm[k].get("flows") or {}
+            out = sum(v for key, v in f.items() if key.startswith("ליסינג>"))
+            held = (dm[k].get("held_median") or {}).get("ליסינג")
+            lines.append(f"- {k}: {out:,} — לסוחר {f.get('ליסינג>סוחר', 0):,} · לפרטי {f.get('ליסינג>פרטי', 0):,} "
+                         f"· לחברה {f.get('ליסינג>חברה', 0):,}" + (f" · חציון {held} חודשים בבעלות הליסינג" if held else ""))
+    return "\n".join(lines), full[-1]
 
 
 def _item_line(i: int, r: dict) -> str:
@@ -266,6 +374,18 @@ def clean(d: dict, names: set[str], numbered: list[dict]) -> tuple[dict, int]:
             c["direction"] = "ניטרלי"
         cos.append(c)
     d["companies"] = cos
+    lz = d.get("leasing") if isinstance(d.get("leasing"), dict) else {}
+    points = []
+    for m in lz.get("points") or []:
+        if not isinstance(m, dict) or not m.get("title"):
+            continue
+        cos = [c.strip() for c in m.get("companies") or [] if isinstance(c, str)]
+        ok = [c for c in cos if c in names]
+        dropped += len(cos) - len(ok)
+        points.append({"title": _strip_refs(m.get("title")), "body": _strip_refs(m.get("body")),
+                       "direction": m.get("direction") if m.get("direction") in DIRECTIONS else "ניטרלי",
+                       "companies": ok, "sources": srcs(m.get("sources")), "data": bool(m.get("data"))})
+    d["leasing"] = {"summary": _strip_refs(lz.get("summary") or ""), "points": points}
     d["watch"] = [{"what": _strip_refs(w.get("what")), "when": _strip_refs(w.get("when") or "")}
                   for w in d.get("watch") or [] if isinstance(w, dict) and w.get("what")][:4]
     d["terms"] = [t for t in d.get("terms") or [] if isinstance(t, dict) and t.get("term")]
@@ -338,8 +458,9 @@ def main() -> int:
     else:
         previous = "— (זו הסקירה הראשונה)"
 
+    registry, reg_month = registry_text(cfg)
     prompt = PROMPT.format(
-        window=WINDOW_H, previous=previous, chain=chain,
+        window=WINDOW_H, previous=previous, chain=chain, registry=registry,
         n_il=len(il), il="\n".join(_item_line(i + 1, r) for i, r in enumerate(il)) or "—",
         n_world=len(world),
         world="\n".join(_item_line(len(il) + i + 1, r) for i, r in enumerate(world)) or "—")
@@ -370,7 +491,8 @@ def main() -> int:
     if dropped:
         print(f"  הוסרו {dropped} שמות או הערות חברה שאינם ברשימת הכיסוי או בלי פריט שמזכיר אותם")
     used = sorted({k for key in ("israel", "world", "companies") for m in data.get(key) or []
-                   for k in m.get("sources") or []})
+                   for k in m.get("sources") or []}
+                  | {k for m in (data.get("leasing") or {}).get("points") or [] for k in m.get("sources") or []})
     refs = {str(k): {f: numbered[k - 1].get(f) for f in ("title", "source", "url", "ts", "region")}
             for k in used}
     now = datetime.now(IL)
@@ -379,13 +501,16 @@ def main() -> int:
            "window_h": WINDOW_H, "n_il": len(il), "n_world": len(world),
            "model": os.environ.get("CLAUDE_MODEL") or "default",
            "effort": os.environ.get("AUTO_EFFORT") or "default", "cost_usd": meta.get("cost"),
-           **{k: data.get(k) for k in ("headline", "overview", "israel", "world", "companies", "watch", "terms")},
+           "registry_month": reg_month,
+           **{k: data.get(k) for k in ("headline", "overview", "israel", "world", "companies", "leasing",
+                                       "watch", "terms")},
            "refs": refs}
     p = OUT / "analyses" / f"{now:%Y-%m}.jsonl"
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     print(f"::notice::סקירת הרכב: {len(data['israel'])} מגמות בישראל, {len(data['world'])} בעולם, "
+          f"{len(data['leasing']['points'])} תובנות ליסינג (רשם עד {reg_month or '—'}), "
           f"{len(data['companies'])} הערות חברה · {len(il)}+{len(world)} כותרות · ${cost:.2f} · {took:.0f} שניות")
     return 0
 

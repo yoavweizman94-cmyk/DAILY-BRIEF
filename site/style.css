@@ -1919,3 +1919,45 @@ a.au-title:hover { color: var(--accent); text-decoration: underline; }
 .au-prev ul li { display: flex; align-items: baseline; gap: 0.6rem; }
 .au-prev details > summary { cursor: pointer; color: var(--fg); }
 .au-prev details p { font-size: 0.85rem; line-height: 1.7; margin: 0.35rem 0; }
+
+/* ---------- גיליון הרכב: ליסינג והשכרה (נתוני רשם כלי הרכב) ---------- */
+.au-lease-sum { max-width: var(--measure); margin: 0.2rem 0 1rem; }
+.au-lease-sum p { font-size: 0.95rem; line-height: 1.8; margin: 0 0 0.5rem; }
+.au-kpi { margin-top: 1.1rem; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); }
+.au-charts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  gap: 1rem 1.6rem; margin: 0.4rem 0 1.4rem;
+}
+.au-charts figure { margin: 0; }
+.au-charts figcaption { font-size: 0.82rem; font-weight: 700; color: var(--fg); margin-bottom: 0.3rem; }
+svg.au-ch .bar { fill: var(--accent); opacity: 0.35; }
+svg.au-ch .bar.last { opacity: 0.8; }
+svg.au-ch .bar.partial { opacity: 0.14; }
+svg.au-ch .l-china, svg.au-ch .l-ev {
+  fill: none; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round;
+}
+svg.au-ch .l-china { stroke: var(--accent); }
+svg.au-ch .l-ev { stroke: var(--warn); }
+svg.au-ch .l-china-end { fill: var(--accent); stroke: var(--surface); stroke-width: 1.5; }
+svg.au-ch .l-ev-end { fill: var(--warn); stroke: var(--surface); stroke-width: 1.5; }
+.au-legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.9rem;
+  font-size: 0.74rem; color: var(--muted); margin: 0.25rem 0 0;
+}
+.au-legend .sw { display: inline-block; width: 0.8rem; height: 0.55rem; margin-inline-end: 0.3rem; vertical-align: middle; }
+.au-legend .sw.bar { background: var(--accent); opacity: 0.8; }
+.au-legend .sw.partial { background: var(--accent); opacity: 0.18; }
+.au-legend .sw.l-china { height: 3px; background: var(--accent); }
+.au-legend .sw.l-ev { height: 3px; background: var(--warn); }
+.au-h3 { font-size: 0.98rem; margin: 1.5rem 0 0.4rem; }
+table.au-tbl td .co {
+  font-size: 0.66rem; font-weight: 600; color: var(--accent); border: 1px solid var(--accent);
+  border-radius: 999px; padding: 0 0.4rem; margin-inline-start: 0.35rem; white-space: nowrap;
+}
+table.au-tbl tr.listed td { background: var(--accent-soft); }
+.au-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.6rem; margin-top: 0.35rem; }
+.au-foot .au-src { margin: 0; }
+.au-data {
+  font-size: 0.66rem; font-weight: 700; color: var(--accent); background: var(--accent-soft);
+  border-radius: 3px; padding: 0.05rem 0.4rem; white-space: nowrap;
+}

@@ -38,6 +38,16 @@ google_news:
     - "רכב סיני when:3d"
     - "מס קנייה רכב when:7d"
     - "ליסינג רכב when:3d"
+    # ליסינג, השכרה ויד שנייה — הזרימות שקובעות את כלכלת הצי.
+    - "חברות הליסינג when:7d"
+    - "ליסינג פרטי when:7d"
+    - "ליסינג תפעולי when:14d"
+    - "השכרת רכב when:7d"
+    - "צי רכב when:7d"
+    - "רכב יד שנייה מחירים when:7d"
+    - "מחירון רכב when:7d"
+    - "שווי שימוש רכב when:14d"
+    - "\"אלדן\" ליסינג when:14d"
     - "\"דלק רכב\" when:7d"
     - "\"קרסו מוטורס\" when:7d"
     - "\"יוניברסל מוטורס\" when:7d"
@@ -50,6 +60,11 @@ google_news:
     - "car registrations europe when:7d"
     - "china car exports when:7d"
     - "EV battery costs automakers when:3d"
+    - "car leasing market when:7d"
+    - "fleet leasing residual values when:14d"
+    - "used car prices when:7d"
+    - "rental car fleet when:7d"
+    - "Ayvens leasing when:14d"
 
 # מקורות שחוזרים בתוצאות החיפוש בעברית ואינם חדשות רכב: אתר וייטנאמי
 # שמתרגם כתבות, ספורט, חדשות מקומיות ואגרגטורים שמשכפלים כותרות.
@@ -93,7 +108,8 @@ business_words: ["sales", "sold", "deliveries", "registrations", "tariff", "pric
                  "tax", "excise", "consolidation", "reorganise", "reorganize", "partnership",
                  "joint venture", "orders", "market share", "cost", "costs", "margin", "outlook",
                  "ban", "probe", "investigation", "strike", "cuts", "units", "slump", "surge",
-                 "decline", "record", "quarter", "trade"]
+                 "decline", "record", "quarter", "trade", "fleet", "fleets", "rental", "residual",
+                 "residuals", "depreciation", "used car", "used cars", "lessor"]
 
 # נושאים לתיוג הכותרות. התאמה בעברית מתחילת מילה (עם תחיליות ו/ה/ב/ל/מ/ש/כ)
 # ובלי גבול בסוף, כדי ש"יבואנ" יתפוס יבואנית ויבואנים; באנגלית — מילה שלמה.
@@ -136,12 +152,18 @@ themes:
                "semiconductor", "rare earth", "rare earths", "shortage", "Bosch", "Continental",
                "ZF", "Magna", "Aptiv", "Denso", "Valeo", "Forvia", "Lear", "רכיבים", "ספקים",
                "שרשרת אספקה", "חלקי חילוף", "מחסור", "שבבים"]
+  # ליסינג והשכרה בנושא משלו: הם הקונה הגדול של רכב חדש והמוכר הגדול של יד
+  # שנייה, והסעיף שלהם בגיליון נשען על נתוני הרשם ולא רק על כותרות.
+  - slug: leasing
+    label: "ליסינג, השכרה ויד שנייה"
+    keywords: ["ליסינג", "החכר", "השכרה", "השכרת רכב", "צי רכב", "ציי רכב", "צי הרכב", "רכב צמוד",
+               "שווי שימוש", "יד שנייה", "משומש", "משומשים", "מחירון", "ערך שייר", "leasing", "lease",
+               "lessor", "fleet", "fleets", "rental", "used car", "used cars", "residual", "residuals",
+               "depreciation", "Hertz", "Avis", "Sixt", "Ayvens", "Arval", "LeasePlan", "Europcar"]
   - slug: finance
-    label: "ליסינג, מימון וביטוח"
-    keywords: ["ליסינג", "השכרה", "השכרת רכב", "מימון", "הלוואה", "הלוואות", "אשראי", "ביטוח רכב",
-               "ביטוח חובה", "ביטוח מקיף", "יד שנייה", "משומש", "משומשים", "leasing", "lease",
-               "rental", "auto loan", "auto loans", "car loan", "car loans", "insurance", "used car",
-               "used cars", "residual"]
+    label: "מימון וביטוח"
+    keywords: ["מימון", "הלוואה", "הלוואות", "אשראי", "ביטוח רכב", "ביטוח חובה", "ביטוח מקיף",
+               "auto loan", "auto loans", "car loan", "car loans", "insurance"]
   - slug: fuel
     label: "דלק ותחנות"
     keywords: ["מחירי הדלק", "מחיר הדלק", "בנזין", "סולר", "תחנות דלק", "gasoline", "fuel prices"]
@@ -161,7 +183,7 @@ chain:
     companies:
       - {name: "רבל", aliases: ["Raval"]}
   - role: "ליסינג והשכרה"
-    why: "מחירי רכב חדש, מחירי יד שנייה (שקובעים את ערך הצי בסוף תקופה) ועלות המימון קובעים את רווחיות הצי."
+    why: "מחירי רכב חדש, מחירי יד שנייה (שקובעים את ערך הצי בסוף תקופה) ועלות המימון קובעים את רווחיות הצי. נתוני הרשם בסעיף הליסינג מראים את שתי הזרימות: קנייה ומכירה."
     companies:
       - {name: "אלדן תחבורה", aliases: ["אלדן"]}
   - role: "אשראי צרכני"
@@ -183,3 +205,16 @@ chain:
     why: "קצב המעבר לרכב חשמלי קובע את הביקוש לבנזין ולסולר בתחנות."
     companies:
       - {name: "פז אנרגיה", aliases: []}
+
+# ---------------------------------------------------------------------------
+# נתוני רשם כלי הרכב (ingest/auto_registry.py) — סעיף "ליסינג והשכרה".
+#
+# importers: שם היבואנית במחירון משרד התחבורה (בלי "בע"מ") → שם החברה הנסחרת
+# ב-companies.yaml. **רק כשזו אותה ישות או חברת בת שלה**; שאר היבואניות מוצגות
+# בשמן, בלי שיוך. השמות נבדקו מול המחירון ב-17/09/2026.
+# ---------------------------------------------------------------------------
+registry:
+  importers:
+    "קרסו מוטורס": "קרסו מוטורס"
+    "דלק מוטורס": "דלק רכב"
+    "יוניברסל מוטורס ישראל": "יוניברסל מוטורס"

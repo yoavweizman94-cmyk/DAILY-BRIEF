@@ -63,8 +63,15 @@ jobs:
           fi
           python ingest/auto_pull.py
 
+      # נתוני רשם כלי הרכב לסעיף הליסינג: פעם ביום (הסקריפט מדלג כשכבר חושב היום),
+      # עם תקציב זמן — היסטוריית הבעלויות נמשכת חודש אחר חודש ונשלמת בריצות הבאות.
+      # כשל כאן אינו מפיל את הריצה: הכותרות והסקירה אינן תלויות בו.
+      - name: Vehicle registry (leasing data)
+        id: registry
+        run: python ingest/auto_registry.py --budget-minutes 8 || echo "::warning::רשם כלי הרכב נכשל — ינוסה שוב בריצה הבאה"
+
       - name: Nothing changed
-        if: steps.collect.outputs.changed != 'yes'
+        if: steps.collect.outputs.changed != 'yes' && steps.registry.outputs.updated != 'yes'
         run: echo "אין כותרת חדשה ואין סקירה לכתוב — יוצאים בלי מודל ובלי פריסה."
 
       - uses: actions/setup-node@v7
@@ -96,29 +103,29 @@ jobs:
           exit 0
 
       - name: Save content
-        if: steps.collect.outputs.changed == 'yes'
+        if: steps.collect.outputs.changed == 'yes' || steps.registry.outputs.updated == 'yes'
         run: CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push auto
 
       # התוכן נמשך שוב לפני הבנייה: צנרת אחרת עשויה הייתה לדחוף מאז, ובנייה על
       # עותק ישן הייתה דורסת באתר תוכן חדש יותר.
       - name: Refresh content before build
-        if: steps.collect.outputs.changed == 'yes'
+        if: steps.collect.outputs.changed == 'yes' || steps.registry.outputs.updated == 'yes'
         env:
           CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
         run: bash scripts/content_repo.sh pull
 
       - name: Build site
-        if: steps.collect.outputs.changed == 'yes'
+        if: steps.collect.outputs.changed == 'yes' || steps.registry.outputs.updated == 'yes'
         run: |
           pip install -r requirements.txt
           python site/build.py
 
       - name: Check inline JS
-        if: steps.collect.outputs.changed == 'yes'
+        if: steps.collect.outputs.changed == 'yes' || steps.registry.outputs.updated == 'yes'
         run: python scripts/check_inline_js.py
 
       - name: Deploy to Cloudflare Pages
-        if: steps.collect.outputs.changed == 'yes'
+        if: steps.collect.outputs.changed == 'yes' || steps.registry.outputs.updated == 'yes'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
