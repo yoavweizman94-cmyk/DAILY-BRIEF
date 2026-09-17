@@ -296,6 +296,18 @@ def newest_jsonl(dirname: str, pattern: str, field: str) -> str | None:
     return best
 
 
+def last_call_held(today: date) -> str | None:
+    """מועד שיחת הוועידה האחרונה שכבר התקיימה, מתוך לוח השיחות."""
+    try:
+        data = json.loads((OUT / "calls" / "upcoming.json").read_text(encoding="utf-8")) or {}
+    except (OSError, ValueError):
+        return None
+    rows = data if isinstance(data, list) else (data.get("calls") or data.get("items") or [])
+    days = [r.get("date") for r in rows
+            if isinstance(r, dict) and (r.get("date") or "") <= today.isoformat()]
+    return max(days) if days else None
+
+
 def business_days_since(day: str, today: date) -> int:
     """כמה ימי מסחר חלפו. הבורסה נסחרת שני–שישי מינואר 2026, ולכן
     שבת וראשון אינם פיגור אלא לוח השנה."""
@@ -367,6 +379,22 @@ def main() -> int:
             tg.append((label, "—", "אין נתונים"))
             continue
         n = business_days_since(day, today)
+        # **תמלולים נמדדים מול לוח השיחות ולא מול השעון.** בין עונות הדוחות אין
+        # שיחות כלל — ב-17/09/2026 האחרונה הייתה ב-10/09 והבאה ב-22/09 — ומדידה
+        # מול הרשומה האחרונה הכריזה על תקלה בכל יום של שקט שהוא תכונה של המקור.
+        # מה שמעיד על תקלה הוא שיחה שהתקיימה ואין לה תמלול.
+        if label == "תמלולי שיחות":
+            held = last_call_held(today)
+            if not held or held <= day:
+                rows.append((label, day, f"{n} ימי מסחר · אין שיחה חדשה בלוח", hint))
+                continue
+            gap = business_days_since(held, today)
+            rows.append((label, day, f"שיחה ב-{held}, {gap} ימי מסחר בלי תמלול", hint))
+            if gap > limit:
+                bad.append(f"{label}: התקיימה שיחה ב-{held} ואין לה תמלול — {gap} ימי מסחר. "
+                           f"בדוק את {hint}.")
+                tg.append((label, day, f"{gap} ימי מסחר בלי תמלול"))
+            continue
         rows.append((label, day, f"{n} ימי מסחר", hint))
         if n > limit:
             bad.append(f"{label}: הרשומה האחרונה היא מ-{day} — {n} ימי מסחר. "
