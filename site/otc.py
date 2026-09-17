@@ -160,6 +160,34 @@ def hebdate(iso: str) -> str:
     return f"{iso[8:10]}/{iso[5:7]}/{iso[:4]}" if len(iso) >= 10 else iso
 
 
+SRC_TASE = "מקור: סקירת העסקאות מחוץ לבורסה של הבורסה לניירות ערך בתל אביב"
+KICKER = "עסקאות מחוץ לבורסה"
+
+_ICON = ('<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5m0 0'
+         'L4.8 6.8M8 10l3.2-3.2M3 13.2h10" fill="none" stroke="currentColor" '
+         'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>')
+
+
+def png_button(text: str = "ייצוא לתמונה", cls: str = "", **data) -> str:
+    """כפתור ייצוא. data-key מצביע על מטען מוטמע; data-day/data-month נבנים
+    בדפדפן מתוך נתוני הדיווחים. התווית ב-span כדי שהחלפת הטקסט ("מייצא…")
+    לא תמחק את האייקון."""
+    attrs = "".join(f' data-{k}="{_esc_html(str(v))}"' for k, v in data.items())
+    return (f'<button type="button" class="otc-png{(" " + cls) if cls else ""}"{attrs}>'
+            f'{_ICON}<span class="lbl">{_esc_html(text, quote=False)}</span></button>')
+
+
+def card(title: str, sub: str, blocks: list[dict], file: str,
+         kicker: str = KICKER, source: str = SRC_TASE) -> dict:
+    """מטען לכרטיס תמונה: כותרת ורצף גושים (ראה site/export_card.js)."""
+    return {"kicker": kicker, "title": title, "sub": sub,
+            "blocks": [b for b in blocks if b], "source": source, "file": file}
+
+
+def embed(key: str, payload: dict) -> str:
+    return f'<script type="application/json" id="otc-{key}">{_payload(payload)}</script>'
+
+
 
 def analyse(rows: list[dict], year: str) -> dict:
     """כל מה שהעמוד מציג, מחושב פעם אחת."""
@@ -234,11 +262,41 @@ def tiles(a: dict, year: str) -> str:
     מה שמתחתיהם.
     """
     ref = a["latest"]
-    day = sum(r["value"] for r in a["by_day"].get(ref, []))
+    day_rows = a["by_day"].get(ref, [])
+    day = sum(r["value"] for r in day_rows)
     month = (ref or "")[:7]
     mtd_rows = [r for r in a["shares"] if r["date"][:7] == month]
     mtd = sum(r["value"] for r in mtd_rows)
     ytd = sum(r["value"] for r in a["ytd"])
+    day_word = "היום" if ref != a["ref"] else "יום המסחר האחרון"
+
+    # **תמונת המצב כתמונה.** שלושת המספרים, ומתחתם המחזור היומי בימי השוק
+    # האחרונים מול החציון — ההקשר שאומר אם היום הזה גדול או שגרתי — והניירות
+    # הגדולים של היום. הגרף אינו בעמוד בכוונה (שם הטבלאות עונות); בתמונה
+    # שמופצת לבד, בלי העמוד שסביבה, הוא מה שנותן למספר קנה מידה.
+    recent = a["daily"][-22:]
+    top_day = aggregate(day_rows)[:6] if day_rows else []
+    blocks = [
+        {"type": "stats", "items": [
+            {"label": f"{day_word} · {hebdate(ref or '')}", "value": money(day),
+             "cap": f"{len(day_rows)} עסקאות במניות"},
+            {"label": "מתחילת החודש", "value": money(mtd), "cap": f"{len(mtd_rows)} עסקאות"},
+            {"label": f"מתחילת {year}", "value": money(ytd), "cap": f"{len(a['ytd'])} עסקאות"}]},
+        {"type": "columns", "title": f"המחזור היומי · {len(recent)} ימי המסחר האחרונים",
+         "items": [{"label": f"{d[8:10]}/{d[5:7]}", "value": v, "text": money(v)} for d, v in recent],
+         "maxText": money(max((v for _, v in recent), default=0)),
+         "median": a["median_day"], "medianText": f"חציון 30 יום: {money(a['median_day'])}"}
+        if len(recent) >= 2 else None,
+        {"type": "table", "title": f"הגדולות · {day_word}",
+         "cols": [["נייר", "name", "rtl"], ["עסקאות", "n", "ltr"], ["היקף", "value", "ltr"],
+                  ["% מהון החברה", "cap", "ltr"]],
+         "rows": [{"name": " ".join(e["name"].split()), "n": str(e["n"]), "value": money(e["value"]),
+                   "cap": (num(e["pct_capital"], 2) + "%" if e["pct_capital"] is not None else "—")}
+                  for e in top_day]} if top_day else None,
+    ]
+    payload = card(f"תמונת מצב · {hebdate(ref or '')}",
+                   "היקף העסקאות במניות מחוץ לבורסה — ביום, מתחילת החודש ומתחילת השנה.",
+                   blocks, file=f"tlv-otc-summary-{ref}")
     return "\n".join([
         '<section class="strip">',
         f'<div class="tile"><span class="lbl">'
@@ -253,6 +311,8 @@ def tiles(a: dict, year: str) -> str:
         f'<span class="val" dir="ltr">{money(ytd)}</span>'
         f'<span class="chg">{len(a["ytd"])} עסקאות</span></div>',
         '</section>',
+        embed("summary", payload),
+        f'<p class="otc-acts otc-acts-strip">{png_button("ייצוא תמונת המצב", key="summary")}</p>',
     ])
 
 
@@ -292,6 +352,11 @@ def aggregate(rows: list[dict]) -> list[dict]:
 
 
 def review(rows: list[dict], label: str) -> str:
+    bits = review_bits(rows, label)
+    return '<p class="otc-review">' + " ".join(bits) + "</p>" if bits else ""
+
+
+def review_bits(rows: list[dict], label: str) -> list[str]:
     """סקירה קצרה של התקופה, נגזרת מהמספרים עצמם.
 
     **מה שנאמר כאן הוא עובדה מחושבת, לא הערכה.** ריכוזיות, כיוון
@@ -301,11 +366,11 @@ def review(rows: list[dict], label: str) -> str:
     מעקה 5 חל כאן במלואו: אין ניסוח שממליץ על פעולה.
     """
     if not rows:
-        return ""
+        return []
     agg = aggregate(rows)
     total = sum(e["value"] for e in agg)
     if not total:
-        return ""
+        return []
     n_deals = sum(e["n"] for e in agg)
     top = agg[0]
     top3 = sum(e["value"] for e in agg[:3]) / total * 100
@@ -332,12 +397,21 @@ def review(rows: list[dict], label: str) -> str:
 
     # כיוון הסטיות מול שער הבסיס.
     prem = [e["median_prem"] for e in agg if e["median_prem"] is not None]
+    # **הספירה היא של הצד שהמשפט מדבר עליו.** הגרסה הקודמת ספרה תמיד את
+    # הניירות שמתחת לבסיס, אבל כשהחציון לא היה שלילי המשפט אמר "מעל" — ו-9
+    # ניירות שנסחרו מתחת לבסיס נקראו כ-9 שנסחרו מעליו. וחציון אפסי נכתב
+    # "-0.00%": מינוס אפס של נקודה צפה, לא סטייה.
     if prem:
-        below = sum(1 for x in prem if x < 0)
+        below = sum(1 for x in prem if x < -0.005)
+        above = sum(1 for x in prem if x > 0.005)
         med = statistics.median(prem)
-        side = "מתחת" if med < 0 else "מעל"
-        bits.append(f"חציון הסטייה משער הבסיס הוא {med:+.2f}% — "
-                    f"{below} מתוך {len(prem)} ניירות נסחרו {side} לבסיס.")
+        if abs(med) < 0.005:
+            bits.append(f"חציון הסטייה משער הבסיס הוא 0.00% — {above} ניירות נסחרו "
+                        f"מעל לבסיס ו-{below} מתחתיו.")
+        else:
+            side, n_side = ("מתחת", below) if med < 0 else ("מעל", above)
+            bits.append(f"חציון הסטייה משער הבסיס הוא {med:+.2f}% — "
+                        f"{n_side} מתוך {len(prem)} ניירות נסחרו {side} לבסיס.")
 
     # נייר שחוזר בכמה ימים הוא דפוס; עסקה בודדת אינה.
     rec = [e for e in agg if e["days"] >= 3]
@@ -346,7 +420,8 @@ def review(rows: list[dict], label: str) -> str:
         bits.append(f"{len(rec)} ניירות חזרו בשלושה ימים או יותר, "
                     f"והחוזר שבהם {top_rec['name']} ב-{top_rec['days']} ימים.")
 
-    return '<p class="otc-review">' + " ".join(bits) + "</p>"
+    return bits
+
 
 def buyers(rows: list[dict], off: list[dict]) -> dict[str, list[str]]:
     """זהויות מדווחות לעסקאות של אותה תקופה, מתוך דיווחי מאיה.
@@ -491,7 +566,8 @@ def period_table(title: str, sub: str, rows: list[dict],
 
     shown = agg[:limit]
     cells = [{
-        "name": e["name"], "n": str(e["n"]), "days": str(e["days"]),
+        # שם עם רווחים כפולים ("דיסקונט       א") נשבר בתמונה למילים ריקות.
+        "name": " ".join(e["name"].split()), "n": str(e["n"]), "days": str(e["days"]),
         "value": money(e["value"]),
         "cap": (num(e["pct_capital"], 2) + "%"
                 if e["pct_capital"] is not None else "—"),
@@ -508,21 +584,23 @@ def period_table(title: str, sub: str, rows: list[dict],
 
     # מטען לייצוא: הכפתור מצייר מהנתונים ולא מגרד את ה-DOM, כך
     # שהתמונה אינה תלויה בעיצוב העמוד או ברוחב המסך.
-    payload = _payload({
-        "title": title, "sub": sub,
-        "total": money(total), "deals": sum(e["n"] for e in agg),
-        "securities": len(agg), "cols": cols,
-        "rows": [_public(r) for r in cells],
-        "moreText": more, "totalRow": total_row,
-    })
+    bits = review_bits(rows, label or title)
+    payload = card(title, sub, [
+        {"type": "stats", "items": [
+            {"label": "היקף", "value": money(total)},
+            {"label": "עסקאות", "value": f'{sum(e["n"] for e in agg):,}'},
+            {"label": "ניירות", "value": str(len(agg))}]},
+        # המשפט הראשון בסקירה חוזר על שלושת המספרים שמעליו, ולכן אינו בתמונה.
+        {"type": "notes", "title": "עיקרי התקופה", "items": bits[1:]} if len(bits) > 1 else None,
+        {"type": "table", "title": "לפי נייר", "cols": cols,
+         "rows": [_public(r) for r in cells], "moreText": more, "totalRow": total_row},
+    ], file=f"tlv-otc-{key}-{max(r['date'] for r in rows)}")
     out = [f'<h2>{title}</h2>',
            f'<p class="note">{sub}</p>',
            review(rows, label or title),
            extra,
-           f'<script type="application/json" id="otc-{key}">{payload}</script>',
-           f'<p class="otc-acts">'
-           f'<button type="button" class="otc-png" data-key="{key}">'
-           'ייצוא לתמונה</button>'
+           embed(key, payload),
+           f'<p class="otc-acts">{png_button(key=key)}'
            f'<button type="button" class="otc-copy" data-key="{key}">'
            'העתקת התקציר</button></p>',
            '<div class="tw"><table class="nadlan"><thead><tr>'
@@ -619,359 +697,16 @@ def method() -> str:
 
 
 def export_js() -> str:
-    """ציור הכרטיס לקנבס והורדה כ-PNG, ולצידו העתקת התקציר.
+    """הרנדרר של תמונות הייצוא ומטפלי הכפתורים — מ-site/export_card.js.
 
-    **הטבלה בתמונה היא הטבלה שבעמוד, במלואה.** אותן שורות, אותן עמודות,
-    שורת "ועוד" ושורת הסך — הכל מגיע מאותו מטען שממנו נבנה ה-HTML, כך
-    ששני הפלטים אינם יכולים להיפרד. רוחבי העמודות נמדדים בגופן האמיתי
-    (measureText); הקנבס מתרחב עד 1600 פיקסלים לפני שנשברת שורה אחת,
-    ומעבר לכך עמודות הטקסט נשברות לכמה שורות. **שום תא אינו מקוצר.**
-    הגרסה הקודמת קיצרה עם "…" כל תא שלא נכנס ברוחב קבוע של 1080 פיקסלים,
-    והציגה 16 מתוך 30 שורות ו-6 מתוך 7 עמודות — חתוכה בשני הצירים.
-
-    **הקרדיט נכתב בכיוון LTR.** בכיוון RTL מנוע הטקסט מסדר מחדש את "©"
-    ואת ה-"@" סביב הטקסט הלטיני, והתוצאה על המסך הייתה "Cigarbutthunte7@ ©".
-
-    מצייר מהמטען המוטמע ולא מגרד את ה-DOM: תמונה לציוץ צריכה להיראות
-    זהה מכל מכשיר, ולא לרשת את רוחב המסך או את ערכת הצבעים של הקורא.
-    ללא ספריות חיצוניות.
+    **קובץ JS ולא מחרוזת Python.** כ-700 שורות של ציור בקנבס נכתבות ונבדקות
+    טוב יותר כקובץ JS (node --check עובר עליו ישירות), ובלוכסנים של ביטויים
+    רגולריים אין שכבת בריחה נוספת שאפשר לאבד בדרך. הוא מוטמע ולא מקושר, כמו
+    שאר הסקריפטים באתר: עמוד אחד, בלי בקשה נוספת ובלי מטמון שמתיישן.
     """
-    return """<script>
-(function () {
-  "use strict";
+    js = (ROOT / "site" / "export_card.js").read_text(encoding="utf-8")
+    return "<script>\n" + js.replace("</script", "<\\/script") + "\n</script>"
 
-
-  var W0 = 1080, WMAX = 1600, PAD = 48;
-  var C = {
-    bg: "#0c1a21", panel: "#122730", line: "#1e3a45", hair: "#16303a",
-    text: "#eaf1f3", dim: "#8fa8b2", accent: "#4fd6bd",
-    up: "#5fd48a", down: "#f5786f", zebra: "#0f2029",
-  };
-  var F = function (w, s) {
-    return w + " " + s + "px 'Segoe UI', system-ui, Arial, sans-serif";
-  };
-
-  function roundRect(x, l, t, w, h, r) {
-    x.beginPath();
-    x.moveTo(l + r, t);
-    x.arcTo(l + w, t, l + w, t + h, r);
-    x.arcTo(l + w, t + h, l, t + h, r);
-    x.arcTo(l, t + h, l, t, r);
-    x.arcTo(l, t, l + w, t, r);
-    x.closePath();
-  }
-
-  function add(a, b) { return a + b; }
-
-  // **שבירת שורות, לא קיצור.** תא שרחב מהעמודה נשבר לפי מילים, בגופן
-  // שבו הוא מצויר; מילה בודדת שרחבה מהעמודה נשברת לפי תווים. בשום מקרה
-  // לא נזרק תו — הקיצור עם שלוש נקודות הוא מה שנראה כתמונה חתוכה.
-  function wrap(x, text, max) {
-    var words = String(text).split(" "), lines = [], cur = "";
-    words.forEach(function (w) {
-      var t = cur ? cur + " " + w : w;
-      if (!cur || x.measureText(t).width <= max) {
-        cur = t;
-      } else {
-        lines.push(cur);
-        cur = w;
-      }
-      while (cur.length > 1 && x.measureText(cur).width > max) {
-        var k = cur.length - 1;
-        while (k > 1 && x.measureText(cur.slice(0, k)).width > max) { k--; }
-        lines.push(cur.slice(0, k));
-        cur = cur.slice(k);
-      }
-    });
-    lines.push(cur);
-    return lines;
-  }
-
-  function cellFont(c, i, v, bold) {
-    if (bold) { return F(700, 21); }
-    if (i === 0 || c[1] === "value") { return F(600, 21); }
-    if (v.charAt(0) === "+" || v.charAt(0) === "-") { return F(600, 21); }
-    return F(400, 21);
-  }
-
-  // הסימן שבערך קובע את הצבע, לא שם העמודה — כך גם שינוי נטו בהון
-  // והיקף נטו בטבלת בעלי העניין נצבעים.
-  function cellColor(c, i, v, bold) {
-    if (bold || i === 0) { return C.text; }
-    if (v.charAt(0) === "-") { return C.down; }
-    if (v.charAt(0) === "+") { return C.up; }
-    if (c[1] === "value") { return C.text; }
-    return C.dim;
-  }
-
-  function drawCard(d) {
-    var rows = d.rows || [];
-    var cols = d.cols || [["נייר", "name", "rtl"], ["עסקאות", "n", "ltr"],
-      ["היקף", "value", "ltr"], ["% מההון", "cap", "ltr"],
-      ["מול הבסיס", "prem", "ltr"]];
-    var all = d.totalRow ? rows.concat([d.totalRow]) : rows;
-    var last = d.totalRow ? all.length - 1 : -1;
-    var HEADF = F(600, 16), GAP = 26, LINE = 28;
-    var probe = document.createElement("canvas").getContext("2d");
-
-    function val(r, c) { var v = r[c[1]]; return v == null ? "" : String(v); }
-
-    // 1. רוחב טבעי לכל עמודה, ורוחב מינימלי לעמודות טקסט — בגופן האמיתי.
-    var nat = [], min = [];
-    cols.forEach(function (c, i) {
-      probe.font = HEADF;
-      var head = probe.measureText(c[0]).width, full = head, word = head;
-      all.forEach(function (r, n) {
-        var v = val(r, c);
-        probe.font = cellFont(c, i, v, n === last);
-        full = Math.max(full, probe.measureText(v).width);
-        v.split(" ").forEach(function (w) {
-          word = Math.max(word, probe.measureText(w).width);
-        });
-      });
-      nat.push(Math.ceil(full) + GAP);
-      // עמודת מספרים לעולם אינה נשברת. עמודת טקסט נשברת עד המילה הרחבה
-      // בה, ומעבר ל-340 פיקסלים גם מילה נשברת — לפי תווים, בלי לאבד תו.
-      min.push(c[2] === "rtl"
-        ? Math.max(Math.ceil(head) + GAP, Math.min(Math.ceil(word) + GAP, 340))
-        : Math.ceil(full) + GAP);
-    });
-
-    // 2. רוחב הקנבס. הוא מתרחב עד WMAX לפני שנשברת שורה אחת; ואם גם
-    //    המינימום רחב מזה, הוא מתרחב עוד. הטבלה קובעת את הרוחב, לא להפך.
-    var sumNat = nat.reduce(add, 0), sumMin = min.reduce(add, 0);
-    var inner = Math.max(W0 - PAD * 2, Math.min(sumNat, WMAX - PAD * 2), sumMin);
-    var W = inner + PAD * 2;
-    var wid;
-    if (sumNat <= inner) {
-      wid = nat.slice();
-      wid[0] += inner - sumNat;
-    } else {
-      // רק עמודות הטקסט מתכווצות, כל אחת לפי המרווח שלה מעל המינימום.
-      var over = sumNat - inner;
-      var slack = nat.map(function (w, i) { return w - min[i]; });
-      var sumSlack = slack.reduce(add, 0);
-      wid = nat.map(function (w, i) { return w - over * slack[i] / sumSlack; });
-    }
-
-    // 3. פירוק כל תא לשורות; גובה שורה לפי התא הגבוה בה.
-    var layout = all.map(function (r, n) {
-      var bold = n === last;
-      var cells = cols.map(function (c, i) {
-        var v = val(r, c);
-        probe.font = cellFont(c, i, v, bold);
-        return { v: v, lines: c[2] === "rtl" ? wrap(probe, v, wid[i] - GAP) : [v] };
-      });
-      var tall = cells.reduce(function (m, c) { return Math.max(m, c.lines.length); }, 1);
-      return { cells: cells, bold: bold, h: 18 + LINE * tall };
-    });
-
-    probe.font = F(400, 18);
-    var more = d.moreText ? wrap(probe, d.moreText, inner) : [];
-    var HEAD = 242, FOOT = 118;
-    var bodyH = layout.reduce(function (s, r) { return s + r.h; }, 0);
-    var H = HEAD + 40 + bodyH + (d.totalRow ? 10 : 0)
-      + (more.length ? 18 + 26 * more.length : 0) + FOOT;
-
-    // **קנבס גדול מדי יוצא ריק, בלי שגיאה.** iOS Safari מגביל את שטח
-    // הקנבס לכ-16.7 מיליון פיקסלים, ומעבר לכך toBlob מחזיר null. טבלה
-    // מלאה יכולה לחצות את זה ברזולוציה כפולה, ולכן הרזולוציה יורדת
-    // במקום שהתמונה תיעלם.
-    var S = Math.min(2, Math.sqrt(16e6 / (W * H)), 16000 / W, 16000 / H);
-
-    var cv = document.createElement("canvas");
-    cv.width = Math.round(W * S); cv.height = Math.round(H * S);
-    var x = cv.getContext("2d");
-    x.scale(S, S);
-    x.textBaseline = "alphabetic";
-
-    // רקע
-    var g = x.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, "#0e1e26"); g.addColorStop(1, C.bg);
-    x.fillStyle = g; x.fillRect(0, 0, W, H);
-    x.fillStyle = C.accent; x.fillRect(0, 0, W, 5);
-
-    var right = W - PAD, left = PAD;
-
-    // כותרת. כותרת שרחבה מהקנבס מקטינה גופן במקום לגלוש.
-    x.direction = "rtl"; x.textAlign = "right";
-    x.fillStyle = C.accent; x.font = F(700, 15);
-    x.letterSpacing = "3px";
-    x.fillText("TLV TASE VIEW", right, PAD + 18);
-    x.letterSpacing = "0px";
-    var ts = 40;
-    x.font = F(700, ts);
-    while (ts > 22 && x.measureText(d.title).width > inner) {
-      ts -= 2; x.font = F(700, ts);
-    }
-    x.fillStyle = C.text;
-    x.fillText(d.title, right, PAD + 68);
-    x.fillStyle = C.dim; x.font = F(400, 19);
-    x.fillText(d.kicker || "עסקאות מחוץ לבורסה", right, PAD + 98);
-
-    // שלושה אריחי סיכום
-    var pills = d.pills || [["היקף", d.total], ["עסקאות", String(d.deals)],
-                            ["ניירות", String(d.securities)]];
-    var pw = (inner - 24) / 3, py = PAD + 118;
-    pills.forEach(function (p, i) {
-      var px = right - pw - i * (pw + 12);
-      x.fillStyle = C.panel;
-      roundRect(x, px, py, pw, 62, 10); x.fill();
-      x.strokeStyle = C.line; x.lineWidth = 1; x.stroke();
-      x.direction = "rtl"; x.textAlign = "right";
-      x.fillStyle = C.dim; x.font = F(500, 14);
-      x.fillText(p[0], px + pw - 14, py + 23);
-      var ps = 24;
-      x.font = F(700, ps);
-      while (ps > 14 && x.measureText(String(p[1])).width > pw - 28) {
-        ps -= 1; x.font = F(700, ps);
-      }
-      x.fillStyle = C.text;
-      x.fillText(String(p[1]), px + pw - 14, py + 50);
-    });
-
-    // כותרות עמודות
-    var y = HEAD + 24, cx = right;
-    x.font = HEADF; x.fillStyle = C.dim;
-    cols.forEach(function (c, i) {
-      // כותרת עמודה היא טקסט עברי גם כשהערכים בה LTR. בכיוון LTR
-      // "% מהון החברה" צוירה הפוכה מהעמוד, עם האחוז בצד השמאלי.
-      x.direction = "rtl"; x.textAlign = "right";
-      x.fillText(c[0], cx - 10, y);
-      cx -= wid[i];
-    });
-    x.strokeStyle = C.line; x.lineWidth = 1.5;
-    x.beginPath(); x.moveTo(left, y + 13); x.lineTo(right, y + 13); x.stroke();
-
-    // שורות; אחריהן שורת ה"ועוד", ורק אז שורת הסך — הסדר שבעמוד. הסך
-    // כולל גם את מה שלא הוצג, וכשצויר לפני ה"ועוד" הוא נקרא כסכום של
-    // השורות שמעליו בלבד.
-    var top = y + 13, moreDone = false;
-    function drawMore() {
-      moreDone = true;
-      if (!more.length) { return; }
-      x.direction = "rtl"; x.textAlign = "right";
-      x.fillStyle = C.dim; x.font = F(400, 18);
-      more.forEach(function (ln, k) { x.fillText(ln, right, top + 26 + k * 26); });
-      top += 18 + 26 * more.length;
-    }
-    layout.forEach(function (row, n) {
-      if (row.bold) {
-        drawMore();
-        top += 10;
-        x.strokeStyle = C.line; x.lineWidth = 1.5;
-        x.beginPath(); x.moveTo(left, top); x.lineTo(right, top); x.stroke();
-      } else if (n % 2 === 0) {
-        x.fillStyle = C.zebra;
-        roundRect(x, left, top + 4, inner, row.h - 6, 6); x.fill();
-      }
-      var vx = right;
-      row.cells.forEach(function (cell, i) {
-        var c = cols[i];
-        x.direction = c[2]; x.textAlign = "right";
-        x.font = cellFont(c, i, cell.v, row.bold);
-        x.fillStyle = cellColor(c, i, cell.v, row.bold);
-        cell.lines.forEach(function (ln, k) {
-          x.fillText(ln, vx - 10, top + 30 + k * LINE);
-        });
-        vx -= wid[i];
-      });
-      top += row.h;
-    });
-
-    if (!moreDone) { drawMore(); }
-
-    // כותרת תחתונה
-    x.strokeStyle = C.hair; x.lineWidth = 1;
-    x.beginPath(); x.moveTo(left, H - FOOT + 16); x.lineTo(right, H - FOOT + 16);
-    x.stroke();
-    x.direction = "rtl"; x.textAlign = "right";
-    x.fillStyle = C.dim; x.font = F(400, 16);
-    x.fillText(d.source ||
-               "מקור: סקירת העסקאות מחוץ לבורסה של הבורסה לניירות ערך בתל אביב",
-               right, H - FOOT + 44);
-    // **הקרדיט נכתב LTR.** בכיוון RTL המנוע מסדר מחדש את "©" ואת ה-"@"
-    // סביב הטקסט הלטיני, והתוצאה על המסך הייתה "Cigarbutthunte7@ ©".
-    x.direction = "ltr"; x.textAlign = "right";
-    x.fillStyle = C.accent; x.font = F(700, 17);
-    x.fillText("© @Cigarbutthunte7", right, H - FOOT + 78);
-    x.textAlign = "left";
-    x.fillStyle = C.dim; x.font = F(400, 16);
-    x.fillText("tlvtaseview.com", left, H - FOOT + 78);
-    return cv;
-  }
-  // חשוף לבדיקה: מציירים את הכרטיס ומשווים אותו לטבלה שבעמוד, בלי
-  // ללחוץ על הכפתור ולהוריד קובץ.
-  window.tlvDrawCard = drawCard;
-
-  function save(c, name, fail) {
-    // toBlob מחזיר null כשהקנבס גדול מדי לדפדפן. בלי הבדיקה הכפתור אמר
-    // "התמונה הורדה" ושום קובץ לא נוצר.
-    c.toBlob(function (b) {
-      if (!b) { fail(); return; }
-      var u = URL.createObjectURL(b), a = document.createElement("a");
-      a.href = u; a.download = name; document.body.appendChild(a); a.click();
-      document.body.removeChild(a);
-      setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
-    }, "image/png");
-  }
-
-  var cps = document.querySelectorAll("button.otc-copy");
-  Array.prototype.forEach.call(cps, function (b) {
-    b.addEventListener("click", function () {
-      var el = document.getElementById("tw-" + b.getAttribute("data-key"));
-      if (!el) { return; }
-      var t = (el.textContent || "").trim(), was = b.textContent;
-      function done(msg) { b.textContent = msg; setTimeout(function () {
-        b.textContent = was; }, 2200); }
-      // **דחייה של ה-clipboard חייבת ליפול אחורה ולא להיבלע.** הדפדפן
-      // דוחה את הכתיבה בהקשרים מסוימים, ואז הכפתור לא הגיב בכלל
-      // והמשתמש לא ידע אם הועתק. בחירת הטקסט מאפשרת Ctrl+C ידני.
-      function pick() {
-        try {
-          var r = document.createRange();
-          r.selectNodeContents(el);
-          var sel = window.getSelection();
-          sel.removeAllRanges(); sel.addRange(r);
-          done("סומן — Ctrl+C");
-        } catch (e) { done(was); }
-      }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(t).then(function () { done("הועתק"); }, pick);
-        return;
-      }
-      pick();
-    });
-  });
-
-  var btns = document.querySelectorAll("button.otc-png");
-  Array.prototype.forEach.call(btns, function (b) {
-    b.addEventListener("click", function () {
-      var el = document.getElementById("otc-" + b.getAttribute("data-key"));
-      if (!el) { return; }
-      var d;
-      try { d = JSON.parse(el.textContent); } catch (e) { d = null; }
-      if (!d || !d.rows || !d.rows.length) { return; }
-      var was = b.textContent;
-      b.textContent = "מייצא…";
-      try {
-        save(drawCard(d), "tlv-otc-" + b.getAttribute("data-key") + ".png",
-          function () {
-            if (window.console) { console.error("otc export: toBlob returned null"); }
-            b.textContent = "הייצוא נכשל";
-          });
-        b.textContent = "התמונה הורדה";
-      } catch (e) {
-        // הכשל אינו נאמר על המסך — אבל הוא כן נאמר לקונסולה. בליעה
-        // מוחלטת הפכה באג בציור לכפתור שפשוט אינו מגיב.
-        if (window.console) { console.error("otc export", e); }
-        b.textContent = was;
-      }
-      setTimeout(function () { b.textContent = was; }, 2500);
-    });
-  });
-})();
-</script>"""
 
 def page(otc_rows: list[dict], maya_body: str, year: str,
          offex_rows: list[dict] | None = None) -> str:

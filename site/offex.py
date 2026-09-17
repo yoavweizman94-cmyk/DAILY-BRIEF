@@ -8,7 +8,13 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from otc import card, embed, png_button
+
 ROOT = Path(__file__).resolve().parent.parent
+SRC_MAYA = "מקור: דיווחי בעלי עניין במערכת מאיה של הבורסה לניירות ערך"
+KICKER = "דיווחי בעלי עניין · עסקאות מחוץ לבורסה"
+MONTHS = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט",
+          "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"]
 
 
 def load_offex() -> list[dict]:
@@ -290,19 +296,23 @@ def holders_summary(rows: list[dict], year: str) -> str:
     if more:
         body.append(f'<tr><td colspan="{len(cols)}" class="note">{more}</td></tr>')
 
-    payload = json.dumps({
-        "title": f"בעלי עניין · מתחילת {year}",
-        "kicker": "עסקאות מדווחות מחוץ לבורסה",
-        "cols": cols,
-        "pills": [["מדווחים", str(len(agg))],
-                  ["עסקאות", str(sum(e["n"] for e in agg.values()))],
-                  ["היקף", money(sum(e["buy"] + e["sell"] for e in agg.values()))]],
-        "rows": [{k: v for k, v in r.items() if not k.startswith("_")}
-                 for r in cells],
-        "moreText": more,
-        # הטבלה הזו ממאיה ולא מסקירת הבורסה — הכותרת התחתונה אמרה אחרת.
-        "source": "מקור: דיווחי בעלי עניין במערכת מאיה של הבורסה לניירות ערך",
-    }, ensure_ascii=False).replace("</", "<" + chr(92) + "/")
+    buyers_n = sum(1 for e in agg.values() if e["pct"] > 0)
+    sellers_n = sum(1 for e in agg.values() if e["pct"] < 0)
+    payload = card(
+        f"מי צבר ומי מימש · מתחילת {year}",
+        "כל הדיווחים של בעל עניין באותה חברה מצורפים יחד, ומדורגים לפי השינוי נטו "
+        "בחלקו מהון החברה — רכישות פחות מכירות.",
+        [{"type": "stats", "items": [
+            {"label": "מדווחים", "value": str(len(agg)),
+             "cap": f"{buyers_n} צברו · {sellers_n} מימשו"},
+            {"label": "עסקאות", "value": f'{sum(e["n"] for e in agg.values()):,}'},
+            {"label": "היקף", "value": money(sum(e["buy"] + e["sell"] for e in agg.values())),
+             "cap": "רכישות ומכירות יחד"}]},
+         {"type": "table", "title": "20 השינויים הגדולים בחלק מההון", "cols": cols,
+          "rows": [{k: v for k, v in r.items() if not k.startswith("_")} for r in cells],
+          "moreText": more}],
+        # הטבלה הזו ממאיה ולא מסקירת הבורסה.
+        file=f"tlv-offex-holders-{year}", kicker=KICKER, source=SRC_MAYA)
 
     lines = [f"בעלי עניין · מתחילת {year}",
              f"{len(agg)} מדווחים, {sum(e['n'] for e in agg.values()):,} עסקאות"]
@@ -330,10 +340,8 @@ def holders_summary(rows: list[dict], year: str) -> str:
         'עשרות אחוזים שם הם בעל שליטה ולא היקף העסקה.</p>',
         f'<div class="otc-tweet" id="tw-holders"><pre>'
         + esc(tw) + '</pre></div>',
-        f'<script type="application/json" id="otc-holders">{payload}</script>',
-        '<p class="otc-acts">'
-        '<button type="button" class="otc-png" data-key="holders">'
-        'ייצוא לתמונה</button>'
+        embed("holders", payload),
+        f'<p class="otc-acts">{png_button(key="holders")}'
         '<button type="button" class="otc-copy" data-key="holders">'
         'העתקת התקציר</button></p>',
         '<div class="tw"><table class="nadlan"><thead><tr>'
@@ -342,6 +350,72 @@ def holders_summary(rows: list[dict], year: str) -> str:
         "".join(body),
         '</tbody></table></div>',
     ])
+
+
+# סוג המדווח כפי שמאיה כותבת אותו ארוך מכדי שורה בתמונה, ואינו אומר יותר
+# מ"בעל עניין".
+def _type_short(v) -> str:
+    v = clean(v)
+    return "בעל עניין" if v.startswith(("בעל ענין שאינו", "בעל עניין שאינו")) else v
+
+
+def _ctrl_short(v) -> str:
+    """בעל השליטה במדווח — לתמונה בלבד.
+
+    **בלי מספרי זהות.** השדה בטופס מכיל לעיתים "ת.ז 007048671" לכל בעל
+    שליטה, בכמה כתיבים ("ת.ז..007511652", "ת.ז. 006580211"). זה ציבורי
+    במאיה, אבל תמונה נועדה להפצה, ומספר זהות אינו מידע שהקורא צריך. ובלי
+    הפניות לטופס עצמו ("ראה סעיף 5 להלן"), שאין להן משמעות מחוצה לו.
+    """
+    v = clean(v)
+    if not v or re.search(r"להלן|לעיל|ראה|ראו|כמפורט|בהערות|פרטים", v):
+        return ""
+    v = re.sub(r"(?:ת[\s.\"״׳']*ז|ח[\s.\"״׳']*פ|מס['׳]?\s*(?:זהות|חברה)|ID)[\s.:\-\"״׳']*\d[\d\-]{4,}", ",", v)
+    v = re.sub(r"\d{7,10}", ",", v)
+    v = re.sub(r"(?:^|(?<=[\s,]))\d{1,2}[.)]\s+", "", v)
+    v = re.sub(r"\s*,[\s,]*", ", ", v)
+    return re.sub(r"\s{2,}", " ", v).strip(" ,;·")
+
+
+def report_data(rows: list[dict]) -> dict:
+    """הדיווחים בצורה שהדפדפן מצייר מהם תמונה ליום או לחודש.
+
+    **מחרוזות התצוגה נבנות כאן, לא בדפדפן.** כמות, שער, היקף ושיעור מההון
+    מעוצבים באותן פונקציות שמעצבות את הרשימה בעמוד, כך שהתמונה והעמוד אינם
+    יכולים להציג אותו דיווח בשני פורמטים. הדפדפן רק מסנן לפי יום או חודש
+    ומסכם — ספירה, היקף ומי הגדול.
+
+    `cnt` הוא מה ש-mark_pairs קבע: הצד השני של עסקה, הגשה חוזרת ודיווח
+    מאגד אינם נספרים בהיקף — בתמונה בדיוק כמו בסיכומי העמוד.
+    """
+    out = []
+    for r in rows:
+        d = eff_date(r)
+        if not d:
+            continue
+        counted = r.get("counted", True) is not False and not r.get("partial")
+        out.append({
+            "id": r.get("report_id"), "d": d,
+            "co": (r.get("company") or "—").strip(" _"),
+            "who": clean(r.get("holder")), "type": _type_short(r.get("holder_type")),
+            "ctrl": _ctrl_short(r.get("holder_controller")),
+            "dir": "buy" if r.get("direction") == "buy" else "sell",
+            "kind": r.get("kind") or "holdings",
+            "form": KIND.get(r.get("kind") or "holdings", ("", ""))[1],
+            "q": f'{r["quantity"]:,}' if r.get("quantity") is not None else "—",
+            # שער 0 הוא שדה שלא מולא (עסקה בלי תמורה במזומן), לא מחיר.
+            "px": (f'{rate(r.get("price"))} {UNIT.get(r.get("currency") or "agorot", "")}'.strip()
+                   if r.get("price") not in (None, "", 0, 0.0) else "—"),
+            "v": money(r.get("value_ils")), "vn": r.get("value_ils") or 0,
+            "pct": pct(r.get("pct_of_class")), "pn": r.get("pct_of_class"),
+            "after": pct(r.get("holding_pct_after"), 2),
+            "inh": bool(r.get("pct_inherited")),
+            "partial": bool(r.get("partial")), "restated": bool(r.get("restated")),
+            "other": (not r.get("partial") and not r.get("restated")
+                      and r.get("counted", True) is False),
+            "cnt": counted,
+        })
+    return {"rows": out}
 
 
 def page(rows: list[dict], year: str, head: bool = True) -> str:
@@ -397,6 +471,19 @@ def page(rows: list[dict], year: str, head: bool = True) -> str:
         out.append('<h2>שיעור מצטבר מההון, לפי חברה</h2>')
         out.append('<p class="lead">סכום חלקן של העסקאות בהון המניות של אותה חברה, '
                    f'מתחילת {year}.</p>')
+        out.append(embed("companies", card(
+            f"שיעור מצטבר מההון, לפי חברה · מתחילת {year}",
+            "סכום חלקן של העסקאות המדווחות בהון המניות של כל חברה — בלי ספירה כפולה "
+            "של שני צדדיה של אותה עסקה.",
+            [{"type": "stats", "items": [
+                {"label": "עסקאות מתחילת השנה", "value": str(st["n"]), "cap": f'ב-{st["days"]} ימים'},
+                {"label": "היקף כספי מצטבר", "value": money(st["vol"]), "cap": "בלי ספירה כפולה"},
+                {"label": "חברות", "value": str(len(st["companies"])), "cap": "מניות בלבד"}]},
+             {"type": "bars", "title": f"{len(top)} החברות עם השיעור הגבוה",
+              "rows": [{"label": name, "pct": v["pct"], "pctText": pct(v["pct"], 2),
+                        "volText": money(v["vol"])} for name, v in top]}],
+            file=f"tlv-offex-companies-{year}", kicker=KICKER, source=SRC_MAYA)))
+        out.append(f'<p class="otc-acts">{png_button(key="companies")}</p>')
         out.append('<ul class="offex-bars">')
         for name, v in top:
             w = max(2, round(v["pct"] / mx * 100))
@@ -408,14 +495,39 @@ def page(rows: list[dict], year: str, head: bool = True) -> str:
         out.append('</ul>')
 
     out.append('<h2>העסקאות</h2>')
+    # **תמונה ליום ולחודש.** כל כותרת יום וכל כותרת חודש נושאות כפתור ייצוא;
+    # התמונה נבנית בדפדפן מהנתונים המוטמעים כאן, ולכן אין מטען נפרד לכל יום.
+    out.append('<p class="lead offex-exp-lead">כל יום וכל חודש ברשימה אפשר לייצא כתמונה — '
+               'הכפתור ליד התאריך. תמונת היום כוללת את כל הדיווחים של אותו יום; תמונת החודש — '
+               'את סיכום החודש, עיקריו ו-25 הדיווחים עם החלק הגדול מהון החברה.</p>')
+    out.append('<script type="application/json" id="offex-data">'
+               + json.dumps(report_data(rows), ensure_ascii=False).replace("</", "<" + chr(92) + "/")
+               + '</script>')
+    per_month: dict[str, int] = {}
+    per_day: dict[str, int] = {}
+    for r in rows:
+        d = eff_date(r)
+        per_month[d[:7]] = per_month.get(d[:7], 0) + 1
+        per_day[d] = per_day.get(d, 0) + 1
     day = None
+    month = None
     out.append('<ul class="offex">')
     for r in rows:
         d = eff_date(r)
+        if d[:7] != month and len(d) >= 7:
+            month = d[:7]
+            n_m = per_month.get(month, 0)
+            out.append(
+                f'<li class="monthsep"><span class="mn">{MONTHS[int(month[5:7]) - 1]} {month[:4]}</span>'
+                f'<span class="cnt">{n_m} {"דיווח" if n_m == 1 else "דיווחים"}</span>'
+                f'{png_button("ייצוא החודש", cls="sm", month=month)}</li>')
         if d != day:
             day = d
             dd = f"{d[8:10]}/{d[5:7]}/{d[:4]}" if len(d) >= 10 else d
-            out.append(f'<li class="daysep">{dd}</li>')
+            n_d = per_day.get(d, 0)
+            btn = png_button("ייצוא היום", cls="sm", day=d) if len(d) >= 10 else ""
+            out.append(f'<li class="daysep"><span class="dd">{dd}</span>'
+                       f'<span class="cnt">{n_d} {"דיווח" if n_d == 1 else "דיווחים"}</span>{btn}</li>')
         buy = r["direction"] == "buy"
         who = "הקונה" if buy else "המוכר"
         ctrl = clean(r.get("holder_controller"))

@@ -550,19 +550,25 @@ ul.ac li:hover { background: var(--accent-soft); color: var(--accent); }
   margin: 0.6rem 0 0.9rem; font-size: 0.9rem; line-height: 1.7;
   border-inline-start: 3px solid var(--accent); padding-inline-start: 0.8rem;
 }
-.otc-png {
-  border: 1px solid var(--line); background: transparent; color: var(--muted);
-  border-radius: 6px; padding: 0.3rem 0.75rem; font-size: 0.8rem;
-  font-family: inherit; cursor: pointer;
-}
-.otc-png:hover { color: var(--accent); border-color: var(--accent); }
+/* ייצוא לתמונה והעתקת התקציר. **צבעים מהטוקנים.** הכללים הקודמים השתמשו
+   ב-var(--line), שאינו מוגדר באתר, ולכן המסגרת נפלה לצבע הטקסט. */
 .otc-acts { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0 0.9rem; }
-.otc-copy {
-  border: 1px solid var(--line); background: transparent; color: var(--muted);
-  border-radius: 6px; padding: 0.3rem 0.75rem; font-size: 0.8rem;
-  font-family: inherit; cursor: pointer;
+.otc-png, .otc-copy {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  /* המשפחה במפורש: כותרת היום ברשימה היא בגופן המספרים, והכפתור ירש אותו —
+     "ייצוא היום" יצא באותיות של מכונת כתיבה. */
+  font: inherit; font-family: var(--sans); font-size: 0.8rem; font-weight: 600; line-height: 1.25;
+  color: var(--accent); background: var(--surface);
+  border: 1px solid var(--border-strong); border-radius: 6px;
+  padding: 0.34rem 0.8rem; cursor: pointer; white-space: nowrap;
 }
-.otc-copy:hover { color: var(--accent); border-color: var(--accent); }
+.otc-copy { color: var(--muted); }
+.otc-png:hover, .otc-copy:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.otc-png:disabled { cursor: progress; opacity: 0.8; }
+.otc-png .ico { width: 0.95rem; height: 0.95rem; flex: none; }
+.otc-png.sm { font-size: 0.72rem; padding: 0.14rem 0.55rem; gap: 0.3rem; }
+.otc-png.sm .ico { width: 0.8rem; height: 0.8rem; }
+.otc-acts-strip { margin: -1.1rem 0 1.9rem; }
 
 /* התקציר לציוץ: נועד להעתקה, ולכן מוצג כפי שיודבק — שורות שמורות,
    בלי גלישה מחדש שתשנה את מה שהקורא רואה מול מה שיקבל. */
@@ -897,12 +903,29 @@ ul.offex-bars .mv {
 
 ul.offex { list-style: none; padding: 0; margin: 0.8rem 0 0; }
 ul.offex li.daysep {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.6rem;
   font-family: var(--mono); font-size: 0.8rem; font-weight: 600;
   color: var(--muted); letter-spacing: 0.02em;
-  margin: 1.6rem 0 0.5rem; padding-bottom: 0.25rem;
+  margin: 1.4rem 0 0.5rem; padding-bottom: 0.3rem;
   border-bottom: 1px solid var(--border-strong);
 }
 ul.offex li.daysep:first-child { margin-top: 0.4rem; }
+/* כותרת חודש: עוגן לגלילה ברשימה של שנה שלמה, ומקום לכפתור ייצוא החודש. */
+ul.offex li.monthsep {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.3rem 0.7rem;
+  margin: 2.4rem 0 0.2rem; padding: 0.35rem 0 0.45rem;
+  border-bottom: 2px solid var(--accent);
+}
+ul.offex li.monthsep:first-child { margin-top: 0.5rem; }
+ul.offex li.monthsep + li.daysep { margin-top: 0.9rem; }
+ul.offex li.monthsep .mn {
+  font-family: var(--serif); font-size: 1.2rem; font-weight: 700; color: var(--fg);
+}
+ul.offex li.monthsep .cnt, ul.offex li.daysep .cnt {
+  font-family: var(--sans); font-size: 0.76rem; font-weight: 500; color: var(--faint); letter-spacing: 0;
+}
+ul.offex li.monthsep .otc-png, ul.offex li.daysep .otc-png { margin-inline-start: auto; }
+p.offex-exp-lead { font-size: 0.86rem; color: var(--muted); }
 
 li.tx {
   border: 1px solid var(--border);
