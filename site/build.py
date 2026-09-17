@@ -1042,9 +1042,16 @@ def main() -> int:
                     r = json.loads(line)
                     _all_filings.append(r)
                     if reviewable(r):
-                        pdfmap[str(r["id"])] = {
-                            "p": r["p"], "d": r.get("d"), "t": r.get("t"),
-                            "c": r.get("c")}
+                        m = {"p": r["p"], "d": r.get("d"), "t": r.get("t"),
+                             "c": r.get("c")}
+                        # pv — הקובץ שונה ממה שהכלל הישן בחר, ולכן ה-Function
+                        # לא תגיש סקירה שנשמרה לפני התיקון; n — שם הקובץ,
+                        # כדי שהמודל ידע מה קיבל כשיש בדיווח כמה קבצים.
+                        if r.get("pv"):
+                            m["pv"] = r["pv"]
+                        if r.get("pn"):
+                            m["n"] = r["pn"]
+                        pdfmap[str(r["id"])] = m
             (OUT / "filings" / "pdfmap.json").write_text(
                 json.dumps(pdfmap, ensure_ascii=False), encoding="utf-8")
             # **מונה שאומר מה נכנס בפועל.** "נבנה בהצלחה" אינו מבטיח

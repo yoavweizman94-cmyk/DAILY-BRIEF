@@ -627,6 +627,12 @@ li.fil .dl {
   border-radius: 7px; padding: 0.15rem 0.7rem;
 }
 li.fil .dl:hover { background: var(--accent); color: var(--on-accent); }
+li.fil .ax {
+  text-decoration: none; font-size: 0.74rem; max-width: 100%; overflow-wrap: anywhere;
+  color: var(--muted); border: 1px dashed var(--border);
+  border-radius: 7px; padding: 0.12rem 0.55rem;
+}
+li.fil .ax:hover { color: var(--accent); border-color: var(--accent); }
 
 /* ---------- שיחות ועידה ---------- */
 

@@ -47,6 +47,9 @@
   // `canReview` — כל דוח שמותר לייצר עליו סקירה לפי דרישה (עולה כסף).
   // מאז 27/08/2026 זה **כל דוח כספי בבורסה**, ולא רק של חברת כיסוי.
   var reviewed = {}, canReview = {}, openReview = null;
+  // סקירה שנוצרה לפי דרישה בביקור הזה — נשמרת כאן ולא מסומנת כ"מוכנה":
+  // סקירה מוכנה היא קובץ סטטי, ולחיצה שנייה חיפשה אותו וקיבלה 404.
+  var made = {};
 
   function say(t, cls) { msg.className = "msg " + (cls || ""); msg.textContent = t || ""; }
   function heDate(s) { return s ? s.split("-").reverse().join("/") : "—"; }
@@ -83,6 +86,7 @@
   function esc(t) {
     return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
+  function attr(t) { return esc(t || "").replace(/"/g, "&quot;"); }
   function inline(t) {
     return esc(t).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   }
@@ -260,7 +264,9 @@
     // סקירה מוכנה מוגשת כקובץ סטטי ואינה עולה דבר; רק כשאין כזו
     // נשלחת בקשה שמייצרת אותה, והיא נשמרת לשימוש הבא.
     var got;
-    if (reviewed[id]) {
+    if (made[id]) {
+      got = Promise.resolve(made[id]);
+    } else if (reviewed[id]) {
       got = fetch("filings/reviews/" + id + ".html", { cache: "no-cache" })
         .then(function (r) {
           if (!r.ok) throw new Error("HTTP " + r.status);
@@ -304,8 +310,10 @@
           return pump();
         })
         .then(function (md) {
-          reviewed[id] = true;      // הבאה כבר מהמטמון
-          return mdToHtml(md);
+          var html = mdToHtml(md);
+          // סקירה שנקטעה אינה נשמרת — לחיצה נוספת צריכה לנסות שוב
+          if (md.indexOf("_הסקירה נקטעה") < 0) { made[id] = html; }
+          return html;
         });
     }
     got
@@ -345,6 +353,15 @@
         ? '<a class="dl" href="' + FILES + e.p + '" target="_blank" rel="noopener" ' +
           'data-id="' + e.id + '">הורד PDF' + (e.s ? " · " + size(e.s) : "") + "</a>"
         : '<span class="d">אין PDF</span>';
+      // **שאר הקבצים בדיווח, עם הכיתוב מטופס מאיה.** הקישור הראשי הוא הדוח
+      // עצמו; הערכות שווי, דוחות של חברות כלולות וקבצים נוספים מופיעים
+      // לצידו בשמם, ולא כהורדה של "הדוח".
+      var ax = (e.pa || []).map(function (a) {
+        return '<a class="ax" href="' + FILES + attr(a.p) + '" target="_blank" rel="noopener" ' +
+          'title="' + attr(a.n) + '">' + esc(a.l || "קובץ נוסף") +
+          // bdi: אחרי כיתוב עברי "8.8 MB" מתהפך ל-"MB 8.8"
+          (a.s ? " · <bdi>" + size(a.s) + "</bdi>" : "") + "</a>";
+      }).join("");
       var rev = (reviewed[e.id] || canReview[e.id])
         ? '<button type="button" class="rev' + (reviewed[e.id] ? " ready" : "") +
           '" data-id="' + e.id + '" title="' +
@@ -359,7 +376,7 @@
            e.t + "</a></span>" +
            (e.k === "מצגת" ? '<span class="form">מצגת</span>' : "") +
            '<span class="form">' + (e.f || "—") + "</span>" +
-           rev + dl + "</li>";
+           rev + dl + ax + "</li>";
     });
     h += "</ul>";
     if (rows.length > slice.length) {

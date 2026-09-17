@@ -13,6 +13,10 @@ on:
 # לבקשת יואב, שביקש שהאתר יתעדכן שוב מעצמו בכל ההיבטים.
   schedule:
     - cron: "0 0 * * *"        # 02:00/03:00 בישראל, אחרי מהדורת הלילה
+  # הפעלה בדחיפת קובץ טריגר, כמו בשאר הצנרת.
+  push:
+    paths:
+      - ".trigger/filings-backfill.json"
   workflow_dispatch:
     inputs:
       until:
@@ -21,6 +25,9 @@ on:
       budget_minutes:
         description: "תקציב זמן להרצה"
         default: "20"
+      repair_minutes:
+        description: "תקציב זמן לתיקון בחירת ה-PDF"
+        default: "15"
 
 permissions:
   contents: write
@@ -39,7 +46,7 @@ env:
 jobs:
   backfill:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     outputs:
       changed: ${{ steps.run.outputs.changed }}
     steps:
@@ -62,11 +69,24 @@ jobs:
       - run: pip install curl_cffi pyyaml truststore certifi requests markdown
 
       - name: Backfill
-        id: run
         run: |
           python ingest/maya_index.py --backfill \
             --until "${{ inputs.until || '2024-01-01' }}" \
             --budget-minutes "${{ inputs.budget_minutes || 20 }}"
+
+      # **תיקון בחירת ה-PDF ברשומות שנאספו לפני 17/09/2026.** הכלל הישן בחר
+      # את הקובץ הגדול בדיווח — ובדוחות עם הערכות שווי זה היה קובץ השמאי
+      # (לוינשטין הנדסה). כל רשומה נבדקת מול טופס הדיווח במאיה, מהמסוכנות
+      # לבטוחות, ומסומנת כך שהרצה הבאה ממשיכה מאותה נקודה. בלילה התקציב
+      # גדול; בהפעלה ידנית או בטריגר הוא קצר, כי הקבוצה משותפת עם maya-watch.
+      - name: Repair PDF choice
+        run: |
+          python ingest/maya_index.py --repair-pdf \
+            --budget-minutes "${{ inputs.repair_minutes || (github.event_name == 'schedule' && '30' || '10') }}"
+
+      - name: Detect changes
+        id: run
+        run: |
           # **output/ הוא ריפו נפרד ומוחרג ב-.gitignore של הריפו הראשי**,
           # ולכן `git status output/filings` מהשורש מחזיר תמיד ריק — כלומר
           # התנאי היה כוזב בכל ריצה, והמילוי אחורה לא נשמר ולא נפרס

@@ -61,6 +61,12 @@ SYSTEM = """אתה אנליסט מחקר שכותב עבור מנהל השקעו
    פרשנות, ויש לסמן אותה במילה "משמעות:" בתחילת המשפט.
 4. עברית בלבד. מונחים באנגלית מותרים היכן שמקובל (FFO, EBITDA, cap rate).
 5. ענייני וישיר. בלי סופרלטיבים, בלי "חשוב לציין", בלי ריפוד.
+6. **ודא שהמסמך הוא הדוח.** אם הקובץ המצורף אינו המסמך שכותרת הדיווח
+   מתארת — למשל הערכת שווי או שומת מקרקעין, חוות דעת, מכתב הסכמה, או דוח
+   של חברה כלולה או מוחזקת, כשהכותרת מתארת דוח רבעוני או תקופתי של החברה
+   — אל תסקור אותו כאילו היה הדוח. כתוב רק את הסעיף "## בשורה אחת", ובו
+   מה המסמך בפועל ושהסקירה לא נכתבה משום כך. קובץ שהוא חלק מהדוח ואין
+   בו הדוחות הכספיים — סקור את מה שיש, ואמור זאת בסעיף "מה הדוח לא אומר".
 
 כתוב **בדיוק** את המבנה הבא, בכותרות markdown, ובלי שום טקסט לפניו או
 אחריו:
@@ -165,7 +171,8 @@ def as_text(blob: bytes) -> str | None:
 def review_one(client: anthropic.Anthropic, rec: dict, blob: bytes) -> str | None:
     who = ", ".join(rec.get("c") or []) if isinstance(rec.get("c"), list) else str(rec.get("c"))
     head = (f"חברה: {who}\nכותרת הדיווח: {rec.get('t')}\n"
-            f"תאריך הדיווח: {rec.get('d')}\nמזהה מאיה: {rec.get('id')}")
+            f"תאריך הדיווח: {rec.get('d')}\nמזהה מאיה: {rec.get('id')}"
+            + (f"\nשם הקובץ: {rec['pn']}" if rec.get("pn") else ""))
 
     if len(blob) <= MAX_PDF_BYTES:
         doc = {"type": "document",
@@ -265,7 +272,7 @@ def main() -> int:
         meta = {"id": rec["id"], "date": rec["d"], "title": rec["t"],
                 "companies": rec.get("c"), "model": MODEL,
                 "generated": datetime.now().isoformat(timespec="seconds"),
-                "pdf_bytes": len(blob)}
+                "pdf": rec["p"], "pdf_bytes": len(blob)}
         (REVIEWS / f"{rec['id']}.md").write_text(
             "<!--" + json.dumps(meta, ensure_ascii=False) + "-->\n" + md,
             encoding="utf-8")

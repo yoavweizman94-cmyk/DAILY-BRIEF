@@ -41,6 +41,12 @@ const SYSTEM_FINANCIAL = `אתה אנליסט מחקר שכותב עבור מנ�
    פרשנות, ויש לסמן אותה במילה "משמעות:" בתחילת המשפט.
 4. עברית בלבד. מונחים באנגלית מותרים היכן שמקובל (FFO, EBITDA, cap rate).
 5. ענייני וישיר. בלי סופרלטיבים, בלי "חשוב לציין", בלי ריפוד.
+6. **ודא שהמסמך הוא הדוח.** אם הקובץ המצורף אינו המסמך שכותרת הדיווח
+   מתארת — למשל הערכת שווי או שומת מקרקעין, חוות דעת, מכתב הסכמה, או דוח
+   של חברה כלולה או מוחזקת, כשהכותרת מתארת דוח רבעוני או תקופתי של החברה
+   — אל תסקור אותו כאילו היה הדוח. כתוב רק את הסעיף "## בשורה אחת", ובו
+   מה המסמך בפועל ושהסקירה לא נכתבה משום כך. קובץ שהוא חלק מהדוח ואין
+   בו הדוחות הכספיים — סקור את מה שיש, ואמור זאת בסעיף "מה הדוח לא אומר".
 
 כתוב **בדיוק** את המבנה הבא, בכותרות markdown, ובלי שום טקסט לפניו או
 אחריו:
@@ -116,8 +122,26 @@ export async function onRequestGet(context) {
   const sess = await readSession(readCookie(request, COOKIE), env.SESSION_SECRET);
   if (!sess) return json(401, { error: "נדרשת התחברות" });
 
-  // 2. מטמון. לחיצה חוזרת אינה עולה דבר ואינה נספרת במגביל הקצב.
-  const key = `review:${id}`;
+  // 2. רשימת ההיתר — מזהה שאינו דוח כספי אינו מגיע ל-API. נטענת לפני
+  //    המטמון, כי מפתח המטמון תלוי בקובץ שנבחר לדיווח.
+  let map;
+  try {
+    const r = await env.ASSETS.fetch(new URL("/filings/pdfmap.json", request.url));
+    map = await r.json();
+  } catch {
+    return json(503, { error: "מפת הדוחות אינה זמינה" });
+  }
+  const rec = map[id];
+  if (!rec) return json(404, { error: "הדיווח אינו ברשימת הדיווחים שניתן לסקור" });
+
+  // 3. מטמון. לחיצה חוזרת אינה עולה דבר ואינה נספרת במגביל הקצב.
+  //    **המפתח כולל את הקובץ כשהבחירה השתנתה.** עד 17/09/2026 נבחר ה-PDF
+  //    הגדול בדיווח, ובדוחות עם הערכות שווי זה היה קובץ השמאי — כך
+  //    בלוינשטין הנדסה. סקירה שנשמרה אז נכתבה על המסמך הלא נכון, ובלי מפתח
+  //    חדש הייתה מוגשת לתמיד. pv מסמן שהקובץ שונה ממה שהכלל הישן בחר;
+  //    דיווח בלעדיו שומר על המפתח הישן ועל הסקירה שכבר שולמה.
+  const tag = String(rec.p || "").split("/").pop().replace(/\.pdf$/i, "");
+  const key = rec.pv ? `review:${id}:${tag}` : `review:${id}`;
   if (env.USERS) {
     const hit = await env.USERS.get(key);
     if (hit) {
@@ -131,17 +155,6 @@ export async function onRequestGet(context) {
       });
     }
   }
-
-  // 3. רשימת ההיתר — מזהה שאינו דוח כספי של חברת כיסוי אינו מגיע ל-API.
-  let map;
-  try {
-    const r = await env.ASSETS.fetch(new URL("/filings/pdfmap.json", request.url));
-    map = await r.json();
-  } catch {
-    return json(503, { error: "מפת הדוחות אינה זמינה" });
-  }
-  const rec = map[id];
-  if (!rec) return json(404, { error: "הדיווח אינו ברשימת הדיווחים שניתן לסקור" });
 
   if (!env.ANTHROPIC_API_KEY) return json(503, { error: "המפתח אינו מוגדר" });
 
@@ -165,7 +178,7 @@ export async function onRequestGet(context) {
 
   const who = Array.isArray(rec.c) ? rec.c.join(", ") : rec.c || "";
   const head = `חברה: ${who}\nכותרת הדיווח: ${rec.t}\nתאריך הדיווח: ${rec.d}\n` +
-               `מזהה מאיה: ${id}`;
+               `מזהה מאיה: ${id}` + (rec.n ? `\nשם הקובץ: ${rec.n}` : "");
 
   const res = await fetch(API, {
     method: "POST",
