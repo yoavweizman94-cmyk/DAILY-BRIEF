@@ -24,6 +24,7 @@ import coverlist
 import nadlan
 import otc
 import offex
+import jumbo
 import transcripts
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1157,11 +1158,14 @@ def main() -> int:
     # אותן רשומות משמשות פעמיים: כגוף הסעיף של מאיה, וכמקור הזהויות
     # לתקציר לציוץ — סקירת הבורסה עצמה אינה נושאת שמות.
     _off_rows = offex.load_offex()
+    # עסקאות מתואמות מ-GTO (ingest/gto_pull.py, רץ מקומית) — לשוניות באותו עמוד.
+    _jumbo_rows = jumbo.load()
     (OUT / "offex.html").write_text(
-        PAGE.format(title=f"עסקאות מחוץ לבורסה · {site_title}", site_title=site_title,
+        PAGE.format(title=(f"עסקאות מחוץ לבורסה{' ומתואמות' if _jumbo_rows else ''}"
+                           f" · {site_title}"), site_title=site_title,
                     root="", body=otc.page(_otc_rows,
                                            offex.page(_off_rows, yr, head=False),
-                                           yr, _off_rows)),
+                                           yr, _off_rows, _jumbo_rows)),
         encoding="utf-8")
     # **מה נבנה בפועל, ולא רק שהבנייה הצליחה.** העמוד הזה נראה תקוע
     # במשך ימים בזמן שהקובץ היה מעודכן, כי היום הפתוח לא רונדר. שורה
@@ -1174,6 +1178,16 @@ def main() -> int:
               f"היום השלם האחרון {_a['ref']}, סעיף יום פתוח: {_open}")
     else:
         print("::warning::עסקאות מחוץ לבורסה: הקובץ ריק")
+    # **המתואמות נאספות במחשב מקומי ולא בענן**, ולכן הן יכולות להתיישן בשקט
+    # כשהמחשב כבוי. השורה הזו אומרת מתי נאספו לאחרונה.
+    if _jumbo_rows:
+        _jl = max(r["date"] for r in _jumbo_rows)
+        _jd = [r for r in _jumbo_rows if r["date"] == _jl]
+        print(f"::notice::עסקאות מתואמות: היום האחרון {_jl} "
+              f"({'סיום מסחר' if all(r.get('final') for r in _jd) else 'חלקי'}), "
+              f"{len(_jd)} ניירות, {sum(r['value'] for r in _jd) / 1e6:,.1f} מ׳ ₪")
+    else:
+        print("::notice::עסקאות מתואמות: אין נתונים (output/jumbo ריק) — הלשוניות אינן מוצגות")
 
     (OUT / "calls.html").write_text(
         PAGE.format(title=f"שיחות ועידה · {site_title}", site_title=site_title,

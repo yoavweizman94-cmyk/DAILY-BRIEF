@@ -303,13 +303,13 @@ def tiles(a: dict, year: str) -> str:
         f'{"היום" if ref != a["ref"] else "יום המסחר האחרון"} · '
         f'{hebdate(ref or "")}</span>'
         f'<span class="val" dir="ltr">{money(day)}</span>'
-        f'<span class="chg">{len(a["by_day"].get(ref, []))} עסקאות במניות</span></div>',
+        f'<span class="chg txt">{len(a["by_day"].get(ref, []))} עסקאות במניות</span></div>',
         f'<div class="tile"><span class="lbl">מתחילת החודש</span>'
         f'<span class="val" dir="ltr">{money(mtd)}</span>'
-        f'<span class="chg">{len(mtd_rows)} עסקאות</span></div>',
+        f'<span class="chg txt">{len(mtd_rows)} עסקאות</span></div>',
         f'<div class="tile"><span class="lbl">מתחילת {year}</span>'
         f'<span class="val" dir="ltr">{money(ytd)}</span>'
-        f'<span class="chg">{len(a["ytd"])} עסקאות</span></div>',
+        f'<span class="chg txt">{len(a["ytd"])} עסקאות</span></div>',
         '</section>',
         embed("summary", payload),
         f'<p class="otc-acts otc-acts-strip">{png_button("ייצוא תמונת המצב", key="summary")}</p>',
@@ -668,22 +668,30 @@ def periods(a: dict, year: str, off: list[dict] | None = None) -> str:
 
 
 
-def head(a: dict, year: str) -> str:
+def head(a: dict, year: str, jumbo: bool = False) -> str:
     # ספירת הניירות האחרים הוסרה מהעמוד: היא תיאור של מה שלא מוצג,
     # והקורא לא ביקש אותו.
-    note = ""
-    return "\n".join([
-        '<div class="dash-head"><h1>עסקאות מחוץ לבורסה</h1>',
-        f'<span class="stamp">מתחילת {year} · נבנה {datetime.now():%d/%m %H:%M}</span></div>',
+    if jumbo:
+        # שלוש לשוניות באותו מבנה. ההסבר על כל מקור יושב בלשונית שלו.
+        lead = ('<p class="lead">שלוש לשוניות באותו מבנה — עסקאות מחוץ לבורסה, '
+                'עסקאות מתואמות, ושתיהן יחד — ובכל אחת יום, חודש ושנה מסוכמים לפי '
+                'נייר. עסקאות מחוץ לבורסה מהסקירה היומית של הבורסה, שמפרסמת את '
+                '<strong>כל</strong> העסקאות אך בלי זהויות; עסקאות מתואמות מנתוני '
+                'המסחר ב-GTO. בהמשך העמוד, מתוך מאיה, מי שמאחורי העסקאות שחייבות '
+                'דיווח — בשמו ובשיעור מההון.</p>')
+    else:
         # פסקה אחת במקום שתיים. ההסבר על ההשהיה עבר לכותרת של טבלת
         # היום, שם הוא רלוונטי — ולא לראש העמוד, שם הוא מס שפה שנקרא
         # פעם אחת ואז מדולג בכל בוקר.
-        '<p class="lead">שלוש טבלאות באותו מבנה — יום, חודש ושנה — '
-        'מסוכמות לפי נייר. המקור הוא הסקירה היומית של הבורסה, שמפרסמת '
-        'את <strong>כל</strong> העסקאות מחוץ לבורסה אך בלי זהויות. '
-        'בהמשך העמוד, מתוך מאיה, מי שמאחורי העסקאות שחייבות דיווח — '
-        'בשמו ובשיעור מההון.</p>',
-        note,
+        lead = ('<p class="lead">שלוש טבלאות באותו מבנה — יום, חודש ושנה — '
+                'מסוכמות לפי נייר. המקור הוא הסקירה היומית של הבורסה, שמפרסמת '
+                'את <strong>כל</strong> העסקאות מחוץ לבורסה אך בלי זהויות. '
+                'בהמשך העמוד, מתוך מאיה, מי שמאחורי העסקאות שחייבות דיווח — '
+                'בשמו ובשיעור מההון.</p>')
+    return "\n".join([
+        f'<div class="dash-head"><h1>עסקאות מחוץ לבורסה{" ומתואמות" if jumbo else ""}</h1>',
+        f'<span class="stamp">מתחילת {year} · נבנה {datetime.now():%d/%m %H:%M}</span></div>',
+        lead,
     ])
 
 
@@ -709,7 +717,8 @@ def export_js() -> str:
 
 
 def page(otc_rows: list[dict], maya_body: str, year: str,
-         offex_rows: list[dict] | None = None) -> str:
+         offex_rows: list[dict] | None = None,
+         jumbo_rows: list[dict] | None = None) -> str:
     if not otc_rows:
         return ('<div class="dash-head"><h1>עסקאות מחוץ לבורסה</h1></div>'
                 + (maya_body or ""))
@@ -718,8 +727,14 @@ def page(otc_rows: list[dict], maya_body: str, year: str,
     # ליקוט עסקאות חריגות בשמן וטבלת חזרות בין שני חתכים יומיים, ולא
     # הייתה בה דרך לענות על "מה קרה החודש". שלוש טבלאות באותו מבנה
     # עונות על זה, ומאפשרות להשוות נייר בין התקופות בלי ללמוד מבנה חדש.
-    parts = [head(a, year), tiles(a, year),
-             periods(a, year, offex_rows), method()]
+    body = "\n".join([tiles(a, year), periods(a, year, offex_rows), method()])
+    if jumbo_rows:
+        # **עסקאות מתואמות בלשוניות, באותו מבנה.** יבוא מקומי: jumbo.py
+        # משתמש בכלים של המודול הזה, ויבוא בראש הקובץ היה מעגלי.
+        import jumbo
+        parts = [head(a, year, jumbo=True), jumbo.tabs(a, body, jumbo_rows, year)]
+    else:
+        parts = [head(a, year), body]
     if maya_body:
         parts += ['<h2>מי עומד מאחורי העסקאות המדווחות</h2>', maya_body]
     # **הסקריפט אחרון, אחרי כל הכפתורים.** הוא רץ בזמן פענוח העמוד

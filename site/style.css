@@ -332,6 +332,11 @@ ul.sources li.bad span { color: var(--down); font-weight: 700; }
   font-feature-settings: "tnum" 1;
 }
 .tile .chg { font-family: var(--mono); font-size: 0.76rem; font-weight: 500; }
+/* כיתוב מילולי ולא שינוי מספרי: לגופן המספרים אין עברית, והנפילה היא לגופן
+   מונו של המערכת — "38 ניירות" נראה במכונת כתיבה. */
+.tile .chg.txt { font-family: var(--sans); font-size: 0.78rem; color: var(--muted); line-height: 1.45; }
+/* רצועה של שניים-שלושה סכומים עם כיתוב ארוך (מתואמות, הכל יחד) — אריחים רחבים. */
+.strip.wide { grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); }
 .tile.up .chg { color: var(--up); }
 .tile.down .chg { color: var(--down); }
 .tile.flat .chg { color: var(--faint); }
@@ -569,6 +574,28 @@ ul.ac li:hover { background: var(--accent-soft); color: var(--accent); }
 .otc-png.sm { font-size: 0.72rem; padding: 0.14rem 0.55rem; gap: 0.3rem; }
 .otc-png.sm .ico { width: 0.8rem; height: 0.8rem; }
 .otc-acts-strip { margin: -1.1rem 0 1.9rem; }
+
+/* לשוניות: מחוץ לבורסה / מתואמות / הכל יחד. קו תחתון במבטא ולא כפתור ממולא —
+   אותה שפה של קווים דקים כמו בטבלאות, כדי שהלשונית לא תתחרה במספרים שמתחתיה. */
+.otc-tabs {
+  display: flex; gap: 0.2rem; margin: 0.4rem 0 1.6rem;
+  border-bottom: 1px solid var(--border-strong);
+  overflow-x: auto; scrollbar-width: none;
+}
+.otc-tabs::-webkit-scrollbar { display: none; }
+.otc-tabs [role="tab"] {
+  font: inherit; font-family: var(--sans); font-size: 0.97rem; font-weight: 600;
+  background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  padding: 0.5rem 0.95rem 0.45rem; color: var(--muted); cursor: pointer; white-space: nowrap;
+}
+.otc-tabs [role="tab"]:hover { color: var(--fg); }
+.otc-tabs [role="tab"][aria-selected="true"] {
+  color: var(--fg); font-weight: 700; border-bottom-color: var(--accent);
+}
+.otc-tabs [role="tab"]:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+@media (max-width: 480px) {
+  .otc-tabs [role="tab"] { padding: 0.5rem 0.7rem 0.45rem; font-size: 0.92rem; }
+}
 
 /* התקציר לציוץ: נועד להעתקה, ולכן מוצג כפי שיודבק — שורות שמורות,
    בלי גלישה מחדש שתשנה את מה שהקורא רואה מול מה שיקבל. */
