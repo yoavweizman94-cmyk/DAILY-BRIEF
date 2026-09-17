@@ -87,6 +87,14 @@
     return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
   function attr(t) { return esc(t || "").replace(/"/g, "&quot;"); }
+  // כיתוב לקובץ נוסף: קודם מה שהטופס במאיה אומר, ורק כשאין — שם הקובץ.
+  // במגוריט "הערכות_שווי_isa.pdf" הוגש בשדה הקובץ הנוסף בלי הסבר, ובדיווחים
+  // בטופס ישן אין כיתוב כלל ("ריכוז_שמאויות", "שומת_מקרקעין").
+  var VAL_NAME = /הערכ[א-ת]*[\s_-]*שווי|שמא(?:י|ו|ות)|שומת[\s_-]*מקרקעין|valuation|apprais/i;
+  function axLabel(a) {
+    if (a.l) return a.l;
+    return VAL_NAME.test(a.n || "") ? "הערכות שווי" : "קובץ נוסף";
+  }
   function inline(t) {
     return esc(t).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   }
@@ -358,7 +366,7 @@
       // לצידו בשמם, ולא כהורדה של "הדוח".
       var ax = (e.pa || []).map(function (a) {
         return '<a class="ax" href="' + FILES + attr(a.p) + '" target="_blank" rel="noopener" ' +
-          'title="' + attr(a.n) + '">' + esc(a.l || "קובץ נוסף") +
+          'title="' + attr(a.n) + '">' + esc(axLabel(a)) +
           // bdi: אחרי כיתוב עברי "8.8 MB" מתהפך ל-"MB 8.8"
           (a.s ? " · <bdi>" + size(a.s) + "</bdi>" : "") + "</a>";
       }).join("");
