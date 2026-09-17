@@ -19,6 +19,7 @@ import markdown
 import yaml
 
 import autonews
+import commodities
 import cbsdata
 import coverlist
 import nadlan
@@ -57,7 +58,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a><a href="{root}reports.html">דיווחים</a><a href="{root}cbs.html">למ"ס</a><a href="{root}auto.html">רכב</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a><a href="{root}reports.html">דיווחים</a><a href="{root}cbs.html">למ"ס</a><a href="{root}auto.html">רכב</a><a href="{root}commodities.html">סחורות</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
   <a class="brand" href="{root}index.html">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
 </header>
 <main>
@@ -1126,6 +1127,16 @@ def main() -> int:
                     root="", body=autonews.page(_auto)),
         encoding="utf-8")
     for _line in autonews.report(_auto):
+        print(_line)
+
+    # עמוד הסחורות: מחירים לפי אזור, עקומי חוזים, דשנים, עסקאות וחברות.
+    # הנתונים מצנרת commodities-watch; נבנה בכל בנייה, כמו גיליון הרכב.
+    _commod = commodities.load()
+    (OUT / "commodities.html").write_text(
+        PAGE.format(title=f"סחורות · {site_title}", site_title=site_title,
+                    root="", body=commodities.page(_commod)),
+        encoding="utf-8")
+    for _line in commodities.report(_commod):
         print(_line)
 
     # רשימת הכיסוי. הרשימה עצמה היא HTML מלא ונקראת גם בלי JS; עמודת

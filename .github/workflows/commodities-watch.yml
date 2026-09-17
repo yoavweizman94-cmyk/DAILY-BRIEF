@@ -1,0 +1,126 @@
+name: Commodities Watch
+
+# עמוד הסחורות (commodities.html): מחירי Trading Economics, עקומי חוזים, מחירי ייחוס
+# חודשיים מהבנק העולמי וכותרות — וסקירה שמחברת אותם לחברות בתל אביב.
+# מקורות, מכשירים וחשיפות: config/commodities.yaml.
+#
+# **פעמיים ביום, בימי מסחר.** השעות מוזזות מצנרות הלמ"ס והרכב כדי ששתי פריסות לא
+# ירוצו באותן דקות:
+#   06:35 UTC — 09:35 קיץ / 08:35 חורף: אחרי אסיה ופתיחת אירופה
+#   16:20 UTC — 19:20 קיץ / 18:20 חורף: אחרי נעילת אירופה, באמצע המסחר בארה"ב
+#
+# **הסקירה אינה נכתבת בכל ריצה.** commodities_pull מחליט: לפחות 10 שעות מהסקירה
+# הקודמת, ויש כותרות חדשות או שהמחירים זזו. ריצה בלי שינוי אינה בונה ואינה פורסת.
+on:
+  schedule:
+    - cron: "35 6 * * 1-5"
+    - cron: "20 16 * * 1-5"
+  push:
+    paths:
+      - ".trigger/commodities-watch.json"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commodities-watch
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Jerusalem
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Install collector dependencies
+        run: pip install pyyaml truststore certifi curl_cffi requests yfinance openpyxl
+
+      # כשל של כל המקורות מפיל את הריצה באדום; מקור בודד שנכשל — אזהרה.
+      - name: Collect prices, curves and headlines
+        id: collect
+        env:
+          TRADINGECONOMICS_KEY: ${{ secrets.TRADINGECONOMICS_KEY }}
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && grep -q '"force": *true' .trigger/commodities-watch.json; then
+            export COMMOD_FORCE=1
+          fi
+          python ingest/commodities_pull.py
+
+      - name: Nothing changed
+        if: steps.collect.outputs.changed != 'yes'
+        run: echo "אין מחיר או כותרת חדשים — יוצאים בלי מודל ובלי פריסה."
+
+      - uses: actions/setup-node@v7
+        if: steps.collect.outputs.analyze == 'yes'
+        with:
+          node-version: "20"
+
+      - name: Install analyzer
+        if: steps.collect.outputs.analyze == 'yes'
+        run: npm install -g @anthropic-ai/claude-code
+
+      # כישלון בסקירה אינו מפיל את הריצה: המחירים עצמם שווים שמירה ופריסה, והעמוד
+      # אומר כשהסקירה ישנה. **עלות:** קריאה אחת, Sonnet במאמץ בינוני, תקרה של 1.5$.
+      - name: Analyze markets
+        if: steps.collect.outputs.analyze == 'yes'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL: claude-sonnet-5
+          COMMOD_EFFORT: medium
+          COMMOD_MAX_USD: "1.5"
+        run: |
+          set +e
+          python scripts/analyze_commodities.py 2>&1 | tee analyze.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            echo "::warning title=סקירת הסחורות נכשלה (קוד $rc)::המחירים נשמרים ונפרסים; הסקירה תנוסה שוב בריצה הבאה."
+          fi
+          exit 0
+
+      - name: Save content
+        if: steps.collect.outputs.changed == 'yes'
+        run: CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push commodities
+
+      # התוכן נמשך שוב לפני הבנייה: צנרת אחרת עשויה הייתה לדחוף מאז, ובנייה על
+      # עותק ישן הייתה דורסת באתר תוכן חדש יותר.
+      - name: Refresh content before build
+        if: steps.collect.outputs.changed == 'yes'
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Build site
+        if: steps.collect.outputs.changed == 'yes'
+        run: |
+          pip install -r requirements.txt
+          python site/build.py
+
+      - name: Check inline JS
+        if: steps.collect.outputs.changed == 'yes'
+        run: python scripts/check_inline_js.py
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.collect.outputs.changed == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
+          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
+            echo "::error::הפריסה לא החזירה כתובת"; exit 1; }

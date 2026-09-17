@@ -1961,3 +1961,73 @@ table.au-tbl tr.listed td { background: var(--accent-soft); }
   font-size: 0.66rem; font-weight: 700; color: var(--accent); background: var(--accent-soft);
   border-radius: 3px; padding: 0.05rem 0.4rem; white-space: nowrap;
 }
+
+/* ---------- עמוד הסחורות ---------- */
+.cm-kicker { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em; color: var(--accent); margin-bottom: 0.15rem; }
+.cm-regions {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1rem 1.8rem; margin: 0.5rem 0 1.2rem;
+}
+.cm-region h3 { font-size: 0.9rem; margin: 0 0 0.4rem; }
+.cm-rbar {
+  display: grid; grid-template-columns: minmax(7rem, 1.4fr) auto minmax(5rem, 1fr) 3.2rem;
+  align-items: center; gap: 0.5rem; padding: 0.28rem 0; border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+}
+.cm-rbar .nm { font-weight: 600; }
+.cm-rbar .val { font-family: var(--mono); font-size: 0.72rem; color: var(--faint); white-space: nowrap; }
+.cm-rbar .track { position: relative; height: 0.55rem; background: var(--table-head); border-radius: 2px; }
+.cm-rbar .track::after {
+  content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--border-strong);
+}
+.cm-rbar .track i { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+.cm-rbar .track i.pos { left: 50%; background: var(--accent); opacity: 0.75; }
+.cm-rbar .track i.neg { right: 50%; background: var(--muted); opacity: 0.55; }
+.cm-rbar .chg { font-family: var(--mono); font-size: 0.76rem; font-weight: 600; text-align: left; }
+.cm-rbar .chg.up { color: var(--up); }
+.cm-rbar .chg.down { color: var(--down); }
+table.cm-curves td { white-space: nowrap; }
+table.cm-curves td .trend { font-size: 0.72rem; }
+table.cm-curves td.shape { font-size: 0.8rem; font-weight: 600; }
+table.au-tbl td.u { font-size: 0.72rem; color: var(--faint); }
+svg.cm-curve { display: block; width: 110px; height: 30px; }
+svg.cm-curve polyline { fill: none; stroke-width: 1.8; stroke-linejoin: round; }
+svg.cm-curve.up polyline, svg.cm-curve.up circle { stroke: var(--up); fill: none; }
+svg.cm-curve.down polyline, svg.cm-curve.down circle { stroke: var(--down); fill: none; }
+svg.cm-curve circle { stroke-width: 1.3; fill: var(--surface) !important; }
+svg.au-ch.cm-fert .l1, svg.au-ch.cm-fert .l2, svg.au-ch.cm-fert .l3, svg.au-ch.cm-fert .l4 {
+  fill: none; stroke-width: 2.1; stroke-linejoin: round; stroke-linecap: round;
+}
+svg.au-ch.cm-fert .l1 { stroke: var(--accent); }
+svg.au-ch.cm-fert .l2 { stroke: var(--warn); }
+svg.au-ch.cm-fert .l3 { stroke: var(--up); }
+svg.au-ch.cm-fert .l4 { stroke: var(--muted); }
+svg.au-ch.cm-fert .l1-end { fill: var(--accent); }
+svg.au-ch.cm-fert .l2-end { fill: var(--warn); }
+svg.au-ch.cm-fert .l3-end { fill: var(--up); }
+svg.au-ch.cm-fert .l4-end { fill: var(--muted); }
+.au-legend .sw.l1, .au-legend .sw.l2, .au-legend .sw.l3, .au-legend .sw.l4 { height: 3px; }
+.au-legend .sw.l1 { background: var(--accent); }
+.au-legend .sw.l2 { background: var(--warn); }
+.au-legend .sw.l3 { background: var(--up); }
+.au-legend .sw.l4 { background: var(--muted); }
+table.cm-wb td.desc { font-size: 0.7rem; color: var(--faint); white-space: normal; min-width: 14rem; line-height: 1.45; }
+.cm-sigs { display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; margin: 0.15rem 0 0.45rem; }
+.cm-sig { font-size: 0.74rem; color: var(--muted); }
+.cm-sig b { color: var(--fg); font-weight: 600; }
+.cm-sig bdi { font-family: var(--mono); }
+.cm-side { padding: 0.4rem 0; border-top: 1px solid var(--border); }
+.cm-side .why { display: block; font-size: 0.78rem; line-height: 1.55; color: var(--muted); margin: 0.15rem 0 0.3rem; }
+.cm-sidelbl {
+  display: inline-block; font-size: 0.66rem; font-weight: 700; border-radius: 3px; padding: 0.02rem 0.4rem;
+  background: var(--table-head); color: var(--fg);
+}
+.cm-sidelbl.producer { background: color-mix(in srgb, var(--up) 14%, transparent); color: var(--up); }
+.cm-sidelbl.consumer { background: color-mix(in srgb, var(--down) 12%, transparent); color: var(--down); }
+.cm-sidelbl.margin { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.cm-notes { margin-bottom: 1rem; }
+.cm-notes li .au-co { justify-content: flex-start; gap: 0.5rem; }
+details.cm-board { margin: 0.2rem 0 0.8rem; }
+details.cm-board summary { cursor: pointer; font-weight: 700; font-size: 0.92rem; padding: 0.35rem 0; }
+svg.cm-spark { width: 70px; height: 18px; color: var(--accent); }
+.au-charts.cm-one { grid-template-columns: minmax(0, 40rem); }

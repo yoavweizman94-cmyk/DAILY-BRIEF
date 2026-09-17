@@ -1,0 +1,383 @@
+# ---------------------------------------------------------------------------
+# עמוד הסחורות (commodities.html) — מחירים, אזורים, חוזים, חדשות וחברות.
+#
+# נאסף ע"י ingest/commodities_pull.py ומנותח ע"י scripts/analyze_commodities.py,
+# בצנרת commodities-watch. התוצרים בריפו התוכן תחת output/commodities/.
+#
+# ארבעה מקורות, וכל אחד עונה על שאלה אחרת:
+#   · Trading Economics (/markets/commodities, במנוי) — מחיר עדכני ושינוי יומי,
+#     שבועי, חודשי ושנתי, ל-109 סחורות. זה ה"ספוט" של העמוד.
+#   · yfinance — חוזים עתידיים לפי חודש אספקה. עקום החוזים אומר אם השוק מתמחר
+#     מחסור עכשיו (בקוורדיישן) או עודף (קונטנגו).
+#   · הבנק העולמי (Pink Sheet, חודשי) — מחירי ייחוס לפי אזור עם הגדרה רשמית:
+#     אשלג בברזיל, DAP במפרץ ארה"ב, אוריאה במזרח התיכון, גז באירופה/ארה"ב/יפן.
+#     זה המקור היחיד כאן לאשלג, שאינו ב-Trading Economics.
+#   · כותרות — היצע וביקוש, מאקרו ועסקאות שנחתמו (Google News ו-RSS).
+#
+# **אזור מוצג רק כשהוא ידוע.** למחירי Trading Economics בלי אזור מפורש, יחידה
+# ביואן (CNY) היא סימן שהמחיר סיני; אחרת האזור ריק ולא מנוחש.
+# ---------------------------------------------------------------------------
+
+groups:
+  - {key: energy,      label: "אנרגיה"}
+  - {key: power,       label: "חשמל ופחמן"}
+  - {key: fertilizers, label: "דשנים וכימיקלים"}
+  - {key: metals,      label: "מתכות"}
+  - {key: polymers,    label: "פולימרים ופטרוכימיה"}
+  - {key: agri,        label: "חקלאות ומזון"}
+  - {key: freight,     label: "הובלה ומדדים"}
+
+# סמל Trading Economics → קבוצה, שם בעברית, אזור (ריק = לא ידוע).
+instruments:
+  # אנרגיה
+  - {symbol: "CO1:COM",    group: energy, label: "נפט ברנט",              region: "הים הצפוני"}
+  - {symbol: "CL1:COM",    group: energy, label: "נפט WTI",               region: "ארה\"ב"}
+  - {symbol: "URDB:COM",   group: energy, label: "נפט אורל",              region: "רוסיה"}
+  - {symbol: "NG1:COM",    group: energy, label: "גז טבעי Henry Hub",     region: "ארה\"ב"}
+  - {symbol: "NGEU:COM",   group: energy, label: "גז טבעי TTF",           region: "אירופה"}
+  - {symbol: "NGUK:COM",   group: energy, label: "גז טבעי NBP",           region: "בריטניה"}
+  - {symbol: "NGDE:COM",   group: energy, label: "גז טבעי גרמניה",        region: "גרמניה"}
+  - {symbol: "LNGJKM:COM", group: energy, label: "LNG JKM",               region: "צפון-מזרח אסיה"}
+  - {symbol: "XAL1:COM",   group: energy, label: "פחם תרמי ניוקאסל",      region: "אוסטרליה"}
+  - {symbol: "DJM:COM",    group: energy, label: "פחם קוקס",              region: ""}
+  - {symbol: "XB1:COM",    group: energy, label: "בנזין RBOB",            region: "ארה\"ב"}
+  - {symbol: "HO1:COM",    group: energy, label: "סולר (Heating Oil)",    region: "ארה\"ב"}
+  - {symbol: "MOB:COM",    group: energy, label: "נפטא",                  region: ""}
+  - {symbol: "PNL:COM",    group: energy, label: "פרופאן",                region: ""}
+  - {symbol: "TECSI:IND",  group: energy, label: "מרווח זיקוק (מדד TE)",  region: ""}
+  - {symbol: "UXA:COM",    group: energy, label: "אורניום",               region: ""}
+  # חשמל ופחמן
+  - {symbol: "DEUELEPRI:COM", group: power, label: "חשמל",   region: "גרמניה"}
+  - {symbol: "FRAELEPRI:COM", group: power, label: "חשמל",   region: "צרפת"}
+  - {symbol: "ITAELEPRI:COM", group: power, label: "חשמל",   region: "איטליה"}
+  - {symbol: "ESPELEPRI:COM", group: power, label: "חשמל",   region: "ספרד"}
+  - {symbol: "GBRELEPRI:COM", group: power, label: "חשמל",   region: "בריטניה"}
+  - {symbol: "EECXM:IND",     group: power, label: "היתרי פחמן EU ETS", region: "אירופה"}
+  # דשנים וכימיקלים
+  - {symbol: "UFB:COM",    group: fertilizers, label: "אוריאה",             region: ""}
+  - {symbol: "UFI:COM",    group: fertilizers, label: "DAP",                region: ""}
+  - {symbol: "PHO:COM",    group: fertilizers, label: "זרחן צהוב",          region: ""}
+  - {symbol: "SULF:COM",   group: fertilizers, label: "גופרית",             region: ""}
+  - {symbol: "SODASH:COM", group: fertilizers, label: "סודה אש",            region: ""}
+  - {symbol: "CMA:COM",    group: fertilizers, label: "מתנול",              region: ""}
+  # מתכות
+  - {symbol: "LMAHDS03:COM", group: metals, label: "אלומיניום LME",   region: "LME"}
+  - {symbol: "AAL:COM",    group: metals, label: "סגסוגת אלומיניום",  region: ""}
+  - {symbol: "SAL:COM",    group: metals, label: "גרוטאות אלומיניום", region: ""}
+  - {symbol: "HG1:COM",    group: metals, label: "נחושת COMEX",       region: "ארה\"ב"}
+  - {symbol: "HRC:COM",    group: metals, label: "פלדה HRC",          region: "ארה\"ב"}
+  - {symbol: "JBP:COM",    group: metals, label: "פלדת בניין (Rebar)", region: ""}
+  - {symbol: "SSC:COM",    group: metals, label: "גרוטאות פלדה",      region: ""}
+  - {symbol: "SCO:COM",    group: metals, label: "עפרת ברזל",         region: ""}
+  - {symbol: "IOE:COM",    group: metals, label: "עפרת ברזל",         region: ""}
+  - {symbol: "LN1:COM",    group: metals, label: "ניקל",              region: ""}
+  - {symbol: "LMZSDS03:COM", group: metals, label: "אבץ",             region: "LME"}
+  - {symbol: "LL1:COM",    group: metals, label: "עופרת",             region: ""}
+  - {symbol: "LMSNDS03:COM", group: metals, label: "בדיל",            region: "LME"}
+  - {symbol: "LC:COM",     group: metals, label: "ליתיום קרבונט",     region: ""}
+  - {symbol: "LCO1:COM",   group: metals, label: "קובלט",             region: ""}
+  - {symbol: "SI:COM",     group: metals, label: "סיליקון",           region: ""}
+  - {symbol: "MACN:COM",   group: metals, label: "מגנזיום",           region: ""}
+  - {symbol: "XAUUSD:CUR", group: metals, label: "זהב",               region: ""}
+  - {symbol: "XAGUSD:CUR", group: metals, label: "כסף",               region: ""}
+  - {symbol: "XPTUSD:CUR", group: metals, label: "פלטינה",            region: ""}
+  # פולימרים ופטרוכימיה
+  - {symbol: "POL:COM",    group: polymers, label: "פוליאתילן",       region: ""}
+  - {symbol: "PYL:COM",    group: polymers, label: "פוליפרופילן",     region: ""}
+  - {symbol: "PVC:COM",    group: polymers, label: "PVC",             region: ""}
+  - {symbol: "STR:COM",    group: polymers, label: "סטירן",           region: ""}
+  - {symbol: "SBR:COM",    group: polymers, label: "גומי סינתטי",     region: ""}
+  - {symbol: "JN1:COM",    group: polymers, label: "גומי טבעי",       region: ""}
+  - {symbol: "BIT:COM",    group: polymers, label: "ביטומן",          region: ""}
+  # חקלאות ומזון
+  - {symbol: "W 1:COM",    group: agri, label: "חיטה CBOT",       region: "ארה\"ב"}
+  - {symbol: "C 1:COM",    group: agri, label: "תירס CBOT",       region: "ארה\"ב"}
+  - {symbol: "S 1:COM",    group: agri, label: "סויה CBOT",       region: "ארה\"ב"}
+  - {symbol: "RR1:COM",    group: agri, label: "אורז",            region: "ארה\"ב"}
+  - {symbol: "PLO:COM",    group: agri, label: "שמן דקלים",       region: ""}
+  - {symbol: "SUNF:COM",   group: agri, label: "שמן חמניות",      region: ""}
+  - {symbol: "RSO:COM",    group: agri, label: "לפתית",           region: ""}
+  - {symbol: "SB1:COM",    group: agri, label: "סוכר 11",         region: ""}
+  - {symbol: "KC1:COM",    group: agri, label: "קפה ערביקה",      region: ""}
+  - {symbol: "CC1:COM",    group: agri, label: "קקאו",            region: ""}
+  - {symbol: "DA:COM",     group: agri, label: "חלב Class III",   region: "ארה\"ב"}
+  - {symbol: "CHE:COM",    group: agri, label: "גבינה",           region: ""}
+  - {symbol: "FABT:COM",   group: agri, label: "חמאה",            region: ""}
+  - {symbol: "BEEF:COM",   group: agri, label: "בקר",             region: ""}
+  - {symbol: "POUL:COM",   group: agri, label: "עוף",             region: ""}
+  - {symbol: "WEGGS:COM",  group: agri, label: "ביצים",           region: "ארה\"ב"}
+  - {symbol: "LB1:COM",    group: agri, label: "עצים (Lumber)",   region: ""}
+  - {symbol: "KSP:COM",    group: agri, label: "עיסת נייר (Kraft)", region: ""}
+  - {symbol: "CT1:COM",    group: agri, label: "כותנה",           region: ""}
+  # הובלה ומדדים
+  - {symbol: "SPSCFI:COM", group: freight, label: "הובלת מכולות SCFI", region: "שנגחאי"}
+  - {symbol: "BDIY:IND",   group: freight, label: "Baltic Dry",        region: ""}
+  - {symbol: "CRYTR:IND",  group: freight, label: "מדד CRB",           region: ""}
+  - {symbol: "SPGSCITR:IND", group: freight, label: "מדד GSCI",        region: ""}
+
+# אותה סחורה באזורים שונים: השינוי השנתי של כל אחד, זה לצד זה. יחידות שונות
+# אינן ברות השוואה ברמה — השינוי באחוזים כן.
+regional:
+  - {title: "גז טבעי",  symbols: ["NG1:COM", "NGEU:COM", "NGUK:COM", "LNGJKM:COM"]}
+  - {title: "נפט גולמי", symbols: ["CL1:COM", "CO1:COM", "URDB:COM"]}
+  - {title: "פלדה ועפרה", symbols: ["HRC:COM", "JBP:COM", "SCO:COM", "IOE:COM"]}
+  - {title: "חשמל",     symbols: ["DEUELEPRI:COM", "FRAELEPRI:COM", "ITAELEPRI:COM", "ESPELEPRI:COM", "GBRELEPRI:COM"]}
+
+# חוזים עתידיים ב-yfinance: שורש, בורסה, חודשי החוזה הנסחרים (קודי חודש).
+curves:
+  - {root: CL, suffix: NYM, label: "נפט WTI",           months: "FGHJKMNQUVXZ", unit: "USD/Bbl"}
+  - {root: BZ, suffix: NYM, label: "נפט ברנט",          months: "FGHJKMNQUVXZ", unit: "USD/Bbl"}
+  - {root: NG, suffix: NYM, label: "גז Henry Hub",      months: "FGHJKMNQUVXZ", unit: "USD/MMBtu"}
+  - {root: HG, suffix: CMX, label: "נחושת COMEX",       months: "HKNUZ",        unit: "USD/Lbs"}
+  - {root: ZW, suffix: CBT, label: "חיטה CBOT",         months: "HKNUZ",        unit: "USc/Bu"}
+  - {root: ZC, suffix: CBT, label: "תירס CBOT",         months: "HKNUZ",        unit: "USc/Bu"}
+  - {root: ZS, suffix: CBT, label: "סויה CBOT",         months: "FHKNQUX",      unit: "USc/Bu"}
+  - {root: KC, suffix: NYB, label: "קפה ערביקה",        months: "HKNUZ",        unit: "USc/Lbs"}
+  - {root: SB, suffix: NYB, label: "סוכר 11",           months: "HKNV",         unit: "USc/Lbs"}
+  - {root: CC, suffix: NYB, label: "קקאו",              months: "HKNUZ",        unit: "USD/T"}
+curve_horizons: [3, 6, 12, 24]
+
+# הבנק העולמי, Pink Sheet חודשי. col — שם העמודה בגיליון "Monthly Prices"; desc —
+# תחילת התיאור הרשמי בגיליון "Description", שמוצג בעמוד. האזור לפי אותו תיאור
+# (נבדק 17/09/2026: האשלג עבר מוונקובר לברזיל ב-2020, האוריאה למזרח התיכון ב-2022).
+worldbank:
+  landing: "https://www.worldbank.org/en/research/commodity-markets"
+  months: 36
+  series:
+    - {col: "Potassium chloride **",       key: potash,   group: fertilizers, label: "אשלג (KCl)",     region: "ברזיל CFR", desc: "Potassium chloride (muriate of potash)"}
+    - {col: "DAP",                         key: dap,      group: fertilizers, label: "DAP",            region: "מפרץ ארה\"ב FOB", desc: "DAP (diammonium phosphate)"}
+    - {col: "TSP",                         key: tsp,      group: fertilizers, label: "TSP",            region: "יבוא למפרץ ארה\"ב", desc: "TSP (triple superphosphate)"}
+    - {col: "Urea ",                       key: urea,     group: fertilizers, label: "אוריאה",         region: "המזרח התיכון FOB", desc: "Urea, (Ukraine)"}
+    - {col: "Phosphate rock",              key: rock,     group: fertilizers, label: "סלע פוספט",      region: "צפון אפריקה FOB", desc: "Phosphate rock"}
+    - {col: "Natural gas, Europe",         key: gas_eu,   group: energy,      label: "גז טבעי",        region: "אירופה (TTF)", desc: "Natural Gas (Europe)"}
+    - {col: "Natural gas, US",             key: gas_us,   group: energy,      label: "גז טבעי",        region: "ארה\"ב (Henry Hub)", desc: "Natural Gas (U.S.)"}
+    - {col: "Liquefied natural gas, Japan", key: lng_jp,  group: energy,      label: "LNG",            region: "יפן (יבוא CIF)", desc: "Liquefied natural gas (Japan)"}
+    - {col: "Crude oil, Brent",            key: brent,    group: energy,      label: "נפט",            region: "ברנט", desc: "Crude oil, UK Brent"}
+    - {col: "Crude oil, Dubai",            key: dubai,    group: energy,      label: "נפט",            region: "דובאי", desc: "Crude oil, Dubai"}
+    - {col: "Coal, Australian",            key: coal_au,  group: energy,      label: "פחם תרמי",       region: "אוסטרליה", desc: "Coal (Australia), from"}
+    - {col: "Coal, South African **",      key: coal_za,  group: energy,      label: "פחם תרמי",       region: "דרום אפריקה", desc: "Coal (South Africa), from"}
+    - {col: "Aluminum",                    key: alu,      group: metals,      label: "אלומיניום",      region: "LME", desc: "Aluminum (LME)"}
+    - {col: "Copper",                      key: copper,   group: metals,      label: "נחושת",          region: "LME", desc: "Copper (LME)"}
+    - {col: "Iron ore, cfr spot",          key: ironore,  group: metals,      label: "עפרת ברזל",      region: "סין CFR", desc: "Iron ore (any origin)"}
+    - {col: "Wheat, US SRW",               key: wheat,    group: agri,        label: "חיטה SRW",       region: "מפרץ ארה\"ב", desc: "Wheat (U.S.), no. 2, soft red"}
+    - {col: "Maize",                       key: maize,    group: agri,        label: "תירס",           region: "מפרץ ארה\"ב", desc: "Maize (U.S.)"}
+    - {col: "Palm oil",                    key: palm,     group: agri,        label: "שמן דקלים",      region: "מלזיה", desc: "Palm oil (Malaysia)"}
+    - {col: "Sugar, world",                key: sugar,    group: agri,        label: "סוכר",           region: "עולמי", desc: "Sugar (World)"}
+    - {col: "Coffee, Arabica",             key: arabica,  group: agri,        label: "קפה ערביקה",     region: "ICO", desc: "Coffee, Arabica"}
+    - {col: "Cocoa",                       key: cocoa,    group: agri,        label: "קקאו",           region: "ICCO", desc: "Cocoa (ICCO)"}
+  # הגרף החודשי בעמוד: הדשנים — אשלג, פוספטים ואוריאה.
+  chart: [potash, dap, urea, rock]
+
+# החברות הנסחרות ותלותן בסחורות. side: producer — מחיר גבוה מיטיב; consumer —
+# מחיר גבוה הוא עלות; margin — הרווח תלוי במרווח ולא במחיר. why הוא המנגנון,
+# לא תיאור עסקי: אין כאן טענה על תמהיל שאינה בדיווחי החברות. המיפוי מבוסס על
+# רשימת המעקב הענפית ב-CLAUDE.md, והשמות נבדקים מול companies.yaml בכל ריצה.
+exposures:
+  - key: fertilizers
+    label: "אשלג, ברום ופוספטים"
+    commodities: ["potash", "dap", "tsp", "rock", "UFB:COM", "UFI:COM", "SULF:COM"]
+    news: ["potash", "bromine", "phosphate", "fertilizer"]
+    groups:
+      - {side: producer, why: "מחיר האשלג, הפוספטים והברום הוא מחיר המכירה של יצרן הדשנים והכימיקלים.",
+         companies: ["איי.סי.אל", "חברה לישראל"]}
+      - {side: consumer, why: "דשנים הם תשומה חקלאית: מחיר גבוה מייקר את עלות הגידול.",
+         companies: ["מהדרין", "גן שמואל"]}
+  - key: oil
+    label: "נפט, גז וזיקוק"
+    commodities: ["CO1:COM", "CL1:COM", "NG1:COM", "NGEU:COM", "LNGJKM:COM", "TECSI:IND", "HO1:COM", "XB1:COM"]
+    news: ["crude", "gas", "lng", "refining"]
+    groups:
+      - {side: producer, why: "מחירי הנפט והגז, ובחלק מחוזי הגז הצמדה לברנט, קובעים את הכנסות השותפויות והמפיקות.",
+         companies: ["ניו-מד אנרג יהש", "ישראמקו יהש", "תמר פטרוליום", "נאוויטס פטר יהש", "רציו יהש", "אנרג'יאן", "דלק קבוצה"]}
+      - {side: margin, why: "בית זיקוק מרוויח מהמרווח בין מחירי המוצרים לנפט הגולמי, לא ממחיר הנפט עצמו.",
+         companies: ["בזן", "בזא", "פז אנרגיה"]}
+      - {side: consumer, why: "דלק סילוני הוא עלות מרכזית בתעופה, ומחירו נגזר ממחירי הנפט והתזקיקים.",
+         companies: ["אל על", "ישראייר גרופ"]}
+  - key: power
+    label: "חשמל"
+    commodities: ["DEUELEPRI:COM", "FRAELEPRI:COM", "ITAELEPRI:COM", "ESPELEPRI:COM", "GBRELEPRI:COM", "EECXM:IND", "NGEU:COM"]
+    news: ["electricity"]
+    groups:
+      - {side: producer, why: "מחיר החשמל בשוק ומחיר הגז שקובע אותו בשעות רבות מזיזים את הכנסות היצרניות שמוכרות בשוק.",
+         companies: ["אנלייט אנרגיה", "אנרג'יקס", "או פי סי אנרגיה", "נופר אנרג'י", "דוראל אנרגיה", "אורמת טכנו", "משק אנרגיה"]}
+  - key: polymers
+    label: "פולימרים"
+    commodities: ["POL:COM", "PYL:COM", "PVC:COM", "STR:COM", "SBR:COM", "MOB:COM"]
+    news: ["polymers"]
+    groups:
+      - {side: consumer, why: "מחירי הפוליאתילן, הפוליפרופילן וה-PVC הם חומר הגלם; השאלה היא אם המחיר עובר ללקוח ובאיזה פיגור.",
+         companies: ["פלרם", "פלסאון תעשיות", "רימוני", "כפרית", "גולן תעשיות", "פולירם", "אבגול", "ספאנטק", "עלבד"]}
+  - key: construction
+    label: "פלדה, אלומיניום ועץ"
+    commodities: ["HRC:COM", "JBP:COM", "SSC:COM", "SCO:COM", "LMAHDS03:COM", "AAL:COM", "LB1:COM", "KSP:COM"]
+    news: ["steel", "aluminum", "lumber"]
+    groups:
+      - {side: consumer, why: "מחירי הפלדה והאלומיניום הם עלות חומר בפרויקטים ובייצור מוצרי בנייה.",
+         companies: ["שפיר הנדסה", "קבוצת אקרשטיין", "אינרום", "גאון קבוצה", "קליל", "חמת", "חד"]}
+      - {side: consumer, why: "מחירי העץ והעיסה הם עלות היבוא והייצור.",
+         companies: ["בירמן", "שניב", "ניסן"]}
+  - key: food
+    label: "מזון ותשומותיו"
+    commodities: ["W 1:COM", "C 1:COM", "S 1:COM", "SB1:COM", "KC1:COM", "CC1:COM", "DA:COM", "FABT:COM", "BEEF:COM", "POUL:COM", "PLO:COM", "RR1:COM"]
+    news: ["grains", "softs", "dairy"]
+    groups:
+      - {side: consumer, why: "חיטה, סוכר, קפה, קקאו, חלב ובשר הם חומרי הגלם של יצרניות המזון והיבואניות.",
+         companies: ["שטראוס", "מחלבות גד", "זנלכל", "נטו אחזקות", "תורפז", "סוגת", "וילי פוד"]}
+  - key: freight
+    label: "הובלה ימית"
+    commodities: ["SPSCFI:COM", "BDIY:IND"]
+    news: ["shipping"]
+    groups:
+      - {side: consumer, why: "תעריפי המכולות והתפזורת הם עלות יבוא ויצוא, וגם מחזור הפעילות של המשלחים.",
+         companies: ["פרידנזון", "נטו אחזקות", "וילי פוד"]}
+
+# --- כותרות -------------------------------------------------------------------
+feeds:
+  - {name: "Mining.com",        url: "https://www.mining.com/feed/", region: world}
+  - {name: "Hellenic Shipping", url: "https://www.hellenicshippingnews.com/feed/", region: world}
+  - {name: "OilPrice.com",      url: "https://oilprice.com/rss/main", region: world}
+  - {name: "World-Grain",       url: "https://www.world-grain.com/rss/articles", region: world}
+
+google_news:
+  il:
+    - "איי.סי.אל when:7d"
+    - "אשלג when:7d"
+    - "מחירי הדשנים when:14d"
+    - "ברום when:14d"
+    - "מחיר הנפט when:2d"
+    - "יצוא גז when:7d"
+    - "מאגר לוויתן when:7d"
+    - "בזן בתי זיקוק when:7d"
+    - "מחירי המתכות when:7d"
+    - "מחירי חומרי גלם when:7d"
+    - "מחיר הקפה OR הקקאו OR הסוכר when:7d"
+  world:
+    - "potash price when:7d"
+    - "potash contract China OR India when:14d"
+    - "bromine price when:14d"
+    - "phosphate fertilizer prices when:7d"
+    - "urea prices when:7d"
+    - "fertilizer market Brazil when:7d"
+    - "oil prices OPEC when:2d"
+    - "oil supply demand outlook when:3d"
+    - "LNG contract signed when:7d"
+    - "European gas prices TTF when:3d"
+    - "refining margins when:7d"
+    - "copper prices when:3d"
+    - "aluminium prices LME when:3d"
+    - "steel prices China when:3d"
+    - "iron ore prices when:3d"
+    - "lithium prices when:7d"
+    - "polyethylene prices when:7d"
+    - "polypropylene market when:14d"
+    - "wheat prices when:3d"
+    - "cocoa prices when:3d"
+    - "coffee prices when:3d"
+    - "sugar prices when:7d"
+    - "dairy prices Global Dairy Trade when:7d"
+    - "container freight rates when:3d"
+    - "commodity supply deal signed when:7d"
+    - "offtake agreement signed when:7d"
+
+world_sources: ["Reuters", "Bloomberg", "Financial Times", "Wall Street Journal", "WSJ", "CNBC", "S&P Global",
+                "Platts", "Argus", "Fastmarkets", "ICIS", "CRU", "Mining.com", "MINING.COM", "Mining Weekly",
+                "OilPrice.com", "Oilprice", "Rigzone", "Upstream", "Energy Voice", "Offshore Energy",
+                "Natural Gas Intelligence", "LNG Prime", "Hellenic Shipping News", "Splash247", "Lloyd's List",
+                "FreightWaves", "Journal of Commerce", "World-Grain", "World Grain", "DTN", "Successful Farming",
+                "Farmdoc", "AgWeb", "Farm Progress", "Food Navigator", "Confectionery News", "Just Food",
+                "Nikkei", "Caixin", "South China Morning Post", "Economic Times", "Hindu BusinessLine",
+                "Business Standard", "Mint", "Valor", "Nasdaq", "MarketWatch", "Barron's", "Yahoo Finance",
+                "Forbes", "Fortune", "The Economist", "AP News", "Associated Press", "BBC", "The Guardian",
+                "Al Jazeera", "Kallanish", "Metal Bulletin", "Plastics News", "Chemical & Engineering News",
+                "Chemical Week", "Nutrien", "Mosaic", "ICL", "Yara", "K+S", "OPEC", "IEA", "EIA",
+                "Energy Intelligence", "Montel", "ICIS News", "Seeking Alpha"]
+
+exclude_sources: ["Vietnam.vn", "Sport5", "ספורט 5", "kikar.co.il", "כיכר השבת", "מיינט", "mynet"]
+exclude_title: ["מתכון", "recipe", "horoscope", "crossword", "price prediction", "should you buy", "stock to buy",
+                "stocks to buy", "top picks", "buy now"]
+
+# כל כותרת עולם צריכה מילה של שוק — בלי זה חיפוש "coffee prices" מביא בתי קפה.
+business_words: ["price", "prices", "priced", "market", "markets", "supply", "demand", "output", "production",
+                 "exports", "imports", "tariff", "tariffs", "contract", "contracts", "deal", "agreement", "offtake",
+                 "inventory", "inventories", "stocks", "futures", "spot", "benchmark", "shortage", "surplus",
+                 "capacity", "mine", "mines", "refinery", "refineries", "margin", "margins", "OPEC", "sanctions",
+                 "freight", "rates", "tonnes", "tons", "barrels", "harvest", "crop", "crops", "forecast", "outlook",
+                 "costs", "cost", "earnings", "profit", "acquisition", "merger", "stake", "investment", "plant",
+                 "shipment", "shipments", "quota", "ban", "levy", "duty", "dollar", "Fed", "China", "India"]
+
+# נושאים לתיוג. כותרת בלי אף נושא אינה נשמרת.
+themes:
+  - slug: crude
+    label: "נפט"
+    keywords: ["crude", "oil", "Brent", "WTI", "OPEC", "barrel", "barrels", "נפט", "ברנט", "אופ\"ק", "חבית"]
+  - slug: gas
+    label: "גז ו-LNG"
+    keywords: ["natural gas", "LNG", "TTF", "Henry Hub", "JKM", "גז טבעי", "גז", "לוויתן", "תמר", "כריש"]
+  - slug: refining
+    label: "זיקוק ודלקים"
+    keywords: ["refining", "refinery", "refineries", "crack spread", "diesel", "gasoline", "jet fuel", "זיקוק",
+               "בית זיקוק", "בתי זיקוק", "סולר", "בנזין", "בזן"]
+  - slug: electricity
+    label: "חשמל ופחמן"
+    keywords: ["electricity", "power prices", "power price", "carbon", "emissions trading", "ETS", "חשמל"]
+  - slug: fertilizers
+    label: "דשנים"
+    keywords: ["potash", "potassium", "phosphate", "phosphates", "fertilizer", "fertilizers", "fertiliser",
+               "fertilisers", "urea", "ammonia", "DAP", "MOP", "Nutrien", "Mosaic", "Belaruskali", "Uralkali",
+               "K+S", "Yara", "OCP", "אשלג", "דשן", "דשנים", "פוספט", "פוספטים", "איי.סי.אל", "כיל"]
+  - slug: bromine
+    label: "ברום וכימיקלים"
+    keywords: ["bromine", "sulfur", "sulphur", "soda ash", "methanol", "caustic soda", "ברום", "גופרית"]
+  - slug: metals
+    label: "מתכות"
+    keywords: ["copper", "aluminium", "aluminum", "zinc", "nickel", "lithium", "cobalt", "tin", "gold",
+               "silver", "LME", "נחושת", "אלומיניום", "ליתיום", "זהב", "מתכות"]
+  - slug: steel
+    label: "פלדה ועפרות"
+    keywords: ["steel", "iron ore", "rebar", "HRC", "scrap", "פלדה", "ברזל"]
+  - slug: polymers
+    label: "פולימרים"
+    keywords: ["polyethylene", "polypropylene", "PVC", "polymer", "polymers", "resin", "resins", "petrochemical",
+               "petrochemicals", "styrene", "פולימר", "פולימרים", "פלסטיק", "פוליאתילן", "פוליפרופילן"]
+  - slug: grains
+    label: "דגנים ושמנים"
+    keywords: ["wheat", "corn", "maize", "soybean", "soybeans", "soy", "grain", "grains", "rice", "palm oil",
+               "vegetable oil", "WASDE", "חיטה", "תירס", "סויה", "דגנים"]
+  - slug: softs
+    label: "קפה, קקאו וסוכר"
+    keywords: ["coffee", "cocoa", "sugar", "קפה", "קקאו", "סוכר"]
+  - slug: dairy
+    label: "חלב ובשר"
+    keywords: ["dairy", "milk", "butter", "cheese", "Global Dairy Trade", "GDT", "beef", "cattle", "poultry",
+               "חלב", "בשר", "עוף"]
+  - slug: shipping
+    label: "הובלה ימית"
+    keywords: ["freight", "container rates", "shipping rates", "Baltic Dry", "SCFI", "bulk carriers", "tanker rates",
+               "Red Sea", "Suez", "Hormuz", "הובלה ימית", "מכולות", "ים סוף"]
+  - slug: deals
+    label: "עסקאות וחוזים"
+    keywords: ["contract", "contracts", "deal", "deals", "agreement", "agreements", "offtake", "signed", "signs",
+               "acquire", "acquires", "acquisition", "merger", "stake", "supply agreement", "long-term",
+               "הסכם", "הסכמים", "חוזה", "חוזים", "עסקה", "עסקאות", "רכישה", "מיזוג"]
+  - slug: macro
+    label: "מאקרו"
+    keywords: ["dollar", "Fed", "interest rates", "inflation", "recession", "China demand", "stimulus", "tariff",
+               "tariffs", "sanctions", "trade war", "דולר", "ריבית", "אינפלציה", "מכסים", "סנקציות"]
+
+# חברות שהכותרת מזכירה בשמן — אזכור בכותרת או בתקציר.
+mentions:
+  - {name: "איי.סי.אל", aliases: ["ICL Group", "ICL", "כיל", "איי סי אל", "כימיקלים לישראל"]}
+  - {name: "חברה לישראל", aliases: ["Israel Corp", "Israel Corporation"]}
+  - {name: "בזן", aliases: ["Bazan", "בתי זיקוק לנפט"]}
+  - {name: "פז אנרגיה", aliases: ["פז נפט", "Paz Oil"]}
+  - {name: "ניו-מד אנרג יהש", aliases: ["NewMed", "ניו-מד", "ניומד"]}
+  - {name: "אנרג'יאן", aliases: ["Energean"]}
+  - {name: "דלק קבוצה", aliases: ["Delek Group", "קבוצת דלק"]}
+  - {name: "ישראמקו יהש", aliases: ["Isramco", "ישראמקו"]}
+  - {name: "נאוויטס פטר יהש", aliases: ["Navitas", "נאוויטס"]}
+  - {name: "רציו יהש", aliases: ["Ratio Energies", "רציו"]}
+  - {name: "תמר פטרוליום", aliases: ["Tamar Petroleum"]}
+  - {name: "אורמת טכנו", aliases: ["Ormat", "אורמת"]}
+  - {name: "שטראוס", aliases: ["Strauss Group", "שטראוס גרופ"]}
+  - {name: "קליל", aliases: []}
+  - {name: "אבגול", aliases: ["Avgol"]}

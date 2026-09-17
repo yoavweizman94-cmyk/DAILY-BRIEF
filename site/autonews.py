@@ -516,9 +516,10 @@ def leasing_html(data: dict, a: dict | None) -> str:
             + ai + strip + charts + importers + brand_tbl + disp_tbl + method)
 
 
-def _item_html(r: dict, labels: dict) -> str:
+def _item_html(r: dict, labels: dict, classes: dict | None = None) -> str:
+    classes = THEME_CLASS if classes is None else classes
     d = _local(r.get("ts"))
-    tags = "".join(f'<span class="au-tag {THEME_CLASS.get(t, "t-other")}">'
+    tags = "".join(f'<span class="au-tag {classes.get(t, "t-other")}">'
                    f'<i class="tdot" aria-hidden="true"></i>{escape(labels.get(t, t))}</span>'
                    for t in r.get("themes") or [])
     cos = "".join(f'<span class="co">{escape(c)}</span>' for c in r.get("companies") or [])
@@ -530,7 +531,7 @@ def _item_html(r: dict, labels: dict) -> str:
             '</div></li>')
 
 
-def _column(rows: list[dict], labels: dict, title: str) -> str:
+def _column(rows: list[dict], labels: dict, title: str, classes: dict | None = None) -> str:
     def render(chunk: list[dict]) -> str:
         out, last = [], None
         for r in chunk:
@@ -539,7 +540,7 @@ def _column(rows: list[dict], labels: dict, title: str) -> str:
             if day != last:
                 out.append(f'<li class="au-day">{WEEKDAYS[day.weekday()]} {day:%d/%m}</li>' if day else "")
                 last = day
-            out.append(_item_html(r, labels))
+            out.append(_item_html(r, labels, classes))
         return "".join(out)
 
     shown, rest = rows[:SHOW_PER_COL], rows[SHOW_PER_COL:]
@@ -550,7 +551,9 @@ def _column(rows: list[dict], labels: dict, title: str) -> str:
     return f'<section class="au-col"><h3>{title} <span class="au-n">{len(rows)}</span></h3>{body}</section>'
 
 
-def headlines_html(cfg: dict, items: list[dict]) -> str:
+def headlines_html(cfg: dict, items: list[dict], classes: dict | None = None, intro: str | None = None) -> str:
+    """שתי עמודות, ישראל ועולם, עם סינון לפי נושא. classes/intro — לעמוד אחר (הסחורות)."""
+    classes = THEME_CLASS if classes is None else classes
     labels = _theme_labels(cfg)
     il = [r for r in items if r.get("region") == "il"]
     world = [r for r in items if r.get("region") != "il"]
@@ -561,15 +564,16 @@ def headlines_html(cfg: dict, items: list[dict]) -> str:
     chips = ('<div class="cbs-chips" id="au-chips" role="group" hidden aria-label="סינון לפי נושא">'
              '<button type="button" data-t="" aria-pressed="true">הכל</button>'
              + "".join(f'<button type="button" data-t="{escape(slug)}" aria-pressed="false">'
-                       f'<i class="tdot {THEME_CLASS.get(slug, "t-other")}" aria-hidden="true"></i>'
+                       f'<i class="tdot {classes.get(slug, "t-other")}" aria-hidden="true"></i>'
                        f'{escape(label)} <span class="au-n">{counts[slug]}</span></button>'
                        for slug, label in labels.items() if counts.get(slug))
              + '</div>')
+    sub = intro or (f'{len(items)} כותרות ב-{DAYS} הימים האחרונים, מאתרי רכב, כלכלה וסחר בישראל '
+                    'ובעולם. כל כותרת מתויגת בנושאים שבה ובחברות הכיסוי שהיא מזכירה.')
     return ('<h2 id="au-news">כותרות</h2>'
-            f'<p class="cbs-sub">{len(items)} כותרות ב-{DAYS} הימים האחרונים, מאתרי רכב, כלכלה וסחר בישראל '
-            'ובעולם. כל כותרת מתויגת בנושאים שבה ובחברות הכיסוי שהיא מזכירה.</p>'
+            f'<p class="cbs-sub">{sub}</p>'
             + chips
-            + f'<div class="au-cols">{_column(il, labels, "ישראל")}{_column(world, labels, "עולם")}</div>')
+            + f'<div class="au-cols">{_column(il, labels, "ישראל", classes)}{_column(world, labels, "עולם", classes)}</div>')
 
 
 def previous_html(analyses: list[dict]) -> str:
