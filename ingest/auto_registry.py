@@ -125,11 +125,45 @@ def importer_name(v: str) -> str:
     return v.strip(" -")
 
 
+def brand_from_name(nm: str, country: str | None, known: set[str], countries: set[str]) -> str | None:
+    """מותג מ-tozeret_nm, כשבטבלת התוצרים אין לו tozar.
+
+    **הטבלה מאבדת שמות מותג.** ב-22/09/2026 היו בה 108 קודי תוצר בלי tozar,
+    ביניהם בי ווי די (1014, "בי ווי די סין") וקיה (885, "קיה ד. קוריאה") — 1,332
+    רכבי ליסינג באוגוסט שנספרו תחת "לא ידוע", ו-BYD נעלמה מטבלת המותגים. השם
+    המלא כולל את ארץ התוצר, ולכן: המותג הידוע הארוך ביותר שהשם מתחיל בו; ואם אין
+    כזה — השם בלי ארץ התוצר שבסופו.
+    """
+    nm = " ".join((nm or "").split())
+    if not nm:
+        return None
+    words = nm.split()
+    for k in range(len(words), 0, -1):
+        if " ".join(words[:k]) in known:
+            return " ".join(words[:k])
+    if country and nm.endswith(country) and nm[: -len(country)].strip():
+        return nm[: -len(country)].strip()
+    # המילה האחרונה יורדת רק כשהיא ארץ ("פורד ברזיל"), לא חלק מהשם ("דיימלר קרייזלר").
+    if len(words) > 1 and words[-1] in countries:
+        base = words[:-1]
+        while base and base[-1].endswith("."):  # "ד. קוריאה" — קיצור לפני הארץ
+            base = base[:-1]
+        return " ".join(base) or nm
+    return nm
+
+
 def makers(s) -> dict[int, dict]:
-    rows = fetch_all(s, RID_MAKER, {}, "tozeret_cd,tozar,tozeret_eretz_nm")
-    return {r["tozeret_cd"]: {"brand": (r.get("tozar") or "").strip() or None,
-                              "country": (r.get("tozeret_eretz_nm") or "").strip() or None}
-            for r in rows if r.get("tozeret_cd") is not None}
+    rows = fetch_all(s, RID_MAKER, {}, "tozeret_cd,tozar,tozeret_nm,tozeret_eretz_nm")
+    known = {(r.get("tozar") or "").strip() for r in rows} - {""}
+    countries = ({(r.get("tozeret_eretz_nm") or "").strip() for r in rows} - {""}) | {"אנגליה", "קוריאה"}
+    out = {}
+    for r in rows:
+        if r.get("tozeret_cd") is None:
+            continue
+        country = (r.get("tozeret_eretz_nm") or "").strip() or None
+        brand = (r.get("tozar") or "").strip() or brand_from_name(r.get("tozeret_nm"), country, known, countries)
+        out[r["tozeret_cd"]] = {"brand": brand, "country": country}
+    return out
 
 
 def price_list(s, years: range) -> dict[tuple, dict]:

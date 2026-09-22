@@ -18,6 +18,8 @@ from pathlib import Path
 
 import yaml
 
+import share
+
 ROOT = Path(__file__).resolve().parent.parent
 AUTO = ROOT / "output" / "auto"
 CFG = ROOT / "config" / "auto.yaml"
@@ -161,6 +163,87 @@ def _cos_html(names) -> str:
 
 
 # --------------------------------------------------------------------------
+# ייצוא לתמונה ולציוץ — המנוע ב-site/export_card.js, הכלים ב-site/share.py.
+#
+# **הכרטיס נבנה מאותם נתונים כמו הסעיף.** בסעיף הליסינג — מאותם משתנים שמהם
+# נבנים האריחים והטבלאות (בתוך leasing_html), כך שמספר בתמונה אינו יכול להיות
+# שונה מהמספר שבעמוד. ושורת המקור נוקבת במקור של הכרטיס: רשם כלי הרכב, או
+# הכותרות שעליהן נשענה הסקירה.
+
+SRC_REG = "משרד התחבורה — רשם כלי הרכב, מחירון היבואנים והיסטוריית הבעלויות (data.gov.il)"
+SRC_REG_SHORT = "משרד התחבורה (data.gov.il)"
+SRC_AI = "ניתוח — TLV TASE View"
+
+
+def _day(a: dict | None) -> str:
+    d = _local((a or {}).get("analyzed_at"))
+    return f"{d:%d/%m}" if d else ""
+
+
+def _src_ai(refs: dict, ids, reg: bool = False) -> str:
+    pubs = share.publishers(refs, ids)
+    return share.source_line([SRC_REG if reg else "", ("כותרות — " + ", ".join(pubs)) if pubs else "", SRC_AI])
+
+
+def _tsrc_ai(refs: dict, ids, reg: bool = False) -> str:
+    pubs = share.publishers(refs, ids)
+    names = ([SRC_REG_SHORT] if reg else []) + pubs[:2]
+    if not names:
+        return ""
+    more = len(pubs) > 2
+    return ("מקורות: " if len(names) > 1 or more else "מקור: ") + ", ".join(names) + (" ועוד" if more else "")
+
+
+def _export(key: str, stamp: str, kicker: str, title: str, sub: str, blocks: list, source: str,
+            head: str, lines: list[str], tsource: str | None = None) -> str:
+    payload = share.card(kicker, title, sub, blocks, source, file=f"tlv-auto-{key}-{stamp or 'latest'}")
+    return share.controls(key, payload, share.tweet(head, lines, tsource or source))
+
+
+def export_now(a: dict | None) -> str:
+    if not a:
+        return ""
+    watch = [w for w in a.get("watch") or [] if isinstance(w, dict) and w.get("what")]
+    ids = sorted({i for k in ("israel", "world") for m in a.get(k) or [] if isinstance(m, dict)
+                  for i in m.get("sources") or []})
+    refs = a.get("refs") or {}
+    titles = [share.plain(m.get("title")) for k in ("israel", "world") for m in a.get(k) or []
+              if isinstance(m, dict) and m.get("title")]
+    blocks = [{"type": "notes", "title": "תמונת מצב", "items": share.sentences(a.get("overview"))},
+              {"type": "notes", "title": "מה לעקוב",
+               "items": [(f'{share.plain(w.get("when"))} — ' if w.get("when") else "") + share.plain(w["what"])
+                         for w in watch]} if watch else None]
+    sub = (f'סקירה מ-{_stamp(a.get("analyzed_at"))}, על {a.get("n_il", 0)} כותרות מישראל ו-{a.get("n_world", 0)} '
+           f'מהעולם. {share.DISCLAIMER}')
+    return _export("au-now", str(a.get("analyzed_at") or "")[:10], "ענף הרכב · תמונת מצב",
+                   share.plain(a.get("headline")), sub, blocks, _src_ai(refs, ids),
+                   f"ענף הרכב · {_day(a)}", [share.lead(a.get("headline"))] + [f"• {t}" for t in titles],
+                   _tsrc_ai(refs, ids))
+
+
+def export_trends(a: dict | None, key: str, title: str) -> str:
+    items = [m for m in (a or {}).get(key) or [] if isinstance(m, dict) and m.get("title")]
+    if not items:
+        return ""
+    refs = a.get("refs") or {}
+    notes = []
+    for m in items:
+        t = f'{share.plain(m["title"])} — {share.plain(m.get("body"))}'
+        if m.get("channel"):
+            t += f' איך זה מגיע לכאן: {share.plain(m["channel"])}'
+        notes.append(t)
+    ids = sorted({i for m in items for i in m.get("sources") or []})
+    cos = sorted({str(c) for m in items for c in m.get("companies") or []})
+    blocks = [{"type": "notes", "items": notes},
+              {"type": "notes", "title": "החברות", "items": ["מושפעות לפי הסקירה: " + ", ".join(cos) + "."]}
+              if cos else None]
+    sub = f'סקירה מ-{_stamp(a.get("analyzed_at"))}. {share.DISCLAIMER}'
+    return _export(f"au-{key}", str(a.get("analyzed_at") or "")[:10], "ענף הרכב", title, sub, blocks,
+                   _src_ai(refs, ids), f"{title} · {_day(a)}", [f"• {share.plain(m['title'])}" for m in items],
+                   _tsrc_ai(refs, ids))
+
+
+# --------------------------------------------------------------------------
 # חלקי העמוד
 
 def now_html(a: dict | None, state: dict) -> str:
@@ -178,7 +261,7 @@ def now_html(a: dict | None, state: dict) -> str:
                   + "".join(f'<li><span class="wn">{escape(_t(w.get("when")) or "—")}</span>'
                             f'<span>{_txt(w["what"])}</span></li>' for w in watch)
                   + '</ul></div>') if watch else ""
-    return ('<h2 id="au-now">תמונת מצב</h2>' + stale
+    return ('<h2 id="au-now">תמונת מצב</h2>' + stale + export_now(a)
             + '<div class="au-now">'
             f'<p class="au-headline">{_txt(a.get("headline"))}</p>'
             f'<div class="au-overview">{_para(a.get("overview"))}</div>'
@@ -203,8 +286,8 @@ def trends_html(a: dict | None, key: str, title: str, anchor: str, sub: str) -> 
                      f'{_cos_html(m.get("companies"))}{_sources_html(m.get("sources"), refs)}</div>')
     if not cards:
         return ""
-    return (f'<h2 id="{anchor}">{title}</h2><p class="cbs-sub">{sub}</p>'
-            f'<div class="cbs-cards">{"".join(cards)}</div>')
+    return (f'<h2 id="{anchor}">{title}</h2><p class="cbs-sub">{sub}</p>' + export_trends(a, key, title)
+            + f'<div class="cbs-cards">{"".join(cards)}</div>')
 
 
 def chain_html(cfg: dict, items: list[dict], a: dict | None) -> str:
@@ -391,6 +474,167 @@ def _sum_top(months: dict, keys: list[str], field: str, owner: str) -> dict:
     return out
 
 
+def _pts(d: float) -> str:
+    """שינוי בנקודות אחוז: "+7.4" / "−2.1"."""
+    return f"{0:.1f}" if abs(d) < 0.05 else f"{'+' if d > 0 else '−'}{abs(d):.1f}"
+
+
+def _lease_exports(data: dict, a: dict | None, months: dict, keys: list[str], full: list[str],
+                   tiles: list[tuple], disp: dict, imap: dict) -> dict:
+    """הכרטיסים והציוצים של סעיף הליסינג — מאותם נתונים שמהם נבנים האריחים והטבלאות."""
+    out = {"month": "", "imp": "", "brands": "", "disp": "", "ai": ""}
+    last = full[-1]
+    v, ya = months[last], months.get(_yago(last)) or {}
+    n, own = v.get("n") or 0, v.get("own") or {}
+    lease, ya_n, ya_lease = own.get("ליסינג", 0), ya.get("n") or 0, (ya.get("own") or {}).get("ליסינג", 0)
+    china = dict((v.get("country") or {}).get("ליסינג") or []).get("סין", 0)
+    ya_china = dict((ya.get("country") or {}).get("ליסינג") or []).get("סין", 0)
+    ev_l = ((v.get("fuel") or {}).get("ליסינג") or {}).get("ev", 0)
+    ev_p = ((v.get("fuel") or {}).get("פרטי") or {}).get("ev", 0)
+    reg = (data.get("registry") or {}).get("registrations") or {}
+    upd = _stamp(reg.get("updated"))
+    src = share.source_line([SRC_REG + (f", עודכן {upd}" if upd != "—" else "")])
+    tsrc = f"מקור: {SRC_REG_SHORT}"
+    kick = "ענף הרכב · ליסינג והשכרה"
+    lz_a = (a or {}).get("leasing") or {}
+    refs = (a or {}).get("refs") or {}
+
+    # ---- החודש: אריחים, רישומים לפי חודש, תוצרת סין וחשמלי, והסקירה
+    win = full[-13:]
+    labels = [f"{k[5:7]}/{k[2:4]}" for k in win]
+    vals = [(months[k].get("own") or {}).get("ליסינג", 0) for k in win]
+    items = [{"label": l, "value": val, "cap": c} for l, val, c in tiles]
+    dm = disp.get("months") or {}
+    dk = sorted(dm)[-1] if dm else None
+    fl = (dm.get(dk) or {}).get("flows") or {} if dk else {}
+    d_out = sum(x for kk, x in fl.items() if kk.startswith("ליסינג>"))
+    held = ((dm.get(dk) or {}).get("held_median") or {}).get("ליסינג") if dk else None
+    blocks = [{"type": "stats", "items": items[:3]},
+              {"type": "stats", "items": items[3:]} if len(items) > 3 else None,
+              {"type": "columns", "title": "רכבים חדשים שנרשמו לליסינג, לפי חודש",
+               "items": [{"label": lb, "value": x, "text": _n(x)} for lb, x in zip(labels, vals)],
+               "maxText": _n(max(vals) if vals else 0)},
+              {"type": "lines", "title": "מה נכנס לציי הליסינג: תוצרת סין וחשמלי מלא, % מהליסינג",
+               "suffix": "%", "decimals": 1, "zero": True, "labels": labels,
+               "series": [{"name": "תוצרת סין", "values": _share_series(months, win, "country", "ליסינג", "סין")},
+                          {"name": "חשמלי מלא", "values": _share_series(months, win, "fuel", "ליסינג", "ev")}]},
+              {"type": "notes", "title": "הסקירה", "items": share.sentences(lz_a.get("summary"))}
+              if lz_a.get("summary") else None]
+    lines = [f"{_n(lease)} רכבים חדשים לציי הליסינג — {_p(lease, n)}% מהרכב הפרטי החדש",
+             f"תוצרת סין: {_p(china, lease)}% מהליסינג" + (f" (אשתקד {_p(ya_china, ya_lease)}%)" if ya_lease else ""),
+             f"חשמלי: {_p(ev_l, lease)}% בליסינג, {_p(ev_p, own.get('פרטי', 0))}% בקנייה פרטית"]
+    if dk:
+        lines.append(f"{_n(d_out)} רכבים יצאו מהציים ב{HE_MONTHS[int(dk[5:7]) - 1]}"
+                     + (f", חציון {held} חודשים בצי" if held else ""))
+    msrc = src if not lz_a.get("summary") else share.source_line([SRC_REG, SRC_AI])
+    payload = share.card(kick, f"מה הציים קונים ומוכרים · {_mon(last)}",
+                         "רכב פרטי חדש שעלה לכביש, לפי בעלות, ורכבים שיצאו מציי הליסינג — מנתוני רשם כלי הרכב.",
+                         blocks, msrc, file=f"tlv-auto-lease-{last}")
+    out["month"] = share.controls("au-lease", payload, share.tweet(f"ליסינג · {_mon(last)}", lines, tsrc))
+
+    # ---- היבואניות
+    last3 = full[-3:]
+    prev3 = [_yago(k) for k in last3]
+    tot, lz, dl, before = (_sum_top(months, last3, "importer", "all"), _sum_top(months, last3, "importer", "ליסינג"),
+                           _sum_top(months, last3, "importer", "סוחר"), _sum_top(months, prev3, "importer", "all"))
+    order = sorted(tot, key=lambda x: -tot[x])[:12]
+    order += [x for x in imap if x in tot and x not in order]
+    rows, tlines = [], []
+    for name in order:
+        t = tot[name]
+        yoy = _p(t - before.get(name, 0), before.get(name, 0), 0) if before.get(name, 0) >= 300 else None
+        listed = (" · נסחרת" if imap[name] == name else f" · נסחרת: {imap[name]}") if name in imap else ""
+        rows.append({"name": name + listed, "t": _n(t), "l": _n(lz.get(name, 0)),
+                     "lp": f"{_p(lz.get(name, 0), t, 0)}%", "d": _n(dl.get(name, 0)),
+                     "y": share.signed(yoy, 0) if yoy is not None else "—"})
+    for name in order[:4] + [x for x in imap if x in tot and x not in order[:4]]:
+        yoy = _p(tot[name] - before.get(name, 0), before.get(name, 0), 0) if before.get(name, 0) >= 300 else None
+        tlines.append(f"{name} {_n(tot[name])}" + (f" · {share.arrow(yoy, 0)} מול אשתקד" if yoy is not None else ""))
+    rng = _mrange(last3[0], last3[-1])
+    payload = share.card(kick, f"היבואניות: רכב חדש ב{rng}",
+                         "רכב פרטי חדש לפי יבואנית, ומה ממנו נרשם לליסינג ולסוחרים.",
+                         [{"type": "table", "cols": [["יבואנית", "name", "rtl"], ["רכב חדש", "t", "ltr"],
+                                                     ["לליסינג", "l", "ltr"], ["% לליסינג", "lp", "ltr"],
+                                                     ["לסוחרים", "d", "ltr"], ["מול אשתקד", "y", "ltr"]],
+                           "rows": rows},
+                          {"type": "notes", "items": [
+                              "השוואה שנתית רק ליבואנית עם 300 רכבים לפחות אשתקד. שינוי חד יכול לשקף מותג שעבר בין "
+                              "יבואניות — השם נלקח ממחירון משרד התחבורה לכל שנת דגם.",
+                              "\"לסוחרים\" — רכב חדש שנרשם על שם סוחר; לרוב רישום מוקדם לפני מכירה."]}],
+                         src, file=f"tlv-auto-importers-{last}")
+    out["imp"] = share.controls("au-imp", payload, share.tweet(f"היבואניות · רכב חדש ב{rng}", tlines, tsrc))
+
+    # ---- המותגים בליסינג
+    brands, bprev = _sum_top(months, last3, "brand", "ליסינג"), _sum_top(months, prev3, "brand", "ליסינג")
+    bsum, bpsum = sum(brands.values()) or 1, sum(bprev.values()) or 1
+    bc = {}
+    for k in last3:
+        bc.update(months[k].get("brand_country") or {})
+    rows, tlines = [], []
+    for name in sorted(brands, key=lambda x: -brands[x])[:12]:
+        sh, ps = brands[name] / bsum * 100, bprev.get(name, 0) / bpsum * 100
+        rows.append({"name": name, "c": bc.get(name, "—"), "n": _n(brands[name]), "sh": f"{sh:.1f}%",
+                     "ps": f"{ps:.1f}%", "d": _pts(sh - ps)})
+        if len(tlines) < 5 and name != "לא ידוע":
+            tlines.append(f"{name} {sh:.1f}% (אשתקד {ps:.1f}%)")
+    payload = share.card(kick, f"מה קונים הציים: המותגים בליסינג ב{rng}",
+                         "חלק כל מותג מהרכב הפרטי החדש שנרשם לליסינג, מול אותם חודשים אשתקד.",
+                         [{"type": "table", "cols": [["מותג", "name", "rtl"], ["ארץ תוצר", "c", "rtl"],
+                                                     ["רכבים", "n", "ltr"], ["חלק מהליסינג", "sh", "ltr"],
+                                                     ["אשתקד", "ps", "ltr"], ["שינוי (נק׳)", "d", "ltr"]],
+                           "rows": rows}],
+                         src, file=f"tlv-auto-brands-{last}")
+    out["brands"] = share.controls("au-brands", payload,
+                                   share.tweet(f"מה קונים ציי הליסינג · {rng}", tlines, tsrc))
+
+    # ---- מה יוצא מהציים
+    if dm:
+        dks = sorted(dm)[-12:]
+        drows, dvals = [], []
+        for k in dks:
+            f = dm[k].get("flows") or {}
+            o = sum(x for kk, x in f.items() if kk.startswith("ליסינג>"))
+            h = (dm[k].get("held_median") or {}).get("ליסינג")
+            dvals.append(o)
+            drows.append({"m": _mm(k), "o": _n(o), "d": _n(f.get("ליסינג>סוחר", 0)), "p": _n(f.get("ליסינג>פרטי", 0)),
+                          "c": _n(f.get("ליסינג>חברה", 0)), "h": str(h) if h is not None else "—"})
+        hi_k, lo_k = dks[dvals.index(max(dvals))], dks[dvals.index(min(dvals))]
+        tl = [f"{_n(d_out)} רכבים — {_n(fl.get('ליסינג>סוחר', 0))} לסוחרים, {_n(fl.get('ליסינג>פרטי', 0))} לפרטיים",
+              f"חציון {held} חודשים בצי" if held else "",
+              f"ב-{len(dks)} החודשים: בין {_n(min(dvals))} ({_mon(lo_k)}) ל-{_n(max(dvals))} ({_mon(hi_k)})"]
+        payload = share.card(kick, "מה יוצא מהציים: רכבים שנמכרו מבעלות ליסינג",
+                             "רכב שבעלות חדשה עליו התחילה בחודש, אחרי תקופה בבעלות ליסינג — ההיצע שנכנס לשוק "
+                             "היד השנייה.",
+                             [{"type": "columns", "title": "יצאו מציי הליסינג, לפי חודש",
+                               "items": [{"label": f"{k[5:7]}/{k[2:4]}", "value": x, "text": _n(x)}
+                                         for k, x in zip(dks, dvals)], "maxText": _n(max(dvals))},
+                              {"type": "table", "cols": [["חודש", "m", "ltr"], ["יצאו מליסינג", "o", "ltr"],
+                                                         ["לסוחר", "d", "ltr"], ["לפרטי", "p", "ltr"],
+                                                         ["לחברה", "c", "ltr"], ["חציון חודשים בצי", "h", "ltr"]],
+                               "rows": drows}],
+                             src, file=f"tlv-auto-disposals-{dk}")
+        out["disp"] = share.controls("au-disp", payload,
+                                     share.tweet(f"יצאו מציי הליסינג · {_mon(dk)}", tl, tsrc))
+
+    # ---- התובנות מהסקירה
+    pts = [m for m in lz_a.get("points") or [] if isinstance(m, dict) and m.get("title")]
+    if pts:
+        ids = sorted({i for m in pts for i in m.get("sources") or []})
+        cos = sorted({str(c) for m in pts for c in m.get("companies") or []})
+        reg_m = (a or {}).get("registry_month")
+        payload = share.card(kick, "ליסינג והשכרה: התובנות",
+                             f'ניתוח מ-{_stamp((a or {}).get("analyzed_at"))}'
+                             + (f", על נתוני הרשם עד {_mon(reg_m)}" if reg_m else "") + f". {share.DISCLAIMER}",
+                             [{"type": "notes", "items": [f'{share.plain(m["title"])} — {share.plain(m.get("body"))}'
+                                                          for m in pts]},
+                              {"type": "notes", "title": "החברות", "items": [", ".join(cos) + "."]} if cos else None],
+                             _src_ai(refs, ids, reg=True), file=f"tlv-auto-lease-insights-{last}")
+        out["ai"] = share.controls("au-lease-ai", payload,
+                                   share.tweet(f"ליסינג · תובנות · {_day(a)}", [f"• {share.plain(m['title'])}" for m in pts],
+                                               _tsrc_ai(refs, ids, reg=True)))
+    return out
+
+
 def leasing_html(data: dict, a: dict | None) -> str:
     reg = (data.get("registry") or {}).get("registrations") or {}
     disp = (data.get("registry") or {}).get("disposals") or {}
@@ -429,6 +673,8 @@ def leasing_html(data: dict, a: dict | None) -> str:
         tiles.append((f"יצאו מציי הליסינג · {_mon(dk)}", _n(out),
                       (f"חציון {held} חודשים בצי · " if held else "")
                       + f"{_p(f.get('ליסינג>סוחר', 0), out, 0)}% לסוחרים"))
+    exp = _lease_exports(data, a, months, keys, full, tiles, disp, imap)
+    _EXP_IMP, _EXP_BR, _EXP_DP, _EXP_AI = exp["imp"], exp["brands"], exp["disp"], exp["ai"]
     strip = ('<section class="strip wide au-kpi">' + "".join(
         f'<div class="tile"><span class="lbl">{escape(l)}</span><span class="val" dir="ltr">{escape(val)}</span>'
         f'<span class="chg txt">{escape(c)}</span></div>' for l, val, c in tiles) + '</section>')
@@ -458,6 +704,7 @@ def leasing_html(data: dict, a: dict | None) -> str:
                     f'<td dir="ltr">{_p(lz.get(name, 0), t, 0)}%</td><td dir="ltr">{_n(dl.get(name, 0))}</td>'
                     f'<td class="trend {cls}" dir="ltr">{("0%" if abs(yoy) < 0.5 else f"{yoy:+.0f}%") if yoy is not None else "—"}</td></tr>')
     importers = (f'<h3 class="au-h3">היבואניות: רכב חדש ב{_mrange(last3[0], last3[-1])}, ומה ממנו לליסינג</h3>'
+                 + _EXP_IMP +
                  '<div class="tw"><table class="nadlan au-tbl"><thead><tr><th>יבואנית</th><th>רכב חדש</th>'
                  '<th>לליסינג</th><th>% לליסינג</th><th>לסוחרים</th><th>מול אשתקד</th></tr></thead><tbody>'
                  + "".join(rows) + '</tbody></table></div>'
@@ -479,6 +726,7 @@ def leasing_html(data: dict, a: dict | None) -> str:
                      f'<td dir="ltr">{_n(brands[name])}</td><td class="key" dir="ltr">{sh:.1f}%</td>'
                      f'<td dir="ltr">{ps:.1f}%</td><td class="trend {cls}" dir="ltr">{d:+.1f}</td></tr>')
     brand_tbl = (f'<h3 class="au-h3">מה קונים הציים: המותגים שנרשמו לליסינג ב{_mrange(last3[0], last3[-1])}</h3>'
+                 + _EXP_BR +
                  '<div class="tw"><table class="nadlan au-tbl"><thead><tr><th>מותג</th><th>ארץ תוצר</th>'
                  '<th>רכבים</th><th>חלק מהליסינג</th><th>אשתקד</th><th>שינוי (נק׳)</th></tr></thead><tbody>'
                  + "".join(brows) + '</tbody></table></div>')
@@ -492,6 +740,7 @@ def leasing_html(data: dict, a: dict | None) -> str:
                      f'<td dir="ltr">{_n(f.get("ליסינג>סוחר", 0))}</td><td dir="ltr">{_n(f.get("ליסינג>פרטי", 0))}</td>'
                      f'<td dir="ltr">{_n(f.get("ליסינג>חברה", 0))}</td><td dir="ltr">{held if held is not None else "—"}</td></tr>')
     disp_tbl = ('<h3 class="au-h3">מה יוצא מהציים: רכבים שנמכרו מבעלות ליסינג</h3>'
+                + _EXP_DP +
                 '<div class="tw"><table class="nadlan au-tbl"><thead><tr><th>חודש</th><th>יצאו מליסינג</th>'
                 '<th>לסוחר</th><th>לפרטי</th><th>לחברה</th><th>חציון חודשים בצי</th></tr></thead><tbody>'
                 + "".join(drows) + '</tbody></table></div>'
@@ -514,6 +763,7 @@ def leasing_html(data: dict, a: dict | None) -> str:
                f'<p class="au-meta">ניתוח מ-{_stamp((a or {}).get("analyzed_at"))}'
                + (f", על נתוני הרשם עד {_mon(reg_m)}" if reg_m else "")
                + '. ניתוח השפעה, לא המלצת השקעה.</p></div>' if lz_a.get("summary") else "")
+              + _EXP_AI
               + (f'<div class="cbs-cards">{"".join(cards)}</div>' if cards else ""))
 
     late = [k for k in full[-13:] if months[k].get("late")]
@@ -528,7 +778,7 @@ def leasing_html(data: dict, a: dict | None) -> str:
     return ('<h2 id="au-lease">ליסינג והשכרה</h2>'
             '<p class="cbs-sub">שתי הזרימות שקובעות את כלכלת הצי — מה הציים קונים ומה הם מוכרים — מנתוני רשם כלי '
             'הרכב, ומה זה אומר לחברות: חברות הליסינג, היבואניות שמוכרות להן, האשראי לרכב והמבטחות.</p>'
-            + ai + strip + charts + importers + brand_tbl + disp_tbl + method)
+            + exp["month"] + ai + strip + charts + importers + brand_tbl + disp_tbl + method)
 
 
 def _item_html(r: dict, labels: dict, classes: dict | None = None) -> str:
@@ -678,6 +928,8 @@ def page(data: dict) -> str:
         headlines_html(cfg, items),
         previous_html(analyses),
         SCRIPT,
+        # **הסקריפט של הייצוא אחרון, אחרי כל הכפתורים** — הוא קושר מאזינים למה שכבר ב-DOM.
+        share.js(),
     ] if x)
 
 

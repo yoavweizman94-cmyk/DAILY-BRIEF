@@ -18,6 +18,7 @@ from pathlib import Path
 import yaml
 
 import autonews as an
+import share
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "output" / "commodities"
@@ -109,9 +110,362 @@ def _group_label(cfg: dict) -> dict:
 
 
 # --------------------------------------------------------------------------
+# ייצוא לתמונה ולציוץ — המנוע ב-site/export_card.js, הכלים ב-site/share.py.
+#
+# **כל כרטיס נבנה מאותם נתונים כמו הסעיף שמעליו.** המחיר, השינוי והיחידה
+# נלקחים מאותה רשומה של Trading Economics או של הבנק העולמי; טקסט הסקירה הוא
+# אותו טקסט. ושורת המקור בתחתית הכרטיס ובסוף הציוץ נוקבת במקור של הכרטיס
+# הזה — לא ברשימה כללית של כל מקורות העמוד.
+
+SRC_TE = "Trading Economics"
+SRC_WB = "הבנק העולמי — Commodity Price Data (Pink Sheet)"
+SRC_FUT = "חוזים עתידיים ב-NYMEX, COMEX, CBOT ו-ICE, דרך Yahoo Finance"
+SRC_AI = "ניתוח — TLV TASE View"
+SRC_WB_SHORT = "הבנק העולמי"
+
+UNIT_HE = {
+    "USD/Bbl": "$ לחבית", "$/bbl": "$ לחבית", "USD/T": "$ לטון", "USD/MT": "$ לטון", "$/mt": "$ לטון",
+    "CNY/T": "יואן לטון", "EUR/T": "€ לטון", "Index Points": "נק׳", "USd/Lbs": "סנט לליברה",
+    "USc/Lbs": "סנט לליברה", "USD/Lbs": "$ לליברה", "EUR/MWh": "€ למגה״ש", "GBP/MWh": "£ למגה״ש",
+    "CNY/Kg": "יואן לק״ג", "USD/Gal": "$ לגלון", "USD/t.oz": "$ לאונקיה", "USd/Bu": "סנט לבושל",
+    "USc/Bu": "סנט לבושל", "USD/MMBtu": "$ ל-MMBtu", "USD/MMBTU": "$ ל-MMBtu", "$/mmbtu": "$ ל-MMBtu", "$/kg": "$ לק״ג",
+    "GBp/thm": "פני לתרם", "USD": "$", "EUR": "€", "Points": "נק׳",
+}
+
+
+def _unit_he(u) -> str:
+    u = str(u or "").strip()
+    return UNIT_HE.get(u, u)
+
+
+def _pct_of(a, b) -> float | None:
+    return (a / b - 1) * 100 if a is not None and b else None
+
+
+def _quote(key: str, te: dict, wb: dict, ins: dict) -> dict | None:
+    """מחיר אחד — מ-Trading Economics או מסדרה של הבנק העולמי — במבנה אחד."""
+    s = (wb.get("series") or {}).get(key)
+    if s and s.get("points"):
+        pts = s["points"]
+        last = pts[-1]
+        ya = next((p for p in pts if p["month"] == f"{int(last['month'][:4]) - 1}-{last['month'][5:]}"), None)
+        pm = pts[-2] if len(pts) >= 2 else None
+        return {"key": key, "label": s["label"], "region": s.get("region") or "", "last": last["value"],
+                "unit": _unit_he(s.get("unit")), "d": None, "w": None,
+                "m": _pct_of(last["value"], (pm or {}).get("value")),
+                "y": _pct_of(last["value"], (ya or {}).get("value")),
+                "month": last["month"], "src": "wb"}
+    row = te.get(key)
+    if not row or row.get("Last") is None:
+        return None
+    i = ins.get(key) or {}
+    return {"key": key, "label": i.get("label") or row.get("Name") or key, "region": _region(i, row),
+            "last": row["Last"], "unit": _unit_he(row.get("unit")),
+            "d": row.get("DailyPercentualChange"), "w": row.get("WeeklyPercentualChange"),
+            "m": row.get("MonthlyPercentualChange"), "y": row.get("YearlyPercentualChange"),
+            "month": None, "src": "te"}
+
+
+def _generic(cfg: dict) -> set:
+    """תוויות שחוזרות בכמה אזורים ("חשמל") — אצלן האזור הוא חלק מהשם."""
+    seen, dup = set(), set()
+    for i in cfg.get("instruments") or []:
+        (dup if i["label"] in seen else seen).add(i["label"])
+    return dup
+
+
+def _qname(q: dict, generic: set, always: bool = False) -> str:
+    if q["region"] and (always or q["label"] in generic or q["src"] == "wb"):
+        return f'{q["label"]} · {q["region"]}'
+    return q["label"]
+
+
+def _tile(q: dict, generic: set) -> dict:
+    """אריח בכרטיס: שם, מחיר ביחידה בעברית, ושורת שינוי בחצים."""
+    if q["src"] == "wb":
+        m = q["month"]
+        cap = " · ".join(x for x in (f"{m[5:7]}/{m[:4]}", f"שנה {share.arrow(q['y'])}" if q["y"] is not None else "") if x)
+    else:
+        cap = " · ".join(f"{w} {share.arrow(q[k], 0 if k == 'y' else 1)}"
+                         for k, w in (("d", "יום"), ("m", "חודש"), ("y", "שנה")) if q[k] is not None)
+    return {"label": _qname(q, generic, always=True), "value": f'{_num(q["last"])} {q["unit"]}'.strip(), "cap": cap}
+
+
+def _qline(q: dict, generic: set) -> str:
+    """שורה בציוץ: שם, מחיר, והשינוי שאומר הכי הרבה — יום וחודש, או שנה לסדרה חודשית."""
+    head = f'{_qname(q, generic)} {_num(q["last"])} {q["unit"]}'.strip()
+    if q["src"] == "wb":
+        return head + (f' · {share.arrow(q["y"])} בשנה' if q["y"] is not None else "")
+    # מדד שבועי (SCFI) מראה שינוי יומי אפס בכל יום בלי פרסום — אז השבועי.
+    first = ("w", "בשבוע") if q["d"] is not None and abs(q["d"]) < 1e-9 and q["w"] else ("d", "ביום")
+    ch = [f"{share.arrow(q[k])} {w}" for k, w in (first, ("m", "בחודש")) if q[k] is not None]
+    return head + (" · " + " · ".join(ch) if ch else "")
+
+
+def _when(snap: dict) -> tuple[str, str]:
+    """"22/09" ו-"22/09/2026" לפי יום המחירים."""
+    d = str(snap.get("date") or "")
+    return (f"{d[8:10]}/{d[5:7]}", f"{d[8:10]}/{d[5:7]}/{d[:4]}") if len(d) >= 10 else ("", "")
+
+
+def _ai_sub(a: dict | None, snap: dict) -> str:
+    return (f'סקירה מ-{an._stamp((a or {}).get("analyzed_at"))}, על מחירים מ-{an._stamp(snap.get("fetched_at"))}. '
+            + share.DISCLAIMER)
+
+
+def _ai_source(refs: dict, ids, data: bool = True, extra: str = "") -> str:
+    pubs = share.publishers(refs, ids)
+    return share.source_line([SRC_TE if data else "", extra, ("כותרות — " + ", ".join(pubs)) if pubs else "",
+                              SRC_AI])
+
+
+def _ai_tsource(refs: dict, ids, data: bool = True, extra: str = "") -> str:
+    """שורת המקור לציוץ: מקור הנתונים ושני מקורות כותרות — הרשימה המלאה בתמונה."""
+    pubs = share.publishers(refs, ids)
+    names = [n for n in ([SRC_TE] if data else []) + ([extra] if extra else []) + pubs[:2] if n]
+    if not names:
+        return ""
+    more = len(pubs) > 2
+    return ("מקורות: " if len(names) > 1 or more else "מקור: ") + ", ".join(names) + (" ועוד" if more else "")
+
+
+def _export(key: str, snap: dict, kicker: str, title: str, sub: str, blocks: list, source: str,
+            head: str, lines: list[str], tsource: str | None = None) -> str:
+    """כרטיס, ציוץ וכפתורים לסעיף אחד. tsource — שורת מקור קצרה יותר לציוץ."""
+    payload = share.card(kicker, title, sub, blocks, source,
+                         file=f"tlv-commodities-{key}-{snap.get('date') or 'latest'}")
+    return share.controls(key, payload, share.tweet(head, lines, tsource or source))
+
+
+def export_now(a: dict | None, snap: dict, te: dict, wb: dict, cfg: dict) -> str:
+    if not a:
+        return ""
+    ins = {i["symbol"]: i for i in cfg.get("instruments") or []}
+    generic = _generic(cfg)
+    qs = [q for q in (_quote(k, te, wb, ins) for k in (cfg.get("export") or {}).get("now") or []) if q]
+    watch = [w for w in a.get("watch") or [] if isinstance(w, dict) and w.get("what")]
+    blocks = [{"type": "stats", "items": [_tile(q, generic) for q in qs]} if qs else None,
+              {"type": "notes", "title": "תמונת מצב", "items": share.sentences(a.get("overview"))},
+              {"type": "notes", "title": "מה לעקוב",
+               "items": [(f'{share.plain(w.get("when"))} — ' if w.get("when") else "") + share.plain(w["what"])
+                         for w in watch]} if watch else None]
+    used = sorted({i for m in a.get("sections") or [] for i in m.get("sources") or []})
+    day, _ = _when(snap)
+    refs = a.get("refs") or {}
+    return _export("cm-now", snap, "סחורות · תמונת מצב", share.plain(a.get("headline")), _ai_sub(a, snap), blocks,
+                   _ai_source(refs, used), f"שוקי הסחורות · {day}",
+                   [share.lead(a.get("headline"))] + [_qline(q, generic) for q in qs], _ai_tsource(refs, used))
+
+
+def export_section(m: dict, a: dict, snap: dict, te: dict, wb: dict, cfg: dict) -> str:
+    group = m.get("group") or ""
+    label = _group_label(cfg).get(group, "")
+    ins = {i["symbol"]: i for i in cfg.get("instruments") or []}
+    generic = _generic(cfg)
+    keys = ((cfg.get("export") or {}).get("groups") or {}).get(group) or []
+    qs = [q for q in (_quote(k, te, wb, ins) for k in keys) if q]
+    cos = [str(c) for c in m.get("companies") or []]
+    blocks = [{"type": "stats", "items": [_tile(q, generic) for q in qs]} if qs else None,
+              {"type": "notes", "title": "מה זז ולמה", "items": share.sentences(m.get("body"))},
+              {"type": "notes", "title": "החברות", "items": ["מושפעות לפי הסקירה: " + ", ".join(cos) + "."]}
+              if cos else None]
+    day, _ = _when(snap)
+    refs, data = a.get("refs") or {}, bool(m.get("data")) or bool(qs)
+    wbx = any(q["src"] == "wb" for q in qs)
+    return _export(f"cm-g-{group}", snap, f"סחורות · {label}", share.plain(m.get("title")), _ai_sub(a, snap),
+                   blocks, _ai_source(refs, m.get("sources"), data, SRC_WB if wbx else ""),
+                   f"סחורות · {label} · {day}",
+                   [share.plain(m.get("title"))] + [_qline(q, generic) for q in qs],
+                   _ai_tsource(refs, m.get("sources"), data, SRC_WB_SHORT if wbx else ""))
+
+
+def export_regional(cfg: dict, te: dict, snap: dict) -> str:
+    ins = {i["symbol"]: i for i in cfg.get("instruments") or []}
+    blocks, lines = [], []
+    for r in cfg.get("regional") or []:
+        rows = []
+        for sym in r.get("symbols") or []:
+            row, i = te.get(sym), ins.get(sym) or {}
+            if row and row.get("YearlyPercentualChange") is not None:
+                y = row["YearlyPercentualChange"]
+                region = _region(i, row)
+                name = i.get("label") or row.get("Name") or sym
+                rows.append({"label": name + (f" · {region}" if region else ""),
+                             "note": f'{_num(row.get("Last"))} {_unit_he(row.get("unit"))}'.strip(),
+                             "value": y, "text": share.signed(y, 0), "region": region, "name": name})
+        if len(rows) < 2:
+            continue
+        blocks.append({"type": "dbars", "title": f'{r["title"]} — שינוי בשנה', "rows": rows})
+        top = sorted(rows, key=lambda x: -abs(x["value"]))[:3]
+        # אזורים שונים לכולן — שם האזור מספיק; אחרת השם המלא, שלא יתערבבו.
+        regs = [x["region"] for x in rows]
+        by_region = all(regs) and len(set(regs)) == len(regs)
+        lines.append(f'{r["title"]}: ' + " · ".join(
+            f'{x["region"] if by_region else x["label"]} {share.arrow(x["value"], 0)}' for x in top))
+    if not blocks:
+        return ""
+    day, date = _when(snap)
+    return _export("cm-regions", snap, "סחורות · אזורים", "אותה סחורה, אזורים שונים",
+                   f"השינוי בשנה האחרונה, זה לצד זה, מחירים מ-{date}. הרמות ביחידות שונות ואינן ברות השוואה ישירה — "
+                   "השינוי כן.", blocks, share.source_line([SRC_TE]),
+                   f"אותה סחורה, אזורים שונים · השינוי בשנה · {day}", lines)
+
+
+def _shape(v) -> str:
+    return ("בקוורדיישן" if v is not None and v < -2 else "קונטנגו" if v is not None and v > 2
+            else "שטוח" if v is not None else "—")
+
+
+def export_curves(snap: dict, cfg: dict) -> str:
+    cv = snap.get("curves") or {}
+    horizons = cfg.get("curve_horizons") or [3, 6, 12, 24]
+    rows, ranked = [], []
+    for c in cv.values():
+        f = (c.get("front") or {}).get("price")
+        pts = {p["ahead"]: p for p in c.get("points") or []}
+        if f is None or not pts:
+            continue
+        r = {"name": c["label"], "front": f'{_num(f)} {_unit_he(c.get("unit"))}'.strip(),
+             "shape": _shape((pts.get(12) or {}).get("vs_front_pct"))}
+        for h in horizons:
+            v = (pts.get(h) or {}).get("vs_front_pct")
+            # אפס מדויק: החוזה לאותו מועד הוא החוזה הקרוב עצמו, לא עקום שטוח.
+            r[f"h{h}"] = "=" if v is not None and abs(v) < 0.005 else share.signed(v)
+        rows.append(r)
+        far = max((h for h in pts if pts[h].get("vs_front_pct") is not None), default=None)
+        if far is not None:
+            ranked.append((abs(pts[far]["vs_front_pct"]), c["label"], pts[far], r["shape"]))
+    if not rows:
+        return ""
+    cols = [["סחורה", "name", "rtl"], ["חוזה קרוב", "front", "ltr"]] + \
+           [[f"{h} ח׳", f"h{h}", "ltr"] for h in horizons] + [["מבנה", "shape", "rtl"]]
+    lines = [f'{lab}: {an._mon(p["month"])} {share.arrow(p["vs_front_pct"])} מהחוזה הקרוב ({shape})'
+             for _, lab, p, shape in sorted(ranked, reverse=True)[:4]]
+    day, date = _when(snap)
+    same = any(r.get(f"h{h}") == "=" for r in rows for h in horizons)
+    blocks = [{"type": "table", "cols": cols, "rows": rows},
+              {"type": "notes", "items": [
+                  "בקוורדיישן — חוזים רחוקים זולים מהקרוב: השוק מתמחר מחסור עכשיו שיתמתן.",
+                  "קונטנגו — חוזים רחוקים יקרים מהקרוב: יש היצע עכשיו, והמחיר העתידי כולל אחסון ומימון."]
+               + (["= החוזה לאותו מועד הוא החוזה הקרוב עצמו."] if same else [])}]
+    return _export("cm-curves", snap, "סחורות · חוזים עתידיים", "ספוט מול חוזים",
+                   f"החוזה הקרוב מול חוזים לאספקה בעוד {', '.join(str(h) for h in horizons[:-1])} ו-{horizons[-1]} "
+                   f"חודשים — ההפרש מהקרוב. מחירי סגירה מ-{date}.", blocks, share.source_line([SRC_FUT]),
+                   f"ספוט מול חוזים · {day}", lines, share.source_line(["חוזים עתידיים, Yahoo Finance"]))
+
+
+def export_fertilizers(wb: dict, cfg: dict, snap: dict) -> str:
+    series = wb.get("series") or {}
+    keys = [k for k in ((cfg.get("worldbank") or {}).get("chart") or []) if (series.get(k) or {}).get("points")]
+    if not keys:
+        return ""
+    months = sorted({p["month"] for k in keys for p in series[k]["points"]})[-36:]
+    vals = {k: {p["month"]: p["value"] for p in series[k]["points"]} for k in keys}
+    rows, lines = [], []
+    for k in keys:
+        s = series[k]
+        pts = s["points"]
+        last = pts[-1]
+        ya = next((p for p in pts if p["month"] == f"{int(last['month'][:4]) - 1}-{last['month'][5:]}"), None)
+        pm = pts[-2] if len(pts) >= 2 else None
+        y, m = _pct_of(last["value"], (ya or {}).get("value")), _pct_of(last["value"], (pm or {}).get("value"))
+        rows.append({"name": s["label"], "region": s.get("region") or "", "price": f'{_num(last["value"])} $ לטון',
+                     "month": f'{last["month"][5:7]}/{last["month"][:4]}', "m": share.signed(m), "y": share.signed(y)})
+        lines.append(f'{s["label"]} · {s.get("region") or ""} {_num(last["value"])} $ לטון'
+                     + (f" · {share.arrow(y)} בשנה" if y is not None else ""))
+    last_m = max(series[k]["points"][-1]["month"] for k in keys)
+    blocks = [{"type": "lines", "title": f"דולר לטון, {len(months)} חודשים", "decimals": 0,
+               "labels": [f"{m[5:7]}/{m[2:4]}" for m in months],
+               "series": [{"name": f'{series[k]["label"]} · {series[k].get("region") or ""}',
+                           "values": [vals[k].get(m) for m in months]} for k in keys]},
+              {"type": "table", "cols": [["סדרה", "name", "rtl"], ["אזור", "region", "rtl"], ["מחיר", "price", "ltr"],
+                                         ["חודש", "month", "ltr"], ["מול חודש קודם", "m", "ltr"], ["שנתי", "y", "ltr"]],
+               "rows": rows}]
+    updated = (wb.get("updated") or "").replace("Updated on", "").strip()
+    try:
+        updated = datetime.strptime(updated, "%B %d, %Y").strftime("%d/%m/%Y")
+    except ValueError:
+        pass
+    return _export("cm-fert", snap, "סחורות · דשנים", "דשנים: מחירי ייחוס חודשיים",
+                   f"אשלג, פוספטים ואוריאה — ממוצע חודשי בדולר לטון, לפי ההגדרה הרשמית של כל סדרה. עד {an._mon(last_m)}.",
+                   blocks, share.source_line([SRC_WB + (f", עודכן {updated}" if updated else "")]),
+                   f"דשנים · מחירי ייחוס · {an._mon(last_m)}", lines,
+                   share.source_line([f"{SRC_WB_SHORT} (Pink Sheet)"]))
+
+
+def export_deals(a: dict | None, snap: dict) -> str:
+    deals = [d for d in (a or {}).get("deals") or [] if isinstance(d, dict) and d.get("title")]
+    if not deals:
+        return ""
+    ids = sorted({i for d in deals for i in d.get("sources") or []})
+    day, _ = _when(snap)
+    items = [f'{share.plain(d["title"])} — {share.plain(d.get("body"))}' for d in deals]
+    cos = sorted({str(c) for d in deals for c in d.get("companies") or []})
+    return _export("cm-deals", snap, "סחורות · עסקאות", "עסקאות וחוזים", _ai_sub(a, snap),
+                   [{"type": "notes", "items": items},
+                    {"type": "notes", "title": "החברות", "items": [", ".join(cos) + "."]} if cos else None],
+                   _ai_source((a or {}).get("refs") or {}, ids, data=False),
+                   f"עסקאות וחוזים בשוקי הסחורות · {day}", [share.plain(d["title"]) for d in deals],
+                   _ai_tsource((a or {}).get("refs") or {}, ids, data=False))
+
+
+def export_companies(cfg: dict, te: dict, wb: dict, a: dict | None, snap: dict) -> str:
+    notes = [c for c in (a or {}).get("companies") or [] if isinstance(c, dict) and c.get("name")]
+    if not notes:
+        return ""
+    ins = {i["symbol"]: i for i in cfg.get("instruments") or []}
+    generic = _generic(cfg)
+    first = {}
+    for e in cfg.get("exposures") or []:
+        q = next((q for q in (_quote(k, te, wb, ins) for k in e.get("commodities") or []) if q), None)
+        for g in e.get("groups") or []:
+            for n in g.get("companies") or []:
+                if q and n not in first:
+                    first[n] = q
+    rows = [{"co": c["name"], "dir": c.get("direction") or "—", "note": share.plain(c.get("note"))} for c in notes]
+    lines = []
+    for c in notes:
+        q = first.get(c["name"])
+        if q:
+            ch = q["y"] if q["src"] == "wb" else q["m"]
+            lines.append(f'{c["name"]} · {_qname(q, generic)} {share.arrow(ch)} '
+                         f'{"בשנה" if q["src"] == "wb" else "בחודש"}')
+    ids = sorted({i for c in notes for i in c.get("sources") or []})
+    day, _ = _when(snap)
+    return _export("cm-cos", snap, "סחורות · החברות", "החברות בתל אביב, דרך הסחורות", _ai_sub(a, snap),
+                   [{"type": "table", "cols": [["חברה", "co", "rtl"], ["כיוון", "dir", "rtl"], ["מה זז", "note", "rtl"]],
+                     "rows": rows}],
+                   _ai_source((a or {}).get("refs") or {}, ids),
+                   f"סחורות והחברות בתל אביב · {day}", lines, _ai_tsource((a or {}).get("refs") or {}, ids))
+
+
+def export_board(group: dict, rows: list[tuple], snap: dict, generic: set) -> str:
+    """טבלת קבוצה אחת בלוח המחירים. rows — (instrument, te row)."""
+    out = []
+    for i, row in rows:
+        out.append({"name": i["label"], "region": _region(i, row),
+                    "price": f'{_num(row["Last"])} {_unit_he(row.get("unit"))}'.strip(),
+                    "d": share.signed(row.get("DailyPercentualChange")),
+                    "m": share.signed(row.get("MonthlyPercentualChange")),
+                    "y": share.signed(row.get("YearlyPercentualChange"), 0)})
+    movers = sorted((r for r in rows if abs(r[1].get("DailyPercentualChange") or 0) >= 0.05),
+                    key=lambda r: -abs(r[1]["DailyPercentualChange"]))[:4]
+    lines = [f'{_qname({"label": i["label"], "region": _region(i, row), "src": "te"}, generic)} '
+             f'{share.arrow(row["DailyPercentualChange"])} ביום' for i, row in movers]
+    day, date = _when(snap)
+    return _export(f'cm-b-{group["key"]}', snap, "סחורות · מחירים", group["label"],
+                   f"מחירים ושינויים, {date}. אזור מוצג כשהוא ידוע, או לפי מטבע המחיר.",
+                   [{"type": "table", "cols": [["סחורה", "name", "rtl"], ["אזור", "region", "rtl"],
+                                               ["מחיר", "price", "ltr"], ["יום", "d", "ltr"], ["חודש", "m", "ltr"],
+                                               ["שנה", "y", "ltr"]], "rows": out}],
+                   share.source_line([SRC_TE]), f'{group["label"]} · מה זז היום · {day}', lines)
+
+
+# --------------------------------------------------------------------------
 # חלקי העמוד
 
-def now_html(a: dict | None) -> str:
+def now_html(a: dict | None, snap: dict | None = None, te: dict | None = None,
+             wb: dict | None = None, cfg: dict | None = None) -> str:
     if not a:
         return ('<h2 id="cm-now">תמונת מצב</h2><p class="cbs-note">הסקירה הראשונה תיכתב בריצה הקרובה של '
                 'הצנרת. בינתיים — המחירים, העקומים והחשיפות למטה מחושבים מהנתונים עצמם.</p>')
@@ -124,14 +478,16 @@ def now_html(a: dict | None) -> str:
                   + "".join(f'<li><span class="wn">{escape(an._t(w.get("when")) or "—")}</span>'
                             f'<span>{an._txt(w["what"])}</span></li>' for w in watch)
                   + '</ul></div>') if watch else ""
-    return ('<h2 id="cm-now">תמונת מצב</h2>' + stale + '<div class="au-now">'
+    exp = export_now(a, snap or {}, te or {}, wb or {}, cfg or {})
+    return ('<h2 id="cm-now">תמונת מצב</h2>' + stale + exp + '<div class="au-now">'
             f'<p class="au-headline">{an._txt(a.get("headline"))}</p>'
             f'<div class="au-overview">{an._para(a.get("overview"))}</div>'
             f'<p class="au-meta">סקירה מ-{an._stamp(a.get("analyzed_at"))}, על מחירים מ-{an._stamp(a.get("prices_at"))} '
             f'ו-{a.get("n_items", 0)} כותרות. ניתוח השפעה, לא המלצת השקעה.</p>' + watch_html + '</div>')
 
 
-def sections_html(a: dict | None, cfg: dict) -> str:
+def sections_html(a: dict | None, cfg: dict, snap: dict | None = None, te: dict | None = None,
+                  wb: dict | None = None) -> str:
     if not a or not a.get("sections"):
         return ""
     labels = _group_label(cfg)
@@ -142,14 +498,15 @@ def sections_html(a: dict | None, cfg: dict) -> str:
         cards.append(f'<div class="cbs-card au-trend"><div class="cm-kicker">{escape(labels.get(m.get("group"), ""))}</div>'
                      f'<div class="cc-head"><h3>{an._txt(m.get("title"))}</h3>{an._dir(m.get("direction"))}</div>'
                      f'{an._para(m.get("body"))}{an._cos_html(m.get("companies"))}'
-                     f'<div class="au-foot">{badge}{an._sources_html(m.get("sources"), refs)}</div></div>')
+                     f'<div class="au-foot">{badge}{an._sources_html(m.get("sources"), refs)}</div>'
+                     f'{export_section(m, a, snap or {}, te or {}, wb or {}, cfg)}</div>')
     return ('<h2 id="cm-groups">מה זז, לפי קבוצה</h2>'
             '<p class="cbs-sub">מחיר ושינוי, מה החוזים הרחוקים אומרים, פערים בין אזורים, היצע וביקוש, והחברות '
             'שמושפעות — לכל קבוצה שבה יש תנועה.</p>'
             f'<div class="cbs-cards">{"".join(cards)}</div>')
 
 
-def regional_html(cfg: dict, te: dict) -> str:
+def regional_html(cfg: dict, te: dict, snap: dict | None = None) -> str:
     ins = {i["symbol"]: i for i in cfg.get("instruments") or []}
     blocks = []
     for r in cfg.get("regional") or []:
@@ -177,6 +534,7 @@ def regional_html(cfg: dict, te: dict) -> str:
     return ('<h2 id="cm-regions">אותה סחורה, אזורים שונים</h2>'
             '<p class="cbs-sub">השינוי בשנה האחרונה, זה לצד זה. הרמות ביחידות שונות ואינן ברות השוואה ישירה — '
             'השינוי כן, והפער ביניהם אומר לאן זורם הסחר ואיפה המחסור.</p>'
+            + export_regional(cfg, te, snap or {}) +
             f'<div class="cm-regions">{"".join(blocks)}</div>')
 
 
@@ -220,8 +578,10 @@ def curves_html(snap: dict, cfg: dict) -> str:
                 continue
             v = p.get("vs_front_pct")
             cls = "up" if (v or 0) > 0.05 else ("down" if (v or 0) < -0.05 else "flat")
+            # אפס מדויק — זה החוזה הקרוב עצמו, ולא עקום שטוח.
+            tag = "= הקרוב" if v is not None and abs(v) < 0.005 else (f"{v:+.1f}%" if v is not None else "")
             cells.append(f'<td dir="ltr" title="{escape(p.get("contract") or "")} · {escape(p.get("month") or "")}">'
-                         f'{_num(p["price"])} <span class="trend {cls}">{f"{v:+.1f}%" if v is not None else ""}</span></td>')
+                         f'{_num(p["price"])} <span class="trend {cls}">{tag}</span></td>')
         twelve = (pts.get(12) or {}).get("vs_front_pct")
         shape = ("בקוורדיישן" if twelve is not None and twelve < -2 else
                  "קונטנגו" if twelve is not None and twelve > 2 else "שטוח" if twelve is not None else "—")
@@ -233,6 +593,7 @@ def curves_html(snap: dict, cfg: dict) -> str:
             '<p class="cbs-sub">מחיר החוזה העתידי הקרוב מול חוזים לאספקה בעוד 3, 6, 12 ו-24 חודשים, ובסוגריים ההפרש '
             'מהקרוב. <b>בקוורדיישן</b> (חוזים רחוקים זולים מהקרוב) — השוק מתמחר מחסור עכשיו שיתמתן; '
             '<b>קונטנגו</b> (חוזים רחוקים יקרים) — יש היצע עכשיו, והמחיר העתידי כולל עלות אחסון ומימון.</p>'
+            + export_curves(snap, cfg) +
             '<div class="tw"><table class="nadlan au-tbl cm-curves"><thead><tr><th>סחורה</th><th>יחידה</th>'
             f'<th>חוזה קרוב</th>{head}<th>מבנה (12 ח׳)</th><th>עקום</th></tr></thead><tbody>'
             + "".join(rows) + '</tbody></table></div>'
@@ -240,7 +601,7 @@ def curves_html(snap: dict, cfg: dict) -> str:
             'חוזה רחוק שלא נסחר לאחרונה מוצג במחיר העסקה האחרונה שלו.</p>')
 
 
-def fertilizers_html(wb: dict, cfg: dict) -> str:
+def fertilizers_html(wb: dict, cfg: dict, snap: dict | None = None) -> str:
     series = wb.get("series") or {}
     keys = [k for k in ((cfg.get("worldbank") or {}).get("chart") or []) if (series.get(k) or {}).get("points")]
     if not keys:
@@ -297,6 +658,7 @@ def fertilizers_html(wb: dict, cfg: dict) -> str:
     return ('<h2 id="cm-fert">דשנים: מחירי ייחוס חודשיים</h2>'
             '<p class="cbs-sub">אשלג, פוספטים ואוריאה — המחירים שקובעים את הכנסות יצרני הדשנים ואת עלות התשומות '
             'בחקלאות. מקור: הבנק העולמי (Pink Sheet), ממוצע חודשי בדולר לטון, לפי ההגדרה הרשמית של כל סדרה.</p>'
+            + export_fertilizers(wb, cfg, snap or {}) +
             f'<div class="au-charts cm-one"><figure><figcaption>דולר לטון, {len(months)} חודשים</figcaption>{chart}'
             f'<p class="au-legend">{legend}</p></figure></div>'
             '<div class="tw"><table class="nadlan au-tbl cm-wb"><thead><tr><th>סדרה</th><th>אזור</th><th>מחיר</th>'
@@ -306,7 +668,7 @@ def fertilizers_html(wb: dict, cfg: dict) -> str:
             'ברום אינו מתפרסם במקורות האלה; מה שנכתב עליו בעמוד נשען על כותרות בלבד.</p>')
 
 
-def deals_html(a: dict | None) -> str:
+def deals_html(a: dict | None, snap: dict | None = None) -> str:
     deals = (a or {}).get("deals") or []
     if not deals:
         return ""
@@ -316,6 +678,7 @@ def deals_html(a: dict | None) -> str:
                     f'<div class="au-foot">{an._sources_html(d.get("sources"), refs)}</div></div>' for d in deals)
     return ('<h2 id="cm-deals">עסקאות וחוזים</h2>'
             '<p class="cbs-sub">הסכמי אספקה, חוזים ועסקאות שנחתמו או הוכרזו לפי הכותרות — מי, מה ולמה זה חשוב לשוק.</p>'
+            + export_deals(a, snap or {}) +
             f'<div class="cbs-cards">{cards}</div>')
 
 
@@ -346,7 +709,7 @@ def _signal(key: str, te: dict, wb: dict, ins: dict) -> str:
             f'<bdi dir="ltr">{_num(row["Last"])}</bdi>{f" ({ch})" if ch else ""}</span>')
 
 
-def companies_html(cfg: dict, te: dict, wb: dict, a: dict | None) -> str:
+def companies_html(cfg: dict, te: dict, wb: dict, a: dict | None, snap: dict | None = None) -> str:
     ins = {i["symbol"]: i for i in cfg.get("instruments") or []}
     notes = {c["name"]: c for c in (a or {}).get("companies") or [] if isinstance(c, dict)}
     refs = (a or {}).get("refs") or {}
@@ -369,7 +732,7 @@ def companies_html(cfg: dict, te: dict, wb: dict, a: dict | None) -> str:
     return ('<h2 id="cm-cos">החברות והחשיפות</h2>'
             '<p class="cbs-sub">החברות הנסחרות בתל אביב לפי הסחורה שמזיזה אותן, והצד שלהן: יצרן מרוויח ממחיר גבוה, '
             'צרכן משלם אותו, ובית זיקוק או משלח תלויים במרווח ולא במחיר. לצד כל קבוצה — המחירים הרלוונטיים עכשיו.</p>'
-            + top + f'<div class="au-chain cm-exps">{"".join(blocks)}</div>')
+            + export_companies(cfg, te, wb, a, snap or {}) + top + f'<div class="au-chain cm-exps">{"".join(blocks)}</div>')
 
 
 def board_html(cfg: dict, snaps: list[dict]) -> str:
@@ -382,8 +745,9 @@ def board_html(cfg: dict, snaps: list[dict]) -> str:
         for sym, row in (s.get("te") or {}).items():
             hist.setdefault(sym, []).append(row.get("Last"))
     out = []
+    generic = _generic(cfg)
     for g in cfg.get("groups") or []:
-        rows = []
+        rows, pairs = [], []
         for i in cfg.get("instruments") or []:
             if i["group"] != g["key"]:
                 continue
@@ -391,6 +755,7 @@ def board_html(cfg: dict, snaps: list[dict]) -> str:
             if not row or row.get("Last") is None:
                 continue
             asof = str(row.get("Date") or "")[:10]
+            pairs.append((i, row))
             rows.append(f'<tr><td class="city">{escape(i["label"])}</td><td>{escape(_region(i, row))}</td>'
                         f'<td class="key" dir="ltr">{_num(row["Last"])}</td><td class="u" dir="ltr">{escape(str(row.get("unit") or ""))}</td>'
                         + _pct_cell(row.get("DailyPercentualChange")) + _pct_cell(row.get("MonthlyPercentualChange"))
@@ -400,6 +765,7 @@ def board_html(cfg: dict, snaps: list[dict]) -> str:
         if rows:
             out.append(f'<details class="cm-board" open><summary>{escape(labels.get(g["key"], g["key"]))} '
                        f'<span class="au-n">{len(rows)}</span></summary>'
+                       + export_board(g, pairs, snaps[-1], generic) +
                        '<div class="tw"><table class="nadlan au-tbl"><thead><tr><th>סחורה</th><th>אזור</th><th>מחיר</th>'
                        '<th>יחידה</th><th>יום</th><th>חודש</th><th>שנה</th><th>מגמה</th><th>עדכון</th></tr></thead><tbody>'
                        + "".join(rows) + '</tbody></table></div></details>')
@@ -427,13 +793,13 @@ def page(data: dict) -> str:
     fail_html = (f'<p class="msg warn">בריצה האחרונה חלק מהמקורות לא נקראו: {escape(" · ".join(fails[:3]))}.</p>'
                  if any(not f.startswith("Google News") for f in fails) else "")
     parts = [
-        ("cm-now", "תמונת מצב", now_html(a)),
-        ("cm-groups", "לפי קבוצה", sections_html(a, cfg)),
-        ("cm-regions", "אזורים", regional_html(cfg, te)),
+        ("cm-now", "תמונת מצב", now_html(a, snap, te, wb, cfg)),
+        ("cm-groups", "לפי קבוצה", sections_html(a, cfg, snap, te, wb)),
+        ("cm-regions", "אזורים", regional_html(cfg, te, snap)),
         ("cm-curves", "ספוט מול חוזים", curves_html(snap, cfg)),
-        ("cm-fert", "דשנים", fertilizers_html(wb, cfg)),
-        ("cm-deals", "עסקאות", deals_html(a)),
-        ("cm-cos", "חברות", companies_html(cfg, te, wb, a)),
+        ("cm-fert", "דשנים", fertilizers_html(wb, cfg, snap)),
+        ("cm-deals", "עסקאות", deals_html(a, snap)),
+        ("cm-cos", "חברות", companies_html(cfg, te, wb, a, snap)),
         ("cm-board", "כל המחירים", board_html(cfg, snaps)),
         ("au-news", "כותרות", an.headlines_html(
             cfg, items, THEME_CLASS,
@@ -451,6 +817,8 @@ def page(data: dict) -> str:
         *[html for _, _, html in parts],
         an.previous_html(analyses),
         an.SCRIPT if items else "",
+        # **הסקריפט אחרון, אחרי כל הכפתורים** — הוא קושר מאזינים למה שכבר ב-DOM.
+        share.js(),
     ] if x)
 
 

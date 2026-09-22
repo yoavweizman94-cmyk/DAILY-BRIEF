@@ -168,6 +168,19 @@ worldbank:
   # הגרף החודשי בעמוד: הדשנים — אשלג, פוספטים ואוריאה.
   chart: [potash, dap, urea, rock]
 
+# ייצוא לתמונה ולציוץ (site/commodities.py): המחירים שבראש כל כרטיס, בסדר הזה.
+# מפתח שאינו סמל של Trading Economics הוא סדרה של הבנק העולמי (potash).
+export:
+  now: ["CO1:COM", "NGEU:COM", "HG1:COM", "potash"]
+  groups:
+    energy: ["CO1:COM", "CL1:COM", "NGEU:COM", "LNGJKM:COM"]
+    power: ["DEUELEPRI:COM", "ITAELEPRI:COM", "EECXM:IND"]
+    fertilizers: ["potash", "UFB:COM", "UFI:COM", "SULF:COM"]
+    metals: ["HG1:COM", "LMAHDS03:COM", "HRC:COM", "SCO:COM"]
+    polymers: ["POL:COM", "PYL:COM", "PVC:COM"]
+    agri: ["W 1:COM", "SB1:COM", "KC1:COM", "CC1:COM"]
+    freight: ["SPSCFI:COM", "BDIY:IND"]
+
 # החברות הנסחרות ותלותן בסחורות. side: producer — מחיר גבוה מיטיב; consumer —
 # מחיר גבוה הוא עלות; margin — הרווח תלוי במרווח ולא במחיר. why הוא המנגנון,
 # לא תיאור עסקי: אין כאן טענה על תמהיל שאינה בדיווחי החברות. המיפוי מבוסס על

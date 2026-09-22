@@ -66,9 +66,16 @@ jobs:
       # נתוני רשם כלי הרכב לסעיף הליסינג: פעם ביום (הסקריפט מדלג כשכבר חושב היום),
       # עם תקציב זמן — היסטוריית הבעלויות נמשכת חודש אחר חודש ונשלמת בריצות הבאות.
       # כשל כאן אינו מפיל את הריצה: הכותרות והסקירה אינן תלויות בו.
+      # "registry": "force" בקובץ הטריגר מחשב מחדש גם כשכבר חושב היום — אחרי תיקון בחישוב,
+      # בלי לכפות סקירה חדשה (שעולה כסף) כמו "force": true.
       - name: Vehicle registry (leasing data)
         id: registry
-        run: python ingest/auto_registry.py --budget-minutes 8 || echo "::warning::רשם כלי הרכב נכשל — ינוסה שוב בריצה הבאה"
+        run: |
+          FORCE=""
+          if [ "${{ github.event_name }}" = "push" ] && grep -q '"registry": *"force"' .trigger/auto-watch.json; then
+            FORCE="--force"
+          fi
+          python ingest/auto_registry.py --budget-minutes 8 $FORCE || echo "::warning::רשם כלי הרכב נכשל — ינוסה שוב בריצה הבאה"
 
       - name: Nothing changed
         if: steps.collect.outputs.changed != 'yes' && steps.registry.outputs.updated != 'yes'

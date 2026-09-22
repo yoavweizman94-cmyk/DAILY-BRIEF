@@ -9,7 +9,9 @@
 
 **קריאה חיה ולא מהדיסק.** ערכי RTD מתעדכנים בזיכרון של Excel, והקובץ שעל
 הדיסק מחזיק רק את מה שהיה בשמירה האחרונה. כשהחוברת פתוחה, הערכים נקראים
-מ-Excel עצמו (COM); רק כשהיא סגורה — מהשמירה האחרונה, בתאריך של השמירה.
+מ-Excel עצמו (COM). כשהיא אינה פתוחה אבל GTO רץ — ממופע Excel נסתר ונפרד
+שפותח אותה לקריאה בלבד (_hidden_rows). רק כש-GTO אינו רץ — מהשמירה האחרונה,
+בתאריך של השמירה.
 
 **מה נשמר.** כל נייר שבעמודה "עסקאות מתואמות" מופיעה בו האות J — כך GTO
 מסמן נייר שהיו בו עסקאות מתואמות באותו יום (JumboIndication). לכל אחד:
@@ -118,6 +120,73 @@ def _read_workbook(wb) -> tuple[list[list], str] | None:
     return None
 
 
+GTO_PROCESS = "Trade1.exe"      # תוכנת המסחר; שרת ה-RTD ("gto") מתחבר אליה
+
+
+def _gto_running() -> bool:
+    try:
+        out = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {GTO_PROCESS}", "/NH"],
+                             capture_output=True, text=True, timeout=20,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return GTO_PROCESS.lower() in out.lower()
+
+
+def _hidden_rows(path: Path, wait_s: int = 120) -> tuple[list[list], str] | None:
+    """הערכים החיים ממופע Excel נסתר ונפרד, כשהחוברת אינה פתוחה אצל המשתמש.
+
+    **הקובץ לא היה פתוח, והיום אבד.** 18/09/2026 לא נאסף: GTO רץ, Excel היה
+    פתוח על קובץ אחר, והקריאה נפלה לשמירה מ-17/09. מופע נפרד (DispatchEx)
+    פותח את החוברת לקריאה בלבד, שרת ה-RTD נטען בו ומתחבר ל-GTO הרץ, ותוך
+    כעשרים שניות הערכים מתמלאים — בלי לגעת בחלונות של המשתמש. נבדק 22/09.
+    רץ רק כש-GTO רץ: אחרת שרת ה-RTD עלול לנסות להפעיל אותו.
+    """
+    try:
+        import pythoncom
+        import win32com.client
+    except ImportError:
+        return None
+    pythoncom.CoInitialize()
+    xl = win32com.client.DispatchEx("Excel.Application")
+    wb = None
+    try:
+        xl.Visible = False
+        xl.DisplayAlerts = False
+        xl.ScreenUpdating = False
+        wb = xl.Workbooks.Open(str(path), 0, True)
+        deadline = time.time() + wait_s
+        while time.time() < deadline:
+            for f in (lambda: xl.RTD.RefreshData(), lambda: xl.CalculateFull()):
+                try:
+                    f()
+                except pythoncom.com_error:
+                    pass
+            got = _read_workbook(wb)
+            if got:
+                rows, _ = got
+                header = [str(h).strip() if h is not None else "" for h in rows[0]]
+                li = header.index(HEAD["last"]) if HEAD["last"] in header else None
+                data = [r for r in rows[1:] if r and r[0] not in (None, "")]
+                priced = sum(1 for r in data if li is not None and (_num(r[li]) or 0) > 0)
+                if data and priced >= 0.5 * len(data):
+                    return got
+            time.sleep(6)
+        return None
+    except pythoncom.com_error:
+        return None
+    finally:
+        try:
+            if wb is not None:
+                wb.Close(False)
+        except pythoncom.com_error:
+            pass
+        try:
+            xl.Quit()
+        except pythoncom.com_error:
+            pass
+
+
 def _saved_rows(path: Path) -> tuple[list[list], str]:
     """הערכים מהשמירה האחרונה. עותק זמני — Excel נועל את המקור כשהוא פתוח."""
     import openpyxl
@@ -163,9 +232,11 @@ def coverage() -> dict[int, str]:
 
 def collect(path: Path) -> dict:
     """קורא את החוברת ומחזיר את התמונה: תאריך, רשומות, ומה נבדק בדרך."""
-    got = _live_rows(path)
+    got, how = _live_rows(path), "live"
+    if got is None and _gto_running():
+        got, how = _hidden_rows(path), "hidden"
     if got is not None:
-        how, asof = "live", datetime.now()
+        asof = datetime.now()
     else:
         got = _saved_rows(path)
         how, asof = "saved", datetime.fromtimestamp(path.stat().st_mtime)
@@ -360,7 +431,7 @@ def main() -> int:
         return 1
 
     total = sum(r["value"] or 0 for r in snap["records"])
-    log(f"{snap['day']} · קריאה {'חיה' if snap['how'] == 'live' else 'מהשמירה'} "
+    log(f"{snap['day']} · קריאה {({'live': 'חיה', 'hidden': 'חיה (מופע נסתר)'}).get(snap['how'], 'מהשמירה')} "
         f"({snap['asof']:%H:%M}, גיליון {snap['sheet']}) · {snap['rows']} ניירות, "
         f"{len(snap['records'])} עם J, {total / 1e6:,.1f} מ׳ ₪ · "
         f"{'סיום מסחר' if snap['final'] else 'תוך כדי מסחר'}")
