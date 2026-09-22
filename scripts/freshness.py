@@ -365,8 +365,12 @@ def main() -> int:
     # ירוק בדיוק בזמן שהעמודים היו תקועים.
     #
     # מאיה מפרסמת רצוף, ולכן הסף כאן צמוד: יום מסחר אחד.
+    #
+    # **אינדקס הדוחות הכספיים דליל מחוץ לעונת הדוחות.** 18–22/09/2026 עברו בלי
+    # דוח כספי אחד (נבדק מול מאיה: 302 דיווחים, אפס דוחות), והסף של יום מסחר
+    # הכריז על תקלה בכל ריצה. חמישה ימי מסחר תופסים אוסף שנעצר גם בעונה.
     for label, dirname, pattern, field, limit, hint in (
-        ("אינדקס הדוחות", "filings", "[0-9][0-9][0-9][0-9].jsonl", "d", 1, "Maya Watch"),
+        ("אינדקס הדוחות", "filings", "[0-9][0-9][0-9][0-9].jsonl", "d", 5, "Maya Watch"),
         ("סיכומי דיווחים", "reports", "*.jsonl", "ts", 2, "Maya Watch"),
         ("עסקאות מחוץ לבורסה", "otc", "*.jsonl", "date", 3, "Offex Backfill"),
         ("דיווחי בעלי עניין", "offex", "*.jsonl", "date", 3, "Offex Backfill"),
@@ -383,6 +387,27 @@ def main() -> int:
         # שיחות כלל — ב-17/09/2026 האחרונה הייתה ב-10/09 והבאה ב-22/09 — ומדידה
         # מול הרשומה האחרונה הכריזה על תקלה בכל יום של שקט שהוא תכונה של המקור.
         # מה שמעיד על תקלה הוא שיחה שהתקיימה ואין לה תמלול.
+        # **עסקאות בעלי עניין נמדדות לפי הסריקה.** רוב טופסי ת076 הם מסחר בבורסה:
+        # 18–22/09/2026 נסרקו 25 טפסים בלי כשל ונמצאה עסקה אחת מחוץ לבורסה, מ-17/09.
+        # אוסף שנעצר נראה ב-last_day שאינו מתקדם; רשומה ישנה מאוד מתריעה בכל זאת,
+        # למקרה שהסריקה רצה והמנתח הפסיק לזהות.
+        if label == "דיווחי בעלי עניין":
+            scan = None
+            try:
+                scan = (json.loads((ROOT / "data" / "offex_state.json").read_text(encoding="utf-8"))
+                        or {}).get("last_day")
+            except (OSError, ValueError):
+                pass
+            gap = business_days_since(scan, today) if scan else None
+            rows.append((label, day, f"{n} ימי מסחר · נסרק עד {scan or '—'}", hint))
+            if gap is None or gap > limit:
+                bad.append(f"{label}: הסריקה נעצרה — נסרק עד {scan or '?'}. בדוק את {hint}.")
+                tg.append((label, scan or "—", "הסריקה נעצרה"))
+            elif n > 10:
+                bad.append(f"{label}: הסריקה רצה, אבל הרשומה האחרונה מ-{day} — {n} ימי מסחר. "
+                           f"ייתכן שהמנתח הפסיק לזהות עסקאות. בדוק את {hint}.")
+                tg.append((label, day, f"{n} ימי מסחר"))
+            continue
         if label == "תמלולי שיחות":
             held = last_call_held(today)
             if not held or held <= day:

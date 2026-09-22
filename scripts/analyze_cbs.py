@@ -421,12 +421,15 @@ def main() -> int:
             (FAILED / f"{rel['id']}.txt").write_text(out, encoding="utf-8")
             print(f"  פלט שלא נפרס נשמר ב-output/cbs/failed/{rel['id']}.txt ({len(out)} תווים)")
         if data is None:
-            attempts[str(rel["id"])] = attempts.get(str(rel["id"]), 0) + 1
             failures.append(f"{rel['date']} {rel['title'][:50]}: {err or 'פלט שאינו JSON'}")
             if err and re.search(r"credit balance is too low|insufficient.*credit", err, re.I):
+                # **יתרה שאזלה אינה ניסיון שנכשל.** ההודעה תקינה; החשבון ריק. ספירה
+                # כאן שרפה את שלושת הניסיונות של "התחלות וגמר בנייה" (17/09/2026)
+                # בזמן שהיתרה הייתה ריקה, וההודעה נשארה בלי ניתוח גם אחרי הטעינה.
                 print("::error title=יתרת Anthropic אזלה::ניתוחי הלמ\"ס אינם נכתבים. "
                       "טעינה: console.anthropic.com/settings/billing")
                 break
+            attempts[str(rel["id"])] = attempts.get(str(rel["id"]), 0) + 1
             continue
 
         rec = {"release_id": str(rel["id"]), "title": rel["title"], "date": rel.get("date"),
