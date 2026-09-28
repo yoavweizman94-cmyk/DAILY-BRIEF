@@ -34,6 +34,10 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _cli  # noqa: E402
+
+JOB = "cbs-review"
 OUT = ROOT / "output" / "cbs"
 CFG = ROOT / "config" / "companies.yaml"
 ATTEMPTS = OUT / "analysis_attempts.json"
@@ -343,6 +347,7 @@ def run_model(prompt: str) -> tuple[str | None, str | None, dict]:
     except ValueError:
         env = None
     if isinstance(env, dict) and ("result" in env or "subtype" in env):
+        _cli.log_cost(JOB, env.get("total_cost_usd"), model=os.environ.get("CLAUDE_MODEL") or "default")
         usage = env.get("usage") or {}
         meta = {"cost": env.get("total_cost_usd"), "ms": env.get("duration_ms"),
                 "turns": env.get("num_turns"), "subtype": env.get("subtype"),

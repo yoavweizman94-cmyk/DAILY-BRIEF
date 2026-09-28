@@ -22,7 +22,7 @@ from datetime import datetime
 from pathlib import Path
 
 TRIGGER = Path(__file__).resolve().parent.parent / ".trigger" / "daily-brief.json"
-EDITIONS = ("", "morning", "close", "night")
+EDITIONS = ("", "morning", "midday", "close", "night")
 TOPICS_ONLY_TTL_H = 2
 
 

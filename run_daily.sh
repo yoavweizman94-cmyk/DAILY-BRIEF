@@ -10,12 +10,13 @@ mkdir -p "$RAW"
 FAILED=()
 
 # --- מהדורה -----------------------------------------------------------------
-# שלוש מהדורות ביום. ה-cron של GitHub הוא ב-UTC בלבד, וישראל מזיזה שעון פעמיים
+# ארבע מהדורות ביום (צהריים נוספה 28/09/2026). ה-cron של GitHub הוא ב-UTC בלבד, וישראל מזיזה שעון פעמיים
 # בשנה — לכן כל מהדורה מתוזמנת לשתי שעות UTC (קיץ וחורף) והבחירה נעשית כאן לפי
 # השעה המקומית בפועל. ריצה שנפלה על השעה ה"שנייה" יוצאת בשקט.
 edition_from_hour() {
   case "$1" in
     05|06|07) echo morning ;;
+    15|16) echo midday ;;
     13|14|17|18|19) echo close ;;
     23|00|01) echo night ;;
     *) echo skip ;;
@@ -32,9 +33,10 @@ edition_from_hour() {
 # ל"הרץ עכשיו" בכל שעה שהיא.
 edition_nearest() {
   case "$1" in
-    0[5-9]|1[0-2]) echo morning ;;
-    1[3-9])        echo close ;;
-    *)             echo night ;;
+    0[5-9]|1[0-2])      echo morning ;;
+    1[3-7])             echo midday ;;
+    1[89]|2[0-2])       echo close ;;
+    *)                  echo night ;;
   esac
 }
 
@@ -55,6 +57,7 @@ fi
 
 case "$EDITION" in
   morning) ED_HE="בוקר";  ED_FOCUS="סקירת פתיחה: מה קרה בלילה בעולם, מה צפוי היום, ומה שדווח במאיה מאז המהדורה הקודמת. סעיף 'מה לעקוב היום' הוא לב המהדורה." ;;
+  midday)  ED_HE="צהריים"; ED_FOCUS="עדכון אמצע יום: מה זז בתל אביב מאז מהדורת הבוקר — מדדים, מניות ודיווחי מאיה שפורסמו עד עכשיו — ומה נותר לעקוב עד הנעילה. **המסחר עדיין פתוח**: המספרים הם תוך-יום ולא נעילה, ויש לכתוב זאת במפורש." ;;
   close)   ED_HE="נעילה"; ED_FOCUS="סיכום יום המסחר בתל אביב: תזוזות המדדים והמניות, כל דיווחי מאיה של היום ומשמעותם, ותגובת השוק. המיקוד ישראלי — שוק ארה\"ב עדיין נסחר ואינו הסיפור." ;;
   night)   ED_HE="לילה";  ED_FOCUS="סיכום היום כולו לאחר נעילת וול סטריט: סגירת המדדים בארה\"ב, מאקרו גלובלי, וגזירת המשמעות לחברות הכיסוי לקראת יום המסחר הבא." ;;
 esac
@@ -186,12 +189,27 @@ MARKER="$(mktemp)"
 
 # Bash(python:*) נדרש לסקיל israeli-statistics — נתוני הלמ"ס מגיעים
 # מ-scripts/fetch_cbs_data.py שלו, לא מ-WebFetch.
+# **מודל ותקרה במפורש.** ברירת המחדל של ה-CLI היא אופוס בהקשר של מיליון
+# טוקנים, בלי שום תקרה — סשן שנתקע בלולאת כלים יכול לבדו לרוקן את היתרה
+# (נמדד 28/09/2026: היתרה אזלה פעמיים בשבועיים). מהדורת הלילה, שהיא סיכום
+# של יום שכבר נכתב שלוש פעמים, רצה ב-Sonnet; השאר באופוס.
+case "$EDITION" in
+  night) DEFAULT_MODEL="claude-sonnet-5" ;;
+  *)     DEFAULT_MODEL="claude-opus-5" ;;
+esac
+BRIEF_MODEL="${CLAUDE_MODEL:-$DEFAULT_MODEL}"
+BRIEF_MAX_USD="${BRIEF_MAX_USD:-6}"
+ENVELOPE="$(mktemp)"
+echo "מודל: $BRIEF_MODEL · תקרה: \$$BRIEF_MAX_USD"
 claude -p "$PROMPT" \
+  --output-format json \
   --mcp-config .mcp.json \
   --permission-mode acceptEdits \
   --allowedTools "Read,Write,Edit,Glob,Grep,Skill,WebFetch,WebSearch,Bash(python:*),mcp__israel-statistics__*,mcp__nadlan__*" \
-  ${CLAUDE_MODEL:+--model "$CLAUDE_MODEL"}
+  --model "$BRIEF_MODEL" --max-budget-usd "$BRIEF_MAX_USD" > "$ENVELOPE"
 CLAUDE_RC=$?
+python scripts/claude_envelope.py "$ENVELOPE" brief "$EDITION" || CLAUDE_RC=1
+rm -f "$ENVELOPE"
 
 # שלושת המחסומים האלה קיימים כי ריצה "ירוקה" בלי ברייף חדש היא הכשל המסוכן
 # ביותר כאן: האתר נפרס מחדש עם התוכן של אתמול ואיש אינו מבחין.
@@ -245,7 +263,15 @@ python scripts/publish_status.py
 # או של לפני חודש — ונראה תקין לגמרי. שורת echo בלוג של ריצה ירוקה אינה
 # נקראת; אנוטציה כן. הבנייה מדפיסה לצידה את תאריך הסיכום שבו השתמשה.
 python scripts/publish_news.py   || echo "::warning title=סיווג החדשות נכשל::עמודי הסקטור ייבנו מהקובץ הקודם."
-python scripts/summarize_topics.py   || echo "::warning title=סיכומי הנושאים לא נכתבו::עמודי הסקטור יציגו את הסיכום הקודם. בדוק את הפלט של scripts/summarize_topics.py בשלב הזה."
+# **פעם ביום ולא בכל מהדורה.** עמודי הסקטור נשענים על אייטמים של שבוע ואינם
+# זזים בין מהדורה למהדורה, אבל הסיכום רץ בכל אחת מארבע — שלוש קריאות מודל
+# שנזרקות. כשהקובץ של היום כבר קיים, מדלגים; אם ריצה קודמת נכשלה הוא חסר,
+# והריצה הבאה תכתוב אותו.
+if [ -f "output/topics/${DATE}.json" ]; then
+  echo "סיכומי הנושאים של $DATE כבר נכתבו — מדלגים."
+else
+  python scripts/summarize_topics.py   || echo "::warning title=סיכומי הנושאים לא נכתבו::עמודי הסקטור יציגו את הסיכום הקודם. בדוק את הפלט של scripts/summarize_topics.py בשלב הזה."
+fi
 python site/build.py
 # **הטלגרם מעולם לא הוגדר.** TELEGRAM_BOT_TOKEN ו-TELEGRAM_CHAT_ID
 # נשארו ברשימת ההקמה כ"נשאר ליואב" ולא הוזנו, ולכן הקריאה הזו נכשלה

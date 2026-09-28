@@ -10,13 +10,19 @@
 from __future__ import annotations
 
 import json
-import subprocess
+import os
 import sys
 from datetime import date
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _cli  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
-BATCH = 4          # הפלט לכל דיווח גדל עם הניתוח; אצווה קטנה שומרת על איכות
+# **אצווה גדולה יותר חוסכת תקורה.** לכל קריאה יש עלות קבועה — תבנית הסוכן של
+# ה-CLI ורשימת 400 חברות הכיסוי שנשלחת מחדש — ובאצווה של ארבעה היא הייתה כ-40%
+# מהקריאה. שמונה מחצה אותה בלי לשנות את הפלט לדיווח.
+BATCH = 8
 MAX_BODY = 16000   # ניתוח מתחת למספרים דורש את הביאורים ואת תזרים
                    # המזומנים, לא רק את הדוח על הרווח והפסד
 # תקרה למחזור: הניטור רץ כל רבע שעה, וריצה ארוכה מהמחזור תיצור חפיפה.
@@ -99,6 +105,12 @@ def coverage_list() -> str:
     return "\n".join(f"  {s}: {', '.join(n)}" for s, n in sorted(by_sector.items()))
 
 
+# סיכום דיווח הוא עבודה מכנית על טקסט נתון — אותה עבודה שסקירות הרכב והסחורות
+# עושות ב-Sonnet. ברירת המחדל של ה-CLI (אופוס במיליון טוקנים) יקרה פי חמישה כאן.
+MODEL = os.environ.get("SUMMARY_MODEL") or _cli.DEFAULT_MODEL
+MAX_USD = float(os.environ.get("SUMMARY_MAX_USD") or 1.0)
+
+
 def summarize(batch: list[dict], coverage: str) -> list[dict]:
     payload = "\n\n".join(
         f"--- דיווח id={r['id']} | טופס {r.get('form_id','')} | "
@@ -106,16 +118,18 @@ def summarize(batch: list[dict], coverage: str) -> list[dict]:
         f"כותרת: {r.get('title','')}\n"
         f"גוף:\n{(r.get('body') or '(לא נחלץ גוף)')[:MAX_BODY]}"
         for r in batch)
-    proc = subprocess.run(
-        ["claude", "-p", PROMPT.format(n=len(batch), payload=payload, coverage=coverage),
-         "--permission-mode", "acceptEdits", "--allowedTools", ""],
-        capture_output=True, text=True, encoding="utf-8", timeout=600)
-    if proc.returncode != 0:
-        print(f"  ⚠ claude נכשל (קוד {proc.returncode}): {(proc.stderr or '')[:200]}",
-              file=sys.stderr)
+    text, err, meta = _cli.run(PROMPT.format(n=len(batch), payload=payload, coverage=coverage),
+                               job="maya-summaries", model=MODEL, max_usd=MAX_USD, timeout=600,
+                               n=len(batch))
+    if err:
+        print(f"  ⚠ claude נכשל: {err}", file=sys.stderr)
+        if _cli.CREDIT_RE in err:
+            print("::error title=יתרת Anthropic אזלה::סיכומי מאיה אינם נכתבים. "
+                  "טעינה: console.anthropic.com/settings/billing")
         return []
+    print(f"  אצווה של {len(batch)}: ${float(meta.get('cost') or 0):.3f}")
     out = []
-    for line in (proc.stdout or "").splitlines():
+    for line in (text or "").splitlines():
         line = line.strip().strip("`")
         if not line.startswith("{"):
             continue

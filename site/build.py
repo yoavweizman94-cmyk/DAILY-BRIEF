@@ -821,6 +821,39 @@ def sector_depth(md: str) -> list[tuple[str, int, int, float, int]]:
     return out
 
 
+def _costs_notice() -> None:
+    """עלות המודל של היום לפי עבודה, מ-output/costs/<יום>.jsonl.
+
+    **בלי זה אין דרך לדעת לאן הלך הכסף.** הברייף והסיכומים לא דיווחו על עלותם
+    כלל, והסימן הראשון לחריגה היה שהיתרה נגמרה והאתר נעצר.
+    """
+    import collections
+    day = date.today().isoformat()
+    path = ROOT / "output" / "costs" / f"{day}.jsonl"
+    if not path.exists():
+        return
+    by_job: dict[str, float] = collections.defaultdict(float)
+    n = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        by_job[str(r.get("job") or "אחר")] += float(r.get("usd") or 0)
+        n += 1
+    if not by_job:
+        return
+    total = sum(by_job.values())
+    parts = " · ".join(f"{j} ${v:.2f}" for j, v in sorted(by_job.items(), key=lambda x: -x[1]))
+    print(f"::notice::עלות מודל היום ({day}): ${total:.2f} ב-{n} קריאות — {parts}")
+    import os
+    if total > float(os.environ.get("COST_ALERT_USD") or 25):
+        print(f"::warning title=עלות המודל חורגת::${total:.2f} היום, מעל הסף. "
+              "הפירוט ב-output/costs/ בריפו התוכן.")
+
+
 def main() -> int:
     cfg = yaml.safe_load((ROOT / "config" / "sources.yaml").read_text(encoding="utf-8"))
     site_title = cfg.get("site", {}).get("title", "TLV TASE View")
@@ -831,7 +864,7 @@ def main() -> int:
     # סדר כרונולוגי בתוך היום: מהדורת הלילה נכתבת ב-00:00 ולכן היא הראשונה,
     # לא האחרונה. מיון הפוך שהניח night>morning הציג ברייף ישן כעדכני ביותר.
     ED_ORDER = {"night": 0, "": 1, "morning": 1, "close": 2}
-    ED_HE = {"": "בוקר", "morning": "בוקר", "close": "נעילה", "night": "לילה"}
+    ED_HE = {"": "בוקר", "morning": "בוקר", "midday": "צהריים", "close": "נעילה", "night": "לילה"}
     found = []
     for f in ROOT.glob("output/brief_*.md"):
         m = re.match(r"brief_(\d{4}-\d{2}-\d{2})(?:-(morning|close|night))?\.md$", f.name)
@@ -1149,6 +1182,7 @@ def main() -> int:
     _cos = _cov.get("companies") or []
     _nomaya = [c.get("name_he") or "?" for c in _cos if not c.get("maya_company_id")]
     print(f"::notice::רשימת הכיסוי: {len(_cos)} חברות")
+    _costs_notice()
     if _nomaya:
         # maya_pull ו-maya_watch מדלגים בשקט על חברה בלי מזהה מאיה, ולכן
         # החוסר נאמר כאן — אחרת חברה חדשה פשוט אינה מקבלת דיווחים.

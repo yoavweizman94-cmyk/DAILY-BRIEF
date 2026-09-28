@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import json
-import subprocess
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -22,10 +22,15 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _cli  # noqa: E402
 LOOKBACK_FILES = 2        # היום ואתמול — מספיק להקשר בלי להעמיס
 MAX_ITEMS_PER_TOPIC = 22
 BATCH = 4                 # נושאים לקריאה; ראה ההערה ליד הקריאה עצמה
 TIMEOUT = 900             # שניות לאצווה
+# סיכום נושאים הוא עבודה מכנית על אייטמים שכבר נבחרו — Sonnet, לא אופוס.
+MODEL = os.environ.get("SUMMARY_MODEL") or _cli.DEFAULT_MODEL
+MAX_USD = float(os.environ.get("SUMMARY_MAX_USD") or 1.5)
 
 PROMPT = """אתה אנליסט של קרן FOREST. לפניך כותרות חדשות מסווגות לפי נושא,
 רובן באנגלית. כתוב לכל נושא סקירה **בעברית** למנהל השקעות מקצועי.
@@ -122,26 +127,19 @@ def main() -> int:
     for i in range(0, len(blocks), BATCH):
         chunk = blocks[i:i + BATCH]
         tag = f"{i // BATCH + 1}/{(len(blocks) + BATCH - 1) // BATCH}"
-        try:
-            proc = subprocess.run(
-                ["claude", "-p", PROMPT.format(payload="\n\n".join(chunk)),
-                 "--permission-mode", "acceptEdits", "--allowedTools", ""],
-                capture_output=True, text=True, encoding="utf-8", timeout=TIMEOUT)
-        except subprocess.TimeoutExpired:
-            failures.append(f"אצווה {tag}: חריגה מ-{TIMEOUT} שניות")
-            continue
-        except OSError as e:
-            failures.append(f"אצווה {tag}: {type(e).__name__} — {e}")
-            continue
-        if proc.returncode != 0:
+        text, err, meta = _cli.run(PROMPT.format(payload="\n\n".join(chunk)),
+                                   job="topic-summaries", model=MODEL, max_usd=MAX_USD,
+                                   timeout=TIMEOUT, batch=tag)
+        if not err:
+            print(f"  אצווה {tag}: ${float(meta.get('cost') or 0):.3f}")
+        if err:
             # **שגיאת ה-CLI היא האבחנה, וללוג היא אינה נקראת.** הלוגים של
             # Actions דורשים הזדהות; יתרה שאזלה, מפתח שנדחה ומודל עמוס
             # נראים כאן זהים בלעדיה. זו הודעת שגיאה של הכלי ולא תוכן
             # הברייף, ולכן מותר לה לעלות לאנוטציה.
-            err = " ".join((proc.stderr or "").split())[-240:] or "בלי פלט שגיאה"
-            failures.append(f"אצווה {tag}: קוד {proc.returncode} — {err}")
+            failures.append(f"אצווה {tag}: {err}")
             continue
-        out_lines.extend((proc.stdout or "").splitlines())
+        out_lines.extend((text or "").splitlines())
 
     if failures:
         print("::warning title=אצוות סיכום שנפלו::" + " · ".join(failures))
