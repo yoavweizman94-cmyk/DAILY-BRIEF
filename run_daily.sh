@@ -198,8 +198,8 @@ MARKER="$(mktemp)"
 # עדכון תוך-יום על מה שכבר נכתב בבוקר, והלילה היא סיכום של יום שנכתב שלוש
 # פעמים; שתיהן ב-Sonnet. נמדד 28/09/2026: מהדורה באופוס נחתכה בתקרה של $6.
 case "$EDITION" in
-  midday|night) DEFAULT_MODEL="claude-sonnet-5"; DEFAULT_MAX="4" ;;
-  *)            DEFAULT_MODEL="claude-opus-5";   DEFAULT_MAX="12" ;;
+  midday|night) DEFAULT_MODEL="claude-sonnet-5"; DEFAULT_MAX="10" ;;
+  *)            DEFAULT_MODEL="claude-opus-5";   DEFAULT_MAX="18" ;;
 esac
 BRIEF_MODEL="${CLAUDE_MODEL:-$DEFAULT_MODEL}"
 BRIEF_MAX_USD="${BRIEF_MAX_USD:-$DEFAULT_MAX}"
