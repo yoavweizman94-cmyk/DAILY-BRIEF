@@ -218,8 +218,20 @@ case "$EDITION" in
 esac
 BRIEF_MODEL="${CLAUDE_MODEL:-$DEFAULT_MODEL}"
 BRIEF_MAX_USD="${BRIEF_MAX_USD:-$DEFAULT_MAX}"
+
+# **בלם על היום כולו, לא על הקריאה.** התקרה לקריאה עוצרת ריצה אחת, וכל
+# ניסיון חוזר מתחיל מאפס: ב-28/09/2026 נשרפו כך $25.42 בארבע ריצות בלי
+# שפורסם ברייף אחד, והיתרה אזלה. הבלם קורא כמה הוצא היום בפועל ומגיב —
+# מעל הסף הרך המהדורה יורדת ל-Sonnet, ומעל הקשה היא אינה מופקת כלל.
+eval "$(python scripts/cost_guard.py | grep '^[A-Z]' || true)"
+if [ -n "${BRIEF_SKIP:-}" ]; then
+  echo "הבלם היומי נסגר (${DAY_USD:-?}$) — אין ברייף בריצה הזו" >&2
+  exit 1
+fi
+[ -n "${BRIEF_MODEL_FORCED:-}" ] && BRIEF_MODEL="$BRIEF_MODEL_FORCED"
+
 ENVELOPE="$(mktemp)"
-echo "מודל: $BRIEF_MODEL · תקרה: \$$BRIEF_MAX_USD"
+echo "מודל: $BRIEF_MODEL · תקרה: \$$BRIEF_MAX_USD · היום עד כה: \$${DAY_USD:-0}"
 # **זרם ולא מעטפת.** עם --output-format json הלוג שותק עד הסוף, ולכן
 # מהדורה שנקטעה ב-$10.15 (28/09/2026) לא הותירה שום עדות למה היא עשתה.
 # claude_stream כותב יומן כלים — שמות ונתיבים בלבד, בלי תוכן, כי הלוג
