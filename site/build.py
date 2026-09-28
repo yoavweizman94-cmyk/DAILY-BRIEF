@@ -881,7 +881,7 @@ RUN_BRIEF = """<section class="runbrief" id="runbrief" hidden>
       });
       box.hidden = false;
       if (!d.ready) { go.disabled = true; say(d.setup || "לא הוגדר אסימון הפעלה", "warn"); }
-      else if (d.mode === "queued") { say("ההפקה מתחילה " + (d.wait || "בפעימה הקרובה")); }
+      else if (d.mode === "queued") { say("הבקשה תיתבע " + (d.wait || "בפעימה הקרובה") + " — להתחלה מיידית נדרש אסימון", "warn"); }
     })
     .catch(function () { /* לא בעלים, או אין רשת — הפקד פשוט אינו מוצג */ });
   go.addEventListener("click", function () {

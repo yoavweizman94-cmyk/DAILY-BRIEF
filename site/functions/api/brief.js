@@ -24,7 +24,11 @@ const PER_HOUR = 6;
 const NO_STORE = { "Cache-Control": "no-store" };
 const QUEUE_KEY = "brief:request";
 const QUEUE_TTL = 7200;          // שעתיים; ריצת התביעה מתעלמת מבקשה בת שעתיים ומעלה
-const QUEUE_WAIT = "עד 10 דקות";
+// **לא "עשר דקות".** הפעימה מתוזמנת לכל עשר דקות, אבל GitHub מריץ תזמונים
+// באיחור ובדילוגים: נמדד 28/09/2026 שריצה שאמורה להיות כל חצי שעה יצאה
+// אחת לשעתיים, ופעימת ה-10 דקות לא יצאה כלל במשך שעה וחצי. להבטיח לקורא
+// עשר דקות זה לשקר לו, ולכן הניסוח אומר מה באמת ידוע.
+const QUEUE_WAIT = "בפעימה הקרובה של GitHub (לעיתים שעה ויותר)";
 const SETUP = "צור אסימון GitHub fine-grained לריפו DAILY-BRIEF עם הרשאת Actions: Read and write, "
   + "והוסף אותו ב-Cloudflare Pages → Settings → Environment variables בשם GITHUB_DISPATCH_TOKEN. "
   + "בלעדיו ההפקה עדיין עובדת, אבל מתחילה בפעימה הקרובה ולא מיד.";
@@ -90,7 +94,8 @@ export async function onRequestPost({ request, env }) {
       edition,
       queued: true,
       label: LABEL[edition],
-      message: `נרשמה בקשה להפקת ברייף (${LABEL[edition]}). ההפקה מתחילה ${QUEUE_WAIT} ונמשכת 10–15 דקות.`,
+      message: `נרשמה בקשה להפקת ברייף (${LABEL[edition]}). ההפקה מתחילה ${QUEUE_WAIT} ונמשכת 10–15 דקות. `
+        + "להתחלה מיידית צריך אסימון — ראה המדריך.",
       runs: `https://github.com/${REPO}/actions/workflows/brief-request.yml`,
     }, 202, NO_STORE);
   }
