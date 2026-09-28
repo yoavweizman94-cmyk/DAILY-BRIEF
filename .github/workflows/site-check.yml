@@ -8,6 +8,11 @@ name: Site Check
 # קורא היא בדיוק הכשל שהבדיקה הזו נועדה לתפוס.
 on:
   workflow_dispatch: {}
+  # שיגור workflow מרחוק דורש אסימון GitHub שאינו קיים בסביבת העבודה;
+  # דחיפת קובץ טריגר כן אפשרית, כמו ב-daily-brief.
+  push:
+    paths:
+      - ".trigger/site-check.json"
   schedule:
     - cron: "20 5 * * *"      # 08:20 שעון ישראל בקיץ
 
@@ -93,6 +98,17 @@ jobs:
             c=$(curl -sL -o /dev/null --max-time 25 -w '%{http_code}' "$APP/$pg.html" || true)
             note "$pg → $c"
             [ "$c" = "200" ] || bad "$APP/$pg.html החזיר $c"
+          done
+
+          # --- נקודות הקצה של האפליקציה: נפרסו, ומסרבות בלי סשן ---
+          # פונקציה שלא נפרסה מחזירה 404 ונראית באתר ככפתור שלא עושה כלום.
+          # 401 הוא התשובה הנכונה כאן: הקוד חי והשער סגור.
+          echo "=== נקודות קצה ==="
+          for ep in brief importance; do
+            c=$(curl -s -o /dev/null --max-time 25 -w '%{http_code}' "$APP/api/$ep" || true)
+            note "api/$ep → $c"
+            [ "$c" = "404" ] && bad "$APP/api/$ep לא נפרס (404)"
+            [ "$c" = "200" ] && bad "$APP/api/$ep השיב 200 בלי סשן — שער פתוח"
           done
 
           # --- pages.dev: חייב להפנות לדומיין ולא להגיש בעצמו ---
