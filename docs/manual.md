@@ -81,12 +81,17 @@ Actions → **Site Check** → Run workflow — היא רצה משרת של GitH
 בורר מהדורה וכפתור. הוא מוצג **לך בלבד** (לפי `OWNER_EMAIL`), ומוגבל לשש
 הפקות בשעה. אחרי לחיצה הריצה מתחילה ברקע; העמוד יתעדכן כשהיא תסתיים.
 
-**הגדרה חד-פעמית לכפתור:** הוא מפעיל את ה-workflow דרך ה-API של GitHub וצריך
-אסימון. ב-GitHub → Settings → Developer settings → **Fine-grained tokens** צור
-אסימון לריפו `DAILY-BRIEF` בלבד, עם הרשאת **Actions: Read and write**, והוסף
-אותו ב-Cloudflare Pages → forest-brief → Settings → Environment variables בשם
-`GITHUB_DISPATCH_TOKEN` (Production). עד שהוא מוגדר הכפתור מוצג מושבת ואומר
-בדיוק את זה.
+**אין מה להגדיר.** הלחיצה רושמת את הבקשה ל-KV — אותו מרחב שמות שבו יושבים
+המשתמשים — ו-[Brief Request](https://github.com/yoavweizman94-cmyk/DAILY-BRIEF/actions/workflows/brief-request.yml)
+תובע אותה כל עשר דקות ומריץ את המהדורה. כלומר ההפקה מתחילה תוך עד עשר דקות
+מהלחיצה. המסלול נבדק מקצה לקצה (כתיבה, קריאה ומחיקה) ב-28/09/2026.
+
+**אם תרצה שההפקה תתחיל מיד** במקום בפעימה הקרובה: ב-GitHub → Settings →
+Developer settings → **Fine-grained tokens** צור אסימון לריפו `DAILY-BRIEF`
+בלבד, עם הרשאת **Actions: Read and write**, והוסף אותו ב-Cloudflare Pages →
+forest-brief → Settings → Environment variables בשם `GITHUB_DISPATCH_TOKEN`
+(Production). האתר יזהה אותו לבד וישגר ישירות. זה שדרוג לזמן התגובה בלבד —
+הכפתור עובד גם בלעדיו.
 
 **מ-GitHub:** [Actions → Daily Brief](https://github.com/yoavweizman94-cmyk/DAILY-BRIEF/actions/workflows/daily-brief.yml)
 → **Run workflow** → בשדה `edition` בחר `morning` / `midday` / `close` / `night`
