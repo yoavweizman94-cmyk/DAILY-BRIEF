@@ -59,6 +59,10 @@ def envelope(out: str, rc: int, err: str) -> tuple[str | None, str | None, dict]
     meta = {"cost": env.get("total_cost_usd"), "ms": env.get("duration_ms"),
             "turns": env.get("num_turns"), "subtype": env.get("subtype"),
             "in_tokens": usage.get("input_tokens"), "out_tokens": usage.get("output_tokens"),
+            # קריאות המטמון הן המדד לכובד ההקשר: קלט גדול אינו נקרא פעם אחת
+            # אלא נשלח מחדש בכל תור, ושם הוא מתומחר שוב (בעשירית, אבל שוב).
+            "cache_read": usage.get("cache_read_input_tokens"),
+            "cache_new": usage.get("cache_creation_input_tokens"),
             "models": ", ".join((env.get("modelUsage") or {}).keys())}
     if env.get("is_error") or rc != 0:
         return None, (f"{env.get('subtype')}: " + " ".join(str(env.get("result") or "").split())[:240]), meta

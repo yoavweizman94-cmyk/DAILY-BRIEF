@@ -27,7 +27,8 @@ def main() -> int:
     cost = float(meta.get("cost") or 0)
     if cost:
         _cli.log_cost(job, cost, label=label, turns=meta.get("turns"),
-                      models=meta.get("models"), out_tokens=meta.get("out_tokens"))
+                      models=meta.get("models"), out_tokens=meta.get("out_tokens"),
+                      cache_read=meta.get("cache_read"), cache_new=meta.get("cache_new"))
     if err:
         # התקרה נועדה לעצור סשן שנתקע, לא מהדורה לגיטימית. כשהיא זו שעצרה —
         # לומר זאת במפורש, אחרת "קוד 1" נראה כמו כל כשל אחר.
@@ -41,8 +42,11 @@ def main() -> int:
         print(f"::error title=הברייף נכשל::{err[:400]}")
         return 1
     print(text or "")
+    # הטוקנים הם המספר שמסביר את העלות: תור אחד על הקשר של מיליון טוקן
+    # עולה יותר מעשרה תורות על מאה אלף. שניהם מספרים בלבד — הלוג ציבורי.
+    m = int((meta.get("cache_read") or 0) / 1e6 * 10) / 10
     print(f"::notice::עלות {job}{f' ({label})' if label else ''}: ${cost:.2f} · "
-          f"{meta.get('turns')} תורות · {meta.get('models') or '—'}")
+          f"{meta.get('turns')} תורות · {m}M טוקן מהמטמון · {meta.get('models') or '—'}")
     return 0
 
 
