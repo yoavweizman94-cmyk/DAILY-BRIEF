@@ -122,6 +122,32 @@ jobs:
           [ "$fail" = "0" ] && echo "כל הבדיקות עברו." || echo "יש כשלים — ראו ::error:: למעלה."
           exit "$fail"
 
+      # כפתור "הפק ברייף" צריך דרך להפעיל ריצה. שיגור ישיר דורש אסימון
+      # GitHub חדש שרק הבעלים יכול ליצור; אם האסימון הקיים של Cloudflare
+      # מגיע ל-KV, אפשר במקומו שהאתר יכתוב בקשה ל-KV וריצה קצרה תקרא
+      # אותה — בלי שום הגדרה חדשה. הבדיקה הזו עונה איזו משתי הדרכים פתוחה.
+      - name: KV reachable
+        if: always()
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          out=$(curl -s -H "Authorization: Bearer $CF_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/storage/kv/namespaces?per_page=50" || true)
+          python3 - "$out" <<'PY'
+          import json, sys
+          try:
+              d = json.loads(sys.argv[1] or "{}")
+          except ValueError:
+              print("::warning title=KV::התשובה אינה JSON — אין גישה"); raise SystemExit(0)
+          if d.get("success"):
+              names = [n.get("title") for n in d.get("result") or []]
+              print(f"::notice title=KV נגיש::מרחבי שמות: {', '.join(names) or 'אין'}")
+          else:
+              errs = "; ".join(str(e.get("message")) for e in d.get("errors") or [])
+              print(f"::warning title=KV חסום לאסימון::{errs[:200]}")
+          PY
+
       - name: Pages domain status
         if: always()
         env:
