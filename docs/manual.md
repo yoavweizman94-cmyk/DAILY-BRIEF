@@ -107,8 +107,8 @@ Actions → **Site Check** → Run workflow — היא רצה משרת של GitH
 
 | עבודה | מודל | תקרה לקריאה |
 |---|---|---|
-| ברייף — בוקר, צהריים, נעילה | `claude-opus-5` | `BRIEF_MAX_USD`, ברירת מחדל $6 |
-| ברייף — לילה | `claude-sonnet-5` | אותה תקרה |
+| ברייף — בוקר ונעילה | `claude-opus-5` | `BRIEF_MAX_USD`, ברירת מחדל $12 |
+| ברייף — צהריים ולילה | `claude-sonnet-5` | $4 |
 | סיכומי דיווחי מאיה | `claude-sonnet-5` | `SUMMARY_MAX_USD`, $1 |
 | סיכומי עמודי הסקטור (פעם ביום) | `claude-sonnet-5` | $1.5 |
 | סקירות רכב / סחורות / למ"ס | `claude-sonnet-5` | $1–1.5 |

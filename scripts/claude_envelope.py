@@ -29,6 +29,12 @@ def main() -> int:
         _cli.log_cost(job, cost, label=label, turns=meta.get("turns"),
                       models=meta.get("models"), out_tokens=meta.get("out_tokens"))
     if err:
+        # התקרה נועדה לעצור סשן שנתקע, לא מהדורה לגיטימית. כשהיא זו שעצרה —
+        # לומר זאת במפורש, אחרת "קוד 1" נראה כמו כל כשל אחר.
+        if "max_budget" in err:
+            print(f"::error title=הברייף נקטע בתקרת העלות::המהדורה חרגה מ-BRIEF_MAX_USD. "
+                  f"העלות עד הקטיעה: ${cost:.2f}. הגדל את התקרה או הרץ את המהדורה במודל זול יותר.")
+            return 1
         if _cli.CREDIT_RE in err:
             print("::error title=יתרת Anthropic אזלה::הברייף אינו נכתב. "
                   "טעינה: console.anthropic.com/settings/billing")

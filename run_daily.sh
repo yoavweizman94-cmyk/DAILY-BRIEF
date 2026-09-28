@@ -193,12 +193,16 @@ MARKER="$(mktemp)"
 # טוקנים, בלי שום תקרה — סשן שנתקע בלולאת כלים יכול לבדו לרוקן את היתרה
 # (נמדד 28/09/2026: היתרה אזלה פעמיים בשבועיים). מהדורת הלילה, שהיא סיכום
 # של יום שכבר נכתב שלוש פעמים, רצה ב-Sonnet; השאר באופוס.
+# **המהדורות אינן שוות בעלותן ובמשקלן.** הבוקר והנעילה הן המוצר — סריקה מלאה
+# של רשימת המעקב וכתיבה של שישה סעיפים ענפיים — ורצות באופוס. הצהריים היא
+# עדכון תוך-יום על מה שכבר נכתב בבוקר, והלילה היא סיכום של יום שנכתב שלוש
+# פעמים; שתיהן ב-Sonnet. נמדד 28/09/2026: מהדורה באופוס נחתכה בתקרה של $6.
 case "$EDITION" in
-  night) DEFAULT_MODEL="claude-sonnet-5" ;;
-  *)     DEFAULT_MODEL="claude-opus-5" ;;
+  midday|night) DEFAULT_MODEL="claude-sonnet-5"; DEFAULT_MAX="4" ;;
+  *)            DEFAULT_MODEL="claude-opus-5";   DEFAULT_MAX="12" ;;
 esac
 BRIEF_MODEL="${CLAUDE_MODEL:-$DEFAULT_MODEL}"
-BRIEF_MAX_USD="${BRIEF_MAX_USD:-6}"
+BRIEF_MAX_USD="${BRIEF_MAX_USD:-$DEFAULT_MAX}"
 ENVELOPE="$(mktemp)"
 echo "מודל: $BRIEF_MODEL · תקרה: \$$BRIEF_MAX_USD"
 claude -p "$PROMPT" \
