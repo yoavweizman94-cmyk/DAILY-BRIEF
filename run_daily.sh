@@ -220,13 +220,19 @@ BRIEF_MODEL="${CLAUDE_MODEL:-$DEFAULT_MODEL}"
 BRIEF_MAX_USD="${BRIEF_MAX_USD:-$DEFAULT_MAX}"
 ENVELOPE="$(mktemp)"
 echo "מודל: $BRIEF_MODEL · תקרה: \$$BRIEF_MAX_USD"
+# **זרם ולא מעטפת.** עם --output-format json הלוג שותק עד הסוף, ולכן
+# מהדורה שנקטעה ב-$10.15 (28/09/2026) לא הותירה שום עדות למה היא עשתה.
+# claude_stream כותב יומן כלים — שמות ונתיבים בלבד, בלי תוכן, כי הלוג
+# ציבורי — ומסכם אילו יעדים נקראו שוב ושוב. יעד חוזר הוא לולאה, ולולאה
+# היא העלות. המעטפת עצמה נשמרת מהזרם, כך ששרשרת העלות אינה משתנה.
 claude -p "$PROMPT" \
-  --output-format json \
+  --output-format stream-json --verbose \
   --mcp-config .mcp.json \
   --permission-mode acceptEdits \
   --allowedTools "Read,Write,Edit,Glob,Grep,Skill,WebFetch,WebSearch,Bash(python:*),mcp__israel-statistics__*,mcp__nadlan__*" \
-  --model "$BRIEF_MODEL" --max-budget-usd "$BRIEF_MAX_USD" > "$ENVELOPE"
-CLAUDE_RC=$?
+  --model "$BRIEF_MODEL" --max-budget-usd "$BRIEF_MAX_USD" \
+  | python scripts/claude_stream.py "$ENVELOPE"
+CLAUDE_RC=${PIPESTATUS[0]}
 python scripts/claude_envelope.py "$ENVELOPE" brief "$EDITION" || CLAUDE_RC=1
 rm -f "$ENVELOPE"
 
