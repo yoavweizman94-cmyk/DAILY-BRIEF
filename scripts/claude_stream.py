@@ -78,7 +78,10 @@ def main() -> int:
             print(f"  {n:>3}. {name} {tgt}", flush=True)
 
     print()
-    print(f"כלים: {n} קריאות · " + ", ".join(f"{k} {v}" for k, v in tools.most_common()))
+    # אנוטציה ולא רק echo: לוג של ריצה דורש אימות כדי להיקרא, אנוטציה לא.
+    summary = ", ".join(f"{k} {v}" for k, v in tools.most_common())
+    print(f"::notice title=כלים בברייף::{n} קריאות — {summary or 'אין'}")
+    print(f"כלים: {n} קריאות · " + summary)
     repeats = [(t, c) for t, c in targets.most_common(TOP_REPEATS) if c >= 2]
     if repeats:
         print("יעדים חוזרים: " + " · ".join(f"{t} ×{c}" for t, c in repeats))

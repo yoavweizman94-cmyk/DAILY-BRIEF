@@ -224,8 +224,10 @@ def main() -> int:
         dump("companies.txt", comps)
 
     if saved:
-        print(f"  קלט מעוכל: {written // 1024}KB במקום {saved // 1024}KB "
-              f"({100 - written * 100 // max(saved, 1)}% פחות)")
+        line = (f"{written // 1024}KB במקום {saved // 1024}KB "
+                f"({100 - written * 100 // max(saved, 1)}% פחות)")
+        print(f"  קלט מעוכל: {line}")
+        print(f"::notice title=קלט מעוכל::{line}")
     return 0
 
 
