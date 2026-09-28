@@ -30,12 +30,14 @@ MAX_AGE_MIN = int(os.environ.get("KV_MAX_AGE_MIN") or 120)
 EDITIONS = ("", "morning", "midday", "close", "night")
 
 
-def call(path: str, method: str = "GET") -> tuple[int, str]:
+def call(path: str, method: str = "GET", body: str | None = None) -> tuple[int, str]:
     token = os.environ.get("CF_API_TOKEN") or ""
+    headers = {"Authorization": f"Bearer {token}", "User-Agent": "tlv-tase-view"}
+    if body is not None:
+        headers["Content-Type"] = "text/plain"
     req = urllib.request.Request(f"{API}/accounts/{os.environ.get('CF_ACCOUNT_ID', '')}{path}",
-                                 method=method,
-                                 headers={"Authorization": f"Bearer {token}",
-                                          "User-Agent": "tlv-tase-view"})
+                                 method=method, headers=headers,
+                                 data=body.encode("utf-8") if body is not None else None)
     try:
         with urllib.request.urlopen(req, timeout=30) as f:
             return f.status, f.read().decode("utf-8", "replace")
@@ -74,6 +76,23 @@ def main() -> int:
         return 0
 
     key = urllib.parse.quote(KEY, safe="")
+
+    # **בדיקה עצמית.** מסלול הכפתור נבדק עד כה רק בחציו: תור ריק ויציאה
+    # שקטה. עם KV_SEED נכתבת בקשה אמיתית ומיד נתבעת, וכך נבדקות גם
+    # הכתיבה, גם הקריאה וגם המחיקה — בלי להפיק מהדורה ובלי לשלם עליה.
+    seed = (os.environ.get("KV_SEED") or "").strip()
+    if seed:
+        payload = json.dumps({"edition": "" if seed == "-" else seed,
+                              "at": datetime.now(timezone.utc).isoformat(),
+                              "by": "self-test"}, ensure_ascii=False)
+        scode, _ = call(f"/storage/kv/namespaces/{ns}/values/{key}", "PUT", payload)
+        if scode not in (200, 204):
+            print(f"::error title=כתיבה ל-KV נכשלה::קוד {scode} — הכפתור באתר לא יוכל "
+                  "לרשום בקשה, ולכן לא יפעל")
+            out(run="false")
+            return 0
+        print("::notice title=בדיקה עצמית::נכתבה בקשה זמנית ל-KV; ממשיכים לתביעה")
+
     code, body = call(f"/storage/kv/namespaces/{ns}/values/{key}")
     if code == 404 or not body.strip():
         out(run="false")
@@ -110,6 +129,12 @@ def main() -> int:
     if age > MAX_AGE_MIN:
         print(f"::notice title=בקשה ישנה::הבקשה בת {age:.0f} דקות "
               f"(מעל {MAX_AGE_MIN}) — נמחקה בלי הפקה")
+        out(run="false")
+        return 0
+
+    if seed:
+        print(f"::notice title=מסלול הכפתור תקין::כתיבה, קריאה ומחיקה עברו; "
+              f"מהדורת {edition or 'לפי השעה'} נתבעה ולא הופקה (בדיקה)")
         out(run="false")
         return 0
 

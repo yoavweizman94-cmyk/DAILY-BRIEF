@@ -38,9 +38,26 @@ jobs:
       # רק הסקריפט, בלי היסטוריה ובלי שאר הריפו — זו ריצה שרצה 144 פעמים ביום.
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: scripts/kv_request.py
+          sparse-checkout: |
+            scripts/kv_request.py
+            .trigger/brief-request.json
           sparse-checkout-cone-mode: false
           fetch-depth: 1
+
+      # בקובץ הטריגר אפשר לבקש בדיקה עצמית: {"seed": "midday"} כותב בקשה
+      # זמנית ל-KV ותובע אותה, כדי לבדוק את מסלול הכפתור בלי להפיק מהדורה.
+      - name: Self test flag
+        if: github.event_name == 'push'
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json, pathlib
+          try:
+              cfg = json.loads(pathlib.Path(".trigger/brief-request.json").read_text(encoding="utf-8"))
+          except Exception:
+              cfg = {}
+          seed = str(cfg.get("seed") or "").strip()
+          print(f"KV_SEED={seed}")
+          PY
 
       - name: Claim request
         id: kv
