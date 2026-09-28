@@ -51,11 +51,23 @@ jobs:
         run: |
           python3 - <<'PY' >> "$GITHUB_ENV"
           import json, pathlib
+          from datetime import datetime
           try:
               cfg = json.loads(pathlib.Path(".trigger/brief-request.json").read_text(encoding="utf-8"))
           except Exception:
               cfg = {}
           seed = str(cfg.get("seed") or "").strip()
+          # הדגל נשמר בגיט, ולכן דגל שנשאר בקובץ שורד לדחיפה הבאה: בקשה
+          # אמיתית הייתה הופכת לבדיקה שאינה מפיקה דבר. תקף רק לצד חותמת
+          # זמן טרייה, כמו topics_only ב-brief_args.
+          if seed:
+              try:
+                  age = (datetime.now() - datetime.fromisoformat(str(cfg.get("at")))).total_seconds() / 3600
+              except (TypeError, ValueError):
+                  age = 99
+              if age > 2:
+                  print(f"::notice title=דגל בדיקה ישן::seed בן {age:.0f} שעות — מתעלמים")
+                  seed = ""
           print(f"KV_SEED={seed}")
           PY
 
