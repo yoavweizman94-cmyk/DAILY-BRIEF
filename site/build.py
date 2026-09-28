@@ -854,6 +854,53 @@ def _costs_notice() -> None:
               "הפירוט ב-output/costs/ בריפו התוכן.")
 
 
+# **הפקת ברייף בלחיצה — לבעלים בלבד.** הפקד מוסתר כברירת מחדל ונחשף רק אחרי
+# ש-/api/brief אישר בעלות; בלי אישור אין כפתור, ובלי אסימון הפעלה הכפתור אומר
+# מה להגדיר. ההרשאה נאכפת בשרת, לא כאן — ההסתרה היא נוחות ולא הגנה.
+RUN_BRIEF = """<section class="runbrief" id="runbrief" hidden>
+  <label for="rb-ed">הפקת ברייף עכשיו</label>
+  <select id="rb-ed"></select>
+  <button type="button" id="rb-go">הפק</button>
+  <span class="msg" id="rb-msg"></span>
+</section>
+<script>
+(function () {
+  "use strict";
+  var box = document.getElementById("runbrief");
+  if (!box) { return; }
+  var sel = document.getElementById("rb-ed"), go = document.getElementById("rb-go"),
+      msg = document.getElementById("rb-msg");
+  function say(t, cls) { msg.textContent = t || ""; msg.className = "msg" + (cls ? " " + cls : ""); }
+  fetch("/api/brief", { headers: { Accept: "application/json" }, credentials: "same-origin" })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d || !d.owner) { return; }
+      (d.editions || []).forEach(function (e) {
+        var o = document.createElement("option");
+        o.value = e.value; o.textContent = e.label; sel.appendChild(o);
+      });
+      box.hidden = false;
+      if (!d.ready) { go.disabled = true; say(d.setup || "לא הוגדר אסימון הפעלה", "warn"); }
+    })
+    .catch(function () { /* לא בעלים, או אין רשת — הפקד פשוט אינו מוצג */ });
+  go.addEventListener("click", function () {
+    go.disabled = true;
+    say("מפעיל…");
+    fetch("/api/brief", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ edition: sel.value })
+    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        say(res.d.message || res.d.error || (res.ok ? "הופעל" : "נכשל"), res.ok ? "ok" : "warn");
+        setTimeout(function () { go.disabled = false; }, res.ok ? 60000 : 3000);
+      })
+      .catch(function () { say("הבקשה נכשלה", "warn"); go.disabled = false; });
+  });
+})();
+</script>"""
+
+
 def main() -> int:
     cfg = yaml.safe_load((ROOT / "config" / "sources.yaml").read_text(encoding="utf-8"))
     site_title = cfg.get("site", {}).get("title", "TLV TASE View")
@@ -998,6 +1045,7 @@ def main() -> int:
         body = "\n".join(filter(None, [
             f'<div class="dash-head"><h1>{latest_title}</h1>'
             f'<span class="stamp">ברייף ל-{d_disp}{stale_note} · נבנה {datetime.now():%d/%m %H:%M}</span></div>',
+            RUN_BRIEF,
             sources_panel(latest_date, raw_dir),
             topics_nav(topics, counts),
             markets_strip(markets, te),

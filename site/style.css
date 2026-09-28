@@ -2043,3 +2043,27 @@ details.cm-board { margin: 0.2rem 0 0.8rem; }
 details.cm-board summary { cursor: pointer; font-weight: 700; font-size: 0.92rem; padding: 0.35rem 0; }
 svg.cm-spark { width: 70px; height: 18px; color: var(--accent); }
 .au-charts.cm-one { grid-template-columns: minmax(0, 40rem); }
+
+/* הפקת ברייף בלחיצה (site/functions/api/brief.js) — מוצג לבעלים בלבד. */
+.runbrief {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  margin: 0 0 1rem; padding: 0.55rem 0.8rem;
+  background: var(--table-head); border: 1px solid var(--border); border-radius: 8px;
+  font-size: 0.85rem;
+}
+.runbrief label { font-weight: 600; color: var(--muted); }
+.runbrief select {
+  font: inherit; font-family: var(--sans); padding: 0.2rem 0.4rem;
+  color: var(--fg); background: var(--surface);
+  border: 1px solid var(--border-strong); border-radius: 6px;
+}
+.runbrief button {
+  font: inherit; font-family: var(--sans); font-weight: 600; cursor: pointer;
+  color: var(--accent); background: var(--surface);
+  border: 1px solid var(--border-strong); border-radius: 6px; padding: 0.24rem 0.8rem;
+}
+.runbrief button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.runbrief button:disabled { opacity: 0.6; cursor: default; }
+.runbrief .msg { color: var(--muted); }
+.runbrief .msg.ok { color: var(--up); }
+.runbrief .msg.warn { color: var(--warn); }
