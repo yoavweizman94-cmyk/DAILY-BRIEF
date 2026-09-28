@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 API = "https://api.cloudflare.com/client/v4"
 NS_TITLE = os.environ.get("KV_TITLE") or "tlv-tase-view-users"
 KEY = os.environ.get("KV_KEY") or "brief:request"
-MAX_AGE_MIN = int(os.environ.get("KV_MAX_AGE_MIN") or 120)
+MAX_AGE_MIN = int(os.environ.get("KV_MAX_AGE_MIN") or 240)
 EDITIONS = ("", "morning", "midday", "close", "night")
 
 
