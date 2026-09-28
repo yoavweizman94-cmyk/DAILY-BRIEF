@@ -9,9 +9,11 @@
 // הריצה עצמה היא זו שכבר רצה בתזמון, עם אותם מעקות: `reviews` נשאר ריק כדי
 // שלא ייכתבו סקירות דוחות בטעות, והמהדורה נבחרת מרשימה סגורה.
 //
-// **בלי אסימון — 501 עם הסבר.** GITHUB_DISPATCH_TOKEN הוא אסימון fine-grained
-// לריפו הזה בלבד, עם הרשאת Actions: Read and write. כשהוא חסר, התשובה אומרת
-// מה להגדיר ואיפה, במקום להיכשל בשקט.
+// **שתי דרכים, ושתיהן חיות.** עם GITHUB_DISPATCH_TOKEN — אסימון fine-grained
+// לריפו הזה עם הרשאת Actions: Read and write — הריצה משוגרת מיד. בלעדיו
+// הבקשה נרשמת ל-KV, ו-.github/workflows/brief-request.yml תובע אותה בפעימה
+// הקרובה (עד עשר דקות) ומריץ את המהדורה. כך הכפתור עובד בלי שום הגדרה,
+// והאסימון הוא שדרוג לזמן תגובה ולא תנאי לקיום.
 import { readCookie, readSession, getUser, normEmail, json, COOKIE, rateLimit } from "../_lib/auth.js";
 
 const REPO = "yoavweizman94-cmyk/DAILY-BRIEF";
@@ -20,8 +22,12 @@ const EDITIONS = ["", "morning", "midday", "close", "night"];
 const LABEL = { "": "לפי השעה", morning: "בוקר", midday: "צהריים", close: "נעילה", night: "לילה" };
 const PER_HOUR = 6;
 const NO_STORE = { "Cache-Control": "no-store" };
+const QUEUE_KEY = "brief:request";
+const QUEUE_TTL = 7200;          // שעתיים; ריצת התביעה מתעלמת מבקשה בת שעתיים ומעלה
+const QUEUE_WAIT = "עד 10 דקות";
 const SETUP = "צור אסימון GitHub fine-grained לריפו DAILY-BRIEF עם הרשאת Actions: Read and write, "
-  + "והוסף אותו ב-Cloudflare Pages → Settings → Environment variables בשם GITHUB_DISPATCH_TOKEN.";
+  + "והוסף אותו ב-Cloudflare Pages → Settings → Environment variables בשם GITHUB_DISPATCH_TOKEN. "
+  + "בלעדיו ההפקה עדיין עובדת, אבל מתחילה בפעימה הקרובה ולא מיד.";
 
 async function requireOwner(request, env) {
   if (!env.SESSION_SECRET || !env.USERS) return { denied: json({ error: "לא מוגדר" }, 503) };
@@ -40,10 +46,13 @@ async function requireOwner(request, env) {
 export async function onRequestGet({ request, env }) {
   const { denied } = await requireOwner(request, env);
   if (denied) return denied;
+  const direct = Boolean(env.GITHUB_DISPATCH_TOKEN);
   return json({
     owner: true,
-    ready: Boolean(env.GITHUB_DISPATCH_TOKEN),
-    setup: env.GITHUB_DISPATCH_TOKEN ? null : SETUP,
+    ready: direct || Boolean(env.USERS),
+    mode: direct ? "direct" : (env.USERS ? "queued" : "none"),
+    wait: direct ? null : QUEUE_WAIT,
+    setup: direct ? null : SETUP,
     editions: EDITIONS.map((v) => ({ value: v, label: LABEL[v] })),
   }, 200, NO_STORE);
 }
@@ -66,10 +75,25 @@ export async function onRequestPost({ request, env }) {
   const edition = String(body.edition || "");
   if (!EDITIONS.includes(edition)) return json({ error: "מהדורה לא מוכרת" }, 400);
 
-  if (!env.GITHUB_DISPATCH_TOKEN) return json({ error: "לא הוגדר אסימון הפעלה", setup: SETUP }, 501);
-
   const rl = await rateLimit(env, `brief:${email}`, PER_HOUR, 3600);
   if (!rl.ok) return json({ error: `עד ${PER_HOUR} הפקות בשעה` }, 429);
+
+  // בלי אסימון: הבקשה נרשמת ל-KV ונתבעת בפעימה הקרובה. מפתח אחד בכוונה —
+  // שתי לחיצות עוקבות הן בקשה אחת, לא שתי מהדורות.
+  if (!env.GITHUB_DISPATCH_TOKEN) {
+    if (!env.USERS) return json({ error: "לא הוגדר אסימון הפעלה", setup: SETUP }, 501);
+    await env.USERS.put(QUEUE_KEY, JSON.stringify({
+      edition, at: new Date().toISOString(), by: email,
+    }), { expirationTtl: QUEUE_TTL });
+    return json({
+      ok: true,
+      edition,
+      queued: true,
+      label: LABEL[edition],
+      message: `נרשמה בקשה להפקת ברייף (${LABEL[edition]}). ההפקה מתחילה ${QUEUE_WAIT} ונמשכת 10–15 דקות.`,
+      runs: `https://github.com/${REPO}/actions/workflows/brief-request.yml`,
+    }, 202, NO_STORE);
+  }
 
   const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`, {
     method: "POST",

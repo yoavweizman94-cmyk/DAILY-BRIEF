@@ -1,0 +1,59 @@
+name: Brief Request
+
+# כפתור "הפק ברייף" באתר → ריצת ברייף, בלי אסימון GitHub חדש.
+#
+# הכפתור רץ ב-Cloudflare Pages, ומשם אי אפשר לשגר workflow בלי אסימון
+# שרק הבעלים יכול ליצור. לכן האתר כותב את הבקשה ל-KV — אותו מרחב שמות
+# שבו יושבים המשתמשים — והפעימה הזו קוראת אותה, מוחקת אותה ומריצה את
+# המהדורה. האסימון של Cloudflare כבר קיים כסוד בריפו.
+#
+# **פעימה ריקה היא זולה.** רוב הריצות מסתיימות תוך שניות: אין checkout
+# מלא, אין התקנות, רק קריאה אחת ל-API. העלות היא רעש ברשימת הריצות.
+#
+# כשיוגדר GITHUB_DISPATCH_TOKEN, האתר ישגר ישירות והכפתור יפעל מיד;
+# הפעימה הזו תישאר ותמצא תור ריק. שתי הדרכים חיות זו לצד זו בכוונה.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  push:
+    paths:
+      - ".trigger/brief-request.json"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: brief-request
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.kv.outputs.run }}
+      edition: ${{ steps.kv.outputs.edition }}
+    steps:
+      # רק הסקריפט, בלי היסטוריה ובלי שאר הריפו — זו ריצה שרצה 144 פעמים ביום.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/kv_request.py
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - name: Claim request
+        id: kv
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 scripts/kv_request.py
+
+  brief:
+    needs: poll
+    if: needs.poll.outputs.run == 'true'
+    uses: ./.github/workflows/daily-brief.yml
+    with:
+      edition: ${{ needs.poll.outputs.edition }}
+      source: kv
+    secrets: inherit

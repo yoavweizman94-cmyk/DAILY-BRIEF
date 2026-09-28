@@ -881,6 +881,7 @@ RUN_BRIEF = """<section class="runbrief" id="runbrief" hidden>
       });
       box.hidden = false;
       if (!d.ready) { go.disabled = true; say(d.setup || "לא הוגדר אסימון הפעלה", "warn"); }
+      else if (d.mode === "queued") { say("ההפקה מתחילה " + (d.wait || "בפעימה הקרובה")); }
     })
     .catch(function () { /* לא בעלים, או אין רשת — הפקד פשוט אינו מוצג */ });
   go.addEventListener("click", function () {
@@ -910,11 +911,11 @@ def main() -> int:
     # המיון הוא לפי (תאריך, סדר המהדורה) כדי שהחדשה ביותר תהיה ראשונה.
     # סדר כרונולוגי בתוך היום: מהדורת הלילה נכתבת ב-00:00 ולכן היא הראשונה,
     # לא האחרונה. מיון הפוך שהניח night>morning הציג ברייף ישן כעדכני ביותר.
-    ED_ORDER = {"night": 0, "": 1, "morning": 1, "close": 2}
+    ED_ORDER = {"night": 0, "": 1, "morning": 1, "midday": 2, "close": 3}
     ED_HE = {"": "בוקר", "morning": "בוקר", "midday": "צהריים", "close": "נעילה", "night": "לילה"}
     found = []
     for f in ROOT.glob("output/brief_*.md"):
-        m = re.match(r"brief_(\d{4}-\d{2}-\d{2})(?:-(morning|close|night))?\.md$", f.name)
+        m = re.match(r"brief_(\d{4}-\d{2}-\d{2})(?:-(morning|midday|close|night))?\.md$", f.name)
         if m:
             found.append((m.group(1), ED_ORDER.get(m.group(2) or "", 0), m.group(2) or "", f))
     found.sort(key=lambda x: (x[0], x[1]), reverse=True)

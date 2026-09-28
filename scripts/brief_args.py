@@ -8,6 +8,10 @@
   מתוזמנת שמוצאת ברייף טרי צריכה לדלג, אחרת שתי מהדורות של אותה שעה
   יכתבו זו על זו.
 · `workflow_dispatch` — הפרמטרים מה-inputs, והפקה כפויה.
+· `workflow_call` עם IN_SOURCE (הכפתור באתר, דרך KV) — כמו dispatch.
+  **הבדיקה על IN_SOURCE ולא על שם האירוע**: ריצה שנקראת יורשת את
+  event_name של הקוראת, ושם הוא "schedule" — כלומר בקשה מפורשת של
+  הבעלים הייתה נופלת לכללי התזמון ומדלגת על ברייף קיים.
 · `push` על קובץ הטריגר — הפרמטרים מהקובץ, והפקה כפויה. זהו מנגנון
   ההרצה היחיד שזמין בלי אסימון GitHub.
 
@@ -46,11 +50,12 @@ def main() -> int:
     event = os.environ.get("GITHUB_EVENT_NAME", "")
 
     topics_only = ""
-    if event == "workflow_dispatch":
+    source = (os.environ.get("IN_SOURCE") or "").strip()
+    if event == "workflow_dispatch" or source:
         edition = (os.environ.get("IN_EDITION") or "").strip()
         reviews = (os.environ.get("IN_REVIEWS") or "").strip()
         force = "1"
-        src = "workflow_dispatch"
+        src = source or "workflow_dispatch"
     elif event == "schedule":
         # המהדורה נקבעת מה-cron בשלב Resolve edition; כאן רק ברירות מחדל.
         edition, reviews, force, src = "", "", "", "schedule"

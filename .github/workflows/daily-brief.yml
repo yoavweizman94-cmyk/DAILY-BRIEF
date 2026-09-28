@@ -41,6 +41,24 @@ on:
         description: "כמה סקירות דוחות לכתוב בריצה (ריק = 0, כלומר בלחיצה בלבד)"
         required: false
         default: ""
+  # קריאה מ-brief-request.yml, שתובע בקשת הפקה שהכפתור באתר כתב ל-KV.
+  # `source` אינו קישוט: ריצה שנקראת יורשת את event_name של הקוראת
+  # ("schedule"), וברירת המחדל של schedule היא לדלג על ברייף קיים —
+  # כלומר בקשה מפורשת של הבעלים הייתה יוצאת ריקה.
+  workflow_call:
+    inputs:
+      edition:
+        type: string
+        required: false
+        default: ""
+      reviews:
+        type: string
+        required: false
+        default: ""
+      source:
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -95,6 +113,7 @@ jobs:
         env:
           IN_EDITION: ${{ inputs.edition }}
           IN_REVIEWS: ${{ inputs.reviews }}
+          IN_SOURCE: ${{ inputs.source }}
         run: |
           python scripts/brief_args.py > /tmp/brief.env
           cat /tmp/brief.env >> "$GITHUB_ENV"
