@@ -24,8 +24,8 @@ from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SOFT = float(os.environ.get("BRIEF_SOFT_USD") or 20)
-HARD = float(os.environ.get("BRIEF_HARD_USD") or 40)
+SOFT = float(os.environ.get("BRIEF_SOFT_USD") or 15)
+HARD = float(os.environ.get("BRIEF_HARD_USD") or 30)
 CHEAP = "claude-sonnet-5"
 
 
