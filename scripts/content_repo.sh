@@ -45,15 +45,28 @@ case "${1:-}" in
         for p in filings/manifest.json calls/upcoming.json; do
           git ls-files -u -- "$p" | grep -q . && { git checkout --theirs -- "$p" 2>/dev/null || true; git add -- "$p"; }
         done
+        # **יומן העלויות הוא קובץ שמוסיפים לו, לא קובץ שכותבים מחדש.**
+        # כל צינור מוסיף לו שורה, וכולם דוחפים לאותו ריפו; "שלהם מנצח"
+        # היה מוחק את השורה שנרשמה כאן. האיחוד שומר את שתי הגרסאות —
+        # וזה גם מה שהיה קורה אילו רצו בזו אחר זו.
+        while IFS= read -r p; do
+          [ -n "$p" ] || continue
+          { git show ":2:$p" 2>/dev/null; git show ":3:$p" 2>/dev/null; } \
+            | sort -u > "$p.merged" && mv "$p.merged" "$p" && git add -- "$p"
+        done < <(git diff --name-only --diff-filter=U -- 'costs/*.jsonl')
         if git diff --name-only --diff-filter=U | grep -q .; then
-          echo "קונפליקט שאינו בתוצר מחולל" >&2
+          # **הכשל הזה עלה כסף.** הניתוח כבר נכתב ושולם עליו, והוא נזרק
+          # כאן. הלוג דורש הזדהות, ולכן הסיבה חייבת לעלות לאנוטציה —
+          # אחרת "Save content failed" הוא כל מה שרואים מבחוץ.
+          echo "::error title=דחיפת התוכן נכשלה בקונפליקט::$(git diff --name-only --diff-filter=U | tr '\n' ' ')— התוצר של הריצה הזו לא נשמר."
           git diff --name-only --diff-filter=U >&2
           git rebase --abort; exit 1
         fi
         GIT_EDITOR=true git rebase --continue >/dev/null 2>&1 || git rebase --abort
       fi
     done
-    echo "דחיפת התוכן נכשלה" >&2; exit 1
+    echo "::error title=דחיפת התוכן נכשלה::ארבעה ניסיונות rebase לא עברו — התוצר של הריצה הזו לא נשמר."
+    exit 1
     ;;
   *)
     echo "שימוש: content_repo.sh pull|push [הודעת קומיט]" >&2; exit 2 ;;
