@@ -580,6 +580,31 @@ def clean(d: dict, names: set[str], numbered: list[dict], facts: dict | None = N
             c["direction"] = "ניטרלי"
         cos.append(c)
     d["companies"] = cos
+    # **impact — שם מהרשימה, ובסיס שאומר אמת.** החברה חייבת להיות ברשימת
+    # השרשרת, ו-basis שטוען "מוזכרת בפריט" נבדק מול הפריטים שצוטטו: טענה
+    # כזו על חברה שאף פריט אינו נוקב בשמה היא בדיוק מה שהקורא צריך לדעת
+    # שאינו כך, ולכן היא מורדת ל"דרך המנגנון" במקום להיפסל.
+    impacts = []
+    for r in d.get("impact") or []:
+        if not isinstance(r, dict):
+            continue
+        name = (r.get("name") or "").strip()
+        if name not in names or not (r.get("channel") or "").strip():
+            dropped += 1
+            continue
+        srcs_ok = srcs(r.get("sources"))
+        named = any(name in (numbered[k - 1].get("companies") or []) for k in srcs_ok)
+        impacts.append({
+            "name": name,
+            "channel": _strip_refs(r.get("channel")),
+            "magnitude": _strip_refs(r.get("magnitude") or ""),
+            "confirm": _strip_refs(r.get("confirm") or ""),
+            "basis": "מוזכרת בפריט" if named else "דרך המנגנון",
+            "direction": r.get("direction") if r.get("direction") in DIRECTIONS else "ניטרלי",
+            "sources": srcs_ok,
+        })
+    d["impact"] = impacts[:6]
+
     lz = d.get("leasing") if isinstance(d.get("leasing"), dict) else {}
     points = []
     for m in lz.get("points") or []:
@@ -723,14 +748,15 @@ def main() -> int:
            "model": os.environ.get("CLAUDE_MODEL") or "default",
            "effort": os.environ.get("AUTO_EFFORT") or "default", "cost_usd": meta.get("cost"),
            "registry_month": reg_month,
-           **{k: data.get(k) for k in ("headline", "overview", "israel", "world", "companies", "leasing",
-                                       "watch", "terms")},
+           **{k: data.get(k) for k in ("headline", "overview", "israel", "world", "companies",
+                                       "impact", "leasing", "watch", "terms")},
            "refs": refs}
     p = OUT / "analyses" / f"{now:%Y-%m}.jsonl"
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     print(f"::notice::סקירת הרכב: {len(data['israel'])} מגמות בישראל, {len(data['world'])} בעולם, "
+          f"{len(data.get('impact') or [])} חברות בסעיף ההשפעה, "
           f"{len(data['leasing']['points'])} תובנות ליסינג (רשם עד {reg_month or '—'}), "
           f"{len(data['companies'])} הערות חברה · {len(il)}+{len(world)} כותרות · ${cost:.2f} · {took:.0f} שניות")
     return 0
