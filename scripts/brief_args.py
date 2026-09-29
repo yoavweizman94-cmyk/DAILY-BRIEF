@@ -15,6 +15,11 @@
 · `push` על קובץ הטריגר — הפרמטרים מהקובץ, והפקה כפויה. זהו מנגנון
   ההרצה היחיד שזמין בלי אסימון GitHub.
 
+שדה `soft_usd` בקובץ הטריגר מעלה לריצה **אחת** את הסף שבו הבלם היומי
+מוריד למודל זול. הוא קיים בשביל המקרה שבו יום התחיל בבזבוז — ריצה
+שנקטעה, הטענה שנאכלה — ואז הבלם היה מוריד גם את המהדורה שבאמת חשובה.
+העקיפה מפורשת, לריצה אחת, ורשומה בקובץ.
+
 הפלט הוא שורות KEY=VALUE, לטעינה לסביבה של השלב.
 """
 from __future__ import annotations
@@ -50,6 +55,7 @@ def main() -> int:
     event = os.environ.get("GITHUB_EVENT_NAME", "")
 
     topics_only = ""
+    soft = ""
     source = (os.environ.get("IN_SOURCE") or "").strip()
     if event == "workflow_dispatch" or source:
         edition = (os.environ.get("IN_EDITION") or "").strip()
@@ -69,6 +75,7 @@ def main() -> int:
                       "ממשיכים בברירות מחדל", file=sys.stderr)
         edition = str(cfg.get("edition") or "").strip()
         reviews = str(cfg.get("reviews") or "").strip()
+        soft = str(cfg.get("soft_usd") or "").strip()
         force = "1"
         # **רענון עמודי הסקטור בלי לשלם על ברייף.** סיכומי הנושאים הם
         # קריאה אחת למודל; הברייף הוא הקריאה היקרה בצינור. כשהתיקון נוגע
@@ -107,6 +114,14 @@ def main() -> int:
     print(f"BRIEF_FORCE_IN={force}")
     print(f"BRIEF_SRC={src}")
     print(f"BRIEF_TOPICS_ONLY={topics_only}")
+    if soft and not soft.replace(".", "", 1).isdigit():
+        print(f"::warning::soft_usd={soft!r} אינו מספר — הבלם היומי נשאר כרגיל",
+              file=sys.stderr)
+        soft = ""
+    if soft:
+        print(f"::notice title=עקיפת הבלם היומי::הסף הרך הועלה ל-${soft} לריצה הזו",
+              file=sys.stderr)
+    print(f"BRIEF_SOFT_USD={soft}")
     return 0
 
 
