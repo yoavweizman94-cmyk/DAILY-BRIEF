@@ -56,12 +56,16 @@ RID_LABELS = {}
 
 
 def source_links(s, rids: dict) -> list[dict]:
-    """מזהה משאב → כתובת עמוד המשאב ב-data.gov.il.
+    """מזהה משאב → עמוד המאגר ב-data.gov.il.
 
-    ה-slug של מערך הנתונים אינו נגזר מהמזהה, ולכן הוא נפתר מול CKAN:
-    resource_show נותן את package_id, ו-package_show את שמו. כשהפתרון
-    נכשל — נשמרת כתובת ה-API של אותו משאב, שהיא תמיד תקפה ומובילה
-    לאותם נתונים; עדיף קישור פחות יפה מאשר ייחוס בלי קישור.
+    **הכתובת היא /datasets/<משרד>/<מאגר>.** ה-API של CKAN עונה על הנתיב
+    הישן (/dataset/<name>/resource/<id>), אבל האתר עצמו כבר אינו מגיש
+    אותו ומחזיר "העמוד שחיפשת לא נמצא" — נבדק בדפדפן 29/09/2026 מול
+    ארבעת המאגרים. לכן נדרשים שני שדות מ-package_show: name של המאגר
+    ו-organization.name של המשרד.
+
+    כשהפתרון נכשל נשמרת כתובת ה-API של אותו משאב: היא תמיד תקפה ומובילה
+    לאותם נתונים. עדיף קישור פחות יפה מייחוס בלי קישור.
     """
     out = []
     for label, rid in rids.items():
@@ -69,10 +73,12 @@ def source_links(s, rids: dict) -> list[dict]:
         try:
             res = s.get(f"{CKAN}/resource_show", params={"id": rid}, timeout=30).json()
             pkg_id = ((res.get("result") or {}).get("package_id") or "")
-            pkg = s.get(f"{CKAN}/package_show", params={"id": pkg_id}, timeout=30).json()
-            name = (pkg.get("result") or {}).get("name")
-            if name:
-                url = f"https://data.gov.il/dataset/{name}/resource/{rid}"
+            pkg = (s.get(f"{CKAN}/package_show", params={"id": pkg_id}, timeout=30)
+                   .json().get("result") or {})
+            name = pkg.get("name")
+            org = (pkg.get("organization") or {}).get("name")
+            if name and org:
+                url = f"https://data.gov.il/datasets/{org}/{name}"
         except Exception:  # noqa: BLE001
             pass
         out.append({"label": label, "url": url})
