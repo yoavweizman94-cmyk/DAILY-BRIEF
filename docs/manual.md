@@ -86,12 +86,28 @@ Actions → **Site Check** → Run workflow — היא רצה משרת של GitH
 תובע אותה כל עשר דקות ומריץ את המהדורה. כלומר ההפקה מתחילה תוך עד עשר דקות
 מהלחיצה. המסלול נבדק מקצה לקצה (כתיבה, קריאה ומחיקה) ב-28/09/2026.
 
-**אם תרצה שההפקה תתחיל מיד** במקום בפעימה הקרובה: ב-GitHub → Settings →
-Developer settings → **Fine-grained tokens** צור אסימון לריפו `DAILY-BRIEF`
-בלבד, עם הרשאת **Actions: Read and write**, והוסף אותו ב-Cloudflare Pages →
-forest-brief → Settings → Environment variables בשם `GITHUB_DISPATCH_TOKEN`
-(Production). האתר יזהה אותו לבד וישגר ישירות. זה שדרוג לזמן התגובה בלבד —
-הכפתור עובד גם בלעדיו.
+**ההמתנה אינה עשר דקות בפועל.** GitHub מריץ תזמונים בריפו הזה באיחור
+ובדילוגים — נמדד 28/09/2026 ש-`maya-watch`, שמתוזמן פעמיים בשעה, יצא ב-05:05,
+07:15, 13:38 ו-15:43, ושפעימת ה-10 דקות לא יצאה כלל במשך שעה וחצי. לחיצה
+נשמרת ב-KV ארבע שעות, אבל היא תיתבע כשהתזמון יואיל.
+
+**כדי שההפקה תתחיל מיד** צריך אסימון GitHub בצד Cloudflare. שלב ראשון בכל
+מקרה: GitHub → Settings → Developer settings → **Fine-grained tokens** →
+Generate, לריפו `DAILY-BRIEF` בלבד, הרשאת **Actions: Read and write**.
+
+ואז אחת משתיים:
+
+1. **ישירות ב-Cloudflare** — Workers & Pages → `forest-brief` → Settings →
+   **Variables and Secrets** (זה השם החדש; אין יותר "Environment variables")
+   → Add → Type **Secret** → שם `GITHUB_DISPATCH_TOKEN` → Deploy.
+2. **דרך GitHub, בלי למצוא כלום ב-Cloudflare** — Settings → Secrets and
+   variables → Actions → New repository secret, בשם **`DISPATCH_TOKEN`**
+   (GitHub דוחה שם שמתחיל ב-`GITHUB_`, ולכן השם שונה), ואז הרץ את
+   [Dispatch Token Sync](https://github.com/yoavweizman94-cmyk/DAILY-BRIEF/actions/workflows/dispatch-token-sync.yml)
+   — הוא מציב אותו בפרויקט ה-Pages בשם הנכון. הערך אינו מודפס בשום שלב.
+
+אחרי הפריסה הבאה האתר מזהה את האסימון לבד ועובר לשיגור ישיר. זה שדרוג
+לזמן התגובה — הכפתור עובד גם בלעדיו, רק לאט.
 
 **מ-GitHub:** [Actions → Daily Brief](https://github.com/yoavweizman94-cmyk/DAILY-BRIEF/actions/workflows/daily-brief.yml)
 → **Run workflow** → בשדה `edition` בחר `morning` / `midday` / `close` / `night`

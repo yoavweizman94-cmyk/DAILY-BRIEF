@@ -32,8 +32,9 @@ const QUEUE_TTL = 14400;         // ארבע שעות. שעתיים לא הספ�
 // עשר דקות זה לשקר לו, ולכן הניסוח אומר מה באמת ידוע.
 const QUEUE_WAIT = "בפעימה הקרובה של GitHub (לעיתים שעה ויותר)";
 const SETUP = "צור אסימון GitHub fine-grained לריפו DAILY-BRIEF עם הרשאת Actions: Read and write, "
-  + "והוסף אותו ב-Cloudflare Pages → Settings → Environment variables בשם GITHUB_DISPATCH_TOKEN. "
-  + "בלעדיו ההפקה עדיין עובדת, אבל מתחילה בפעימה הקרובה ולא מיד.";
+  + "והוסף אותו ב-Workers & Pages → forest-brief → Settings → Variables and Secrets "
+  + "(Secret, בשם GITHUB_DISPATCH_TOKEN) — או כסוד DISPATCH_TOKEN ב-GitHub, ואז הרץ "
+  + "את Dispatch Token Sync. בלעדיו ההפקה עובדת אך מתחילה בפעימה הקרובה ולא מיד.";
 
 async function requireOwner(request, env) {
   if (!env.SESSION_SECRET || !env.USERS) return { denied: json({ error: "לא מוגדר" }, 503) };

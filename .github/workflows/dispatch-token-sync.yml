@@ -1,0 +1,50 @@
+name: Dispatch Token Sync
+
+# מעביר את האסימון שמפעיל ברייף בלחיצה מ-GitHub ל-Cloudflare Pages.
+#
+# הכפתור באתר רץ ב-Cloudflare, ושיגור ריצה מ-GitHub דורש אסימון שיושב שם.
+# הוספתו בדשבורד דורשת למצוא מסך ששינה את שמו ("Variables and Secrets",
+# לא "Environment variables"), ואת החיפוש הזה אפשר לחסוך: הסוד נוסף פעם
+# אחת ב-GitHub → Settings → Secrets and variables → Actions, בשם
+# **DISPATCH_TOKEN**, והריצה הזו מציבה אותו בפרויקט ה-Pages בשם
+# GITHUB_DISPATCH_TOKEN.
+#
+# **שני שמות, ולא בטעות.** GitHub דוחה סוד ששמו מתחיל ב-GITHUB_, ולכן אצלו
+# הוא DISPATCH_TOKEN; הפונקציה באתר קוראת env.GITHUB_DISPATCH_TOKEN, ולכן
+# בצד Cloudflare זה השם. ההמרה נעשית כאן.
+#
+# הערך אינו מודפס ואינו נשמר בשום מקום אחר. האימות בסוף בודק שהשם קיים
+# ושסוגו מוצפן, לא את ערכו.
+#
+# אחרי ההצבה: הפריסה הבאה (כל דחיפה ל-main) מרימה את האתר עם האסימון,
+# ומאותו רגע לחיצה על "הפק" משגרת ריצה מיד במקום לחכות לתזמון של GitHub.
+on:
+  push:
+    paths:
+      - ".trigger/dispatch-token-sync.json"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dispatch-token-sync
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/pages_env.py
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - name: Put token into Pages
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VAR_NAME: GITHUB_DISPATCH_TOKEN
+          VAR_VALUE: ${{ secrets.DISPATCH_TOKEN }}
+        run: python3 scripts/pages_env.py
