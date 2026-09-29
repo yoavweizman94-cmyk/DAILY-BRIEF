@@ -58,6 +58,23 @@ def main() -> int:
     if not name:
         print("::error::VAR_NAME חסר")
         return 2
+
+    # בדיקה בלבד: האם המשתנה קיים. משמש את site-check כדי לדעת אם הכפתור
+    # באתר משגר מיד או ממתין לתזמון — בלי לגעת בערך ובלי להזדקק לו.
+    if os.environ.get("CHECK_ONLY"):
+        code, body = call("GET", f"/pages/projects/{PROJECT}")
+        cfg = (((body.get("result") or {}).get("deployment_configs") or {})
+               .get(ENVIRONMENT) or {}).get("env_vars") or {}
+        if code != 200:
+            print(f"::warning title=בדיקת הפרויקט נכשלה::קוד {code} — {errors(body)}")
+            return 0
+        if cfg.get(name):
+            print(f"::notice title=הכפתור משגר מיד::{name} מוגדר ב-{PROJECT}/{ENVIRONMENT}")
+        else:
+            print(f"::warning title=הכפתור ממתין לתזמון::{name} אינו מוגדר ב-{PROJECT}, "
+                  "ולכן לחיצה נרשמת ל-KV ומחכה לפעימה של GitHub (שמאחרת שעות)")
+        return 0
+
     if not value.strip():
         print(f"::error title=הסוד ריק::{name} אינו מוגדר כסוד ב-GitHub, "
               "ולכן אין מה להעביר ל-Cloudflare.")
