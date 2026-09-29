@@ -235,7 +235,7 @@ MARKER="$(mktemp)"
 # פעמים; שתיהן ב-Sonnet. נמדד 28/09/2026: מהדורה באופוס נחתכה בתקרה של $6.
 case "$EDITION" in
   midday|night) DEFAULT_MODEL="claude-sonnet-5"; DEFAULT_MAX="8" ;;
-  *)            DEFAULT_MODEL="claude-opus-5";   DEFAULT_MAX="12" ;;
+  *)            DEFAULT_MODEL="claude-opus-5";   DEFAULT_MAX="15" ;;
 esac
 BRIEF_MODEL="${CLAUDE_MODEL:-$DEFAULT_MODEL}"
 BRIEF_MAX_USD="${BRIEF_MAX_USD:-$DEFAULT_MAX}"

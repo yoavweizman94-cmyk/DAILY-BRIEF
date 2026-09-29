@@ -128,7 +128,7 @@ Generate, לריפו `DAILY-BRIEF` בלבד, הרשאת **Actions: Read and writ
 
 | עבודה | מודל | תקרה לקריאה |
 |---|---|---|
-| ברייף — בוקר ונעילה | `claude-opus-5` | `BRIEF_MAX_USD`, ברירת מחדל $12 |
+| ברייף — בוקר ונעילה | `claude-opus-5` | `BRIEF_MAX_USD`, ברירת מחדל $15 |
 | ברייף — צהריים ולילה | `claude-sonnet-5` | $8 |
 | סיכומי דיווחי מאיה | `claude-sonnet-5` | `SUMMARY_MAX_USD`, $1 |
 | סיכומי עמודי הסקטור (פעם ביום) | `claude-sonnet-5` | $1.5 |
