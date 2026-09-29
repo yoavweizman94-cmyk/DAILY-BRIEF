@@ -196,6 +196,12 @@ companies.txt (רשימת הכיסוי, הפרופילים והדרייברים)
 מונח מקצועי צר, ראשי תיבות או מדד ענפי מקבלים הסבר של חצי שורה בסוגריים בהופעה \
 הראשונה בברייף. \
 העומק הזה נמדד אוטומטית בבנייה: מספר האייטמים ומספר שורות הגוף לאייטם. \
+**כתוב את הברייף בכתיבה אחת.** הרכב אותו בשלמותו ואז Write יחיד לקובץ; \
+במדידה של 29/09 הורכב ברייף אחד מ-61 עריכות נפרדות, וכל עריכה שולחת מחדש \
+את כל ההקשר ומשלמת עליו שוב. תיקון אחרי הכתיבה — מעט עריכות וגדולות. \
+אל תפעיל תת-סוכנים (Agent/Task): כל אחד מהם הוא סשן בתשלום מלא על אותה \
+משימה. אל תקרא קבצי תמלול סשן תחת ~/.claude. אל תשתמש ב-Bash כדי לקרוא \
+או לסנן קבצים שאפשר לקרוא ישירות ב-Read או ב-Grep. \
 מקורות שנכשלו בשלב ה-ingest: ${FAILED[*]:-אין}."
 
 if ! command -v claude >/dev/null 2>&1; then
@@ -241,11 +247,22 @@ echo "מודל: $BRIEF_MODEL · תקרה: \$$BRIEF_MAX_USD · היום עד כה
 # claude_stream כותב יומן כלים — שמות ונתיבים בלבד, בלי תוכן, כי הלוג
 # ציבורי — ומסכם אילו יעדים נקראו שוב ושוב. יעד חוזר הוא לולאה, ולולאה
 # היא העלות. המעטפת עצמה נשמרת מהזרם, כך ששרשרת העלות אינה משתנה.
+# **מה שנחסם, ולמה.** יומן הכלים של 29/09 הראה מהדורה שנקטעה ב-$18.07
+# אחרי 163 קריאות כלים: Edit 61, Bash 60, Agent 5 — וקריאה לקובץ התמלול
+# של הסשן עצמו. אלה אינם עלות של חשיבה אלא של התנהלות:
+# · Agent — כל תת-סוכן הוא סשן משלו, בתשלום מלא, על אותה משימה.
+# · התמלול — קובץ שגדל בכל תור; קריאתו מכניסה את הסשן לתוך עצמו.
+# · WebSearch — החדשות מגיעות מה-ingest, לא מחיפוש; מעקה 1 ממילא אוסר
+#   מספרים ממקור שאינו בצנרת.
+# · ToolSearch — אין כאן כלים נדחים שצריך לטעון.
+# WebFetch נשאר: לפעמים צריך לפתוח גוף של ידיעה שהכותרת בלבד אינה מספיקה
+# לה, וזה בדיוק מה שמעקה 3 דורש.
 claude -p "$PROMPT" \
   --output-format stream-json --verbose \
   --mcp-config .mcp.json \
   --permission-mode acceptEdits \
-  --allowedTools "Read,Write,Edit,Glob,Grep,Skill,WebFetch,WebSearch,Bash(python:*),mcp__israel-statistics__*,mcp__nadlan__*" \
+  --allowedTools "Read,Write,Edit,Glob,Grep,Skill,WebFetch,Bash(python:*),mcp__israel-statistics__*,mcp__nadlan__*" \
+  --disallowedTools "Agent,Task,WebSearch,ToolSearch,Read(//home/runner/.claude/**),Read(~/.claude/**)" \
   --model "$BRIEF_MODEL" --max-budget-usd "$BRIEF_MAX_USD" \
   | python scripts/claude_stream.py "$ENVELOPE"
 CLAUDE_RC=${PIPESTATUS[0]}
