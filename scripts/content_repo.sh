@@ -38,7 +38,13 @@ case "${1:-}" in
     # שתי ריצות יכולות לכתוב במקביל (daily-brief ו-maya-watch בקבוצות
     # concurrency נפרדות). ניסיון חוזר עם rebase, ובקונפליקט על תוצר
     # מחולל מנצחת הגרסה החדשה — אותה הכרעה כמו ב-git_sync.sh.
-    for i in 1 2 3 4; do
+    # **ארבעה ניסיונות לא הספיקו.** ה-rebase עבר והדחיפה נדחתה שוב ושוב:
+    # שלושה צינורות שרצו יחד דחפו לאותו ריפו, וכל אחד הספיק להזיז את
+    # ה-remote בין ה-pull לבין ה-push של השני. זה מרוץ, לא קונפליקט, ולכן
+    # התשובה היא עוד ניסיונות והשהיה שמפזרת אותם — בלי זה שניים שמנסים
+    # שוב באותו רגע ממשיכים להתנגש.
+    for i in 1 2 3 4 5 6 7 8; do
+      [ "$i" -gt 1 ] && sleep $(( (RANDOM % 5) + i ))
       if git pull --rebase --quiet origin main 2>/dev/null; then
         git push --quiet origin main && { echo "התוכן נדחף (ניסיון $i)"; exit 0; }
       else
@@ -65,7 +71,7 @@ case "${1:-}" in
         GIT_EDITOR=true git rebase --continue >/dev/null 2>&1 || git rebase --abort
       fi
     done
-    echo "::error title=דחיפת התוכן נכשלה::ארבעה ניסיונות rebase לא עברו — התוצר של הריצה הזו לא נשמר."
+    echo "::error title=דחיפת התוכן נכשלה::שמונה ניסיונות לא עברו — התוצר של הריצה הזו לא נשמר."
     exit 1
     ;;
   *)
