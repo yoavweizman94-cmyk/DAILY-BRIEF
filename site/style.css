@@ -2067,3 +2067,23 @@ svg.cm-spark { width: 70px; height: 18px; color: var(--accent); }
 .runbrief .msg { color: var(--muted); }
 .runbrief .msg.ok { color: var(--up); }
 .runbrief .msg.warn { color: var(--warn); }
+
+/* --- עמוד הרכב: השפעה על החברות הנסחרות, וקישורי מקור הנתונים ----------- */
+/* הכרטיס מציג מנגנון ולא אזכור, ולכן שלוש שורות לו: הערוץ, סדר הגודל, ומה
+   יאשר. הבסיס — "מוזכרת בפריט" מול "דרך המנגנון" — הוא תג ולא טקסט, כי
+   הקורא צריך לראות ממבט אחד על מה הקריאה נשענת. */
+.au-impact .cc-head { flex-wrap: wrap; gap: 0.4rem; }
+.au-basis {
+  font-size: 0.68rem; font-weight: 600; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.5rem;
+  white-space: nowrap;
+}
+p.au-mag, p.au-conf { font-size: 0.82rem; line-height: 1.6; margin: 0.35rem 0; }
+p.au-conf { color: var(--muted); }
+p.au-mag b, p.au-conf b { color: var(--fg); font-weight: 600; }
+p.au-srclinks {
+  font-size: 0.76rem; line-height: 1.7; color: var(--faint);
+  margin: 0.8rem 0 0; padding-top: 0.6rem; border-top: 1px solid var(--line);
+}
+p.au-srclinks span { margin-inline-end: 0.3rem; }
+p.au-srclinks a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }

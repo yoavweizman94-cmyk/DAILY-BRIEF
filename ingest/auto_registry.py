@@ -48,6 +48,36 @@ from curl_cffi import requests as creq  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "output" / "auto" / "registry"
 API = "https://data.gov.il/api/3/action/datastore_search"
+CKAN = "https://data.gov.il/api/3/action"
+
+# שמות קריאים לטבלאות. "לפי נתוני הרשם" הוא ייחוס שאי אפשר לבדוק; הקישור
+# מביא את הקורא לטבלה שממנה חושב המספר.
+RID_LABELS = {}
+
+
+def source_links(s, rids: dict) -> list[dict]:
+    """מזהה משאב → כתובת עמוד המשאב ב-data.gov.il.
+
+    ה-slug של מערך הנתונים אינו נגזר מהמזהה, ולכן הוא נפתר מול CKAN:
+    resource_show נותן את package_id, ו-package_show את שמו. כשהפתרון
+    נכשל — נשמרת כתובת ה-API של אותו משאב, שהיא תמיד תקפה ומובילה
+    לאותם נתונים; עדיף קישור פחות יפה מאשר ייחוס בלי קישור.
+    """
+    out = []
+    for label, rid in rids.items():
+        url = f"{API}?resource_id={rid}&limit=5"
+        try:
+            res = s.get(f"{CKAN}/resource_show", params={"id": rid}, timeout=30).json()
+            pkg_id = ((res.get("result") or {}).get("package_id") or "")
+            pkg = s.get(f"{CKAN}/package_show", params={"id": pkg_id}, timeout=30).json()
+            name = (pkg.get("result") or {}).get("name")
+            if name:
+                url = f"https://data.gov.il/dataset/{name}/resource/{rid}"
+        except Exception:  # noqa: BLE001
+            pass
+        out.append({"label": label, "url": url})
+    return out
+
 RID_REG = "053cea08-09bc-40ec-8f7a-156f0677aff3"
 RID_PRICE = "39f455bf-6db0-4926-859d-017f34eacbcb"
 RID_MAKER = "d00812f4-58c5-4ce8-b16c-ac13ae52f9d8"
@@ -330,6 +360,9 @@ def main() -> int:
     keep = {f"{y:04d}-{m:02d}" for y, m in months}
     reg = {"updated": datetime.now(IL).isoformat(timespec="minutes"),
            "source": "משרד התחבורה — רשם כלי הרכב, data.gov.il",
+           "links": source_links(s, {"רישוי כלי רכב": RID_REG,
+                                     "מחירון היבואנים": RID_PRICE,
+                                     "טבלת התוצרים": RID_MAKER}),
            "months": {k: done[k] for k in sorted(done) if k in keep}}
     _save(reg_p, reg)
 
@@ -354,6 +387,7 @@ def main() -> int:
     dkeep = {f"{y:04d}-{m:02d}" for y, m in dmonths}
     disp = {"updated": datetime.now(IL).isoformat(timespec="minutes"),
             "source": "משרד התחבורה — היסטוריית כלי רכב פרטיים, data.gov.il",
+            "links": source_links(s, {"היסטוריית בעלות": RID_HIST}),
             "months": {k: ddone[k] for k in sorted(ddone) if k in dkeep}}
     _save(disp_p, disp)
 

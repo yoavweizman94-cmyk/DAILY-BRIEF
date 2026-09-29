@@ -171,6 +171,27 @@ def _cos_html(names) -> str:
 # הכותרות שעליהן נשענה הסקירה.
 
 SRC_REG = "משרד התחבורה — רשם כלי הרכב, מחירון היבואנים והיסטוריית הבעלויות (data.gov.il)"
+
+
+def reg_links_html(registry: dict) -> str:
+    """קישורים לעמודי המשאב עצמם ב-data.gov.il.
+
+    "לפי נתוני הרשם" הוא ייחוס שאי אפשר לבדוק. הקישורים נפתרים בזמן ה-ingest
+    (ingest/auto_registry.py) ונשמרים לצד הנתונים, כך שהקורא מגיע לטבלה שממנה
+    חושב המספר ולא לעמוד הבית של data.gov.il.
+    """
+    seen, out = set(), []
+    for src in (registry or {}).values():
+        for ln in (src or {}).get("links") or []:
+            url, label = ln.get("url"), ln.get("label") or "מקור"
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            out.append(f'<a href="{escape(url)}" target="_blank" rel="noopener">{escape(label)}</a>')
+    if not out:
+        return ""
+    return ('<p class="au-srclinks"><span>הטבלאות עצמן ב-data.gov.il:</span> '
+            + " · ".join(out) + "</p>")
 SRC_REG_SHORT = "משרד התחבורה (data.gov.il)"
 SRC_AI = "ניתוח — TLV TASE View"
 
@@ -288,6 +309,39 @@ def trends_html(a: dict | None, key: str, title: str, anchor: str, sub: str) -> 
         return ""
     return (f'<h2 id="{anchor}">{title}</h2><p class="cbs-sub">{sub}</p>' + export_trends(a, key, title)
             + f'<div class="cbs-cards">{"".join(cards)}</div>')
+
+
+def impact_html(a: dict | None) -> str:
+    """מה המגמות של היום עושות לכל חברה נסחרת — ערוץ, גודל, ומה יאשר.
+
+    זה הסעיף שבשבילו נכתבת הסקירה: קורא מקצועי יודע לקרוא כותרות בעצמו,
+    ומה שהוא קונה הוא המעבר מהכותרת לשורה בדוח. הסעיף נפרד מ"החברות
+    בשרשרת" — שם נספרים אזכורים, כאן נכתב מנגנון.
+
+    **הבסיס מוצג ואינו מוסתר.** קריאה שנשענת על מפת השרשרת ולא על פריט
+    שמזכיר את החברה בשמה מסומנת ככזו, כי ההבדל הזה משנה כמה אפשר להישען
+    עליה.
+    """
+    rows = [r for r in (a or {}).get("impact") or [] if isinstance(r, dict) and r.get("name")]
+    if not rows:
+        return ""
+    refs = (a or {}).get("refs") or {}
+    cards = []
+    for r in rows:
+        basis = escape(str(r.get("basis") or ""))
+        badge = (f'<span class="au-basis">{basis}</span>' if basis else "")
+        mag = (f'<p class="au-mag"><b>גודל:</b> {_txt(r["magnitude"])}</p>'
+               if r.get("magnitude") else "")
+        conf = (f'<p class="au-conf"><b>מה יאשר או יפריך:</b> {_txt(r["confirm"])}</p>'
+                if r.get("confirm") else "")
+        cards.append(
+            f'<div class="cbs-card au-impact"><div class="cc-head">'
+            f'<h3>{escape(str(r.get("name")))}</h3>{_dir(r.get("direction"))}{badge}</div>'
+            f'{_para(r.get("channel"))}{mag}{conf}{_sources_html(r.get("sources"), refs)}</div>')
+    return ('<h2 id="au-impact">השפעה על החברות הנסחרות</h2>'
+            '<p class="cbs-sub">דרך איזו שורה בדוח עוברת כל מגמה, מה סדר הגודל, ומה יאשר או '
+            'יפריך את הקריאה. ניתוח השפעה, לא המלצת השקעה.</p>'
+            f'<div class="cbs-cards">{"".join(cards)}</div>')
 
 
 def chain_html(cfg: dict, items: list[dict], a: dict | None) -> str:
@@ -778,7 +832,8 @@ def leasing_html(data: dict, a: dict | None) -> str:
     return ('<h2 id="au-lease">ליסינג והשכרה</h2>'
             '<p class="cbs-sub">שתי הזרימות שקובעות את כלכלת הצי — מה הציים קונים ומה הם מוכרים — מנתוני רשם כלי '
             'הרכב, ומה זה אומר לחברות: חברות הליסינג, היבואניות שמוכרות להן, האשראי לרכב והמבטחות.</p>'
-            + exp["month"] + ai + strip + charts + importers + brand_tbl + disp_tbl + method)
+            + exp["month"] + ai + strip + charts + importers + brand_tbl + disp_tbl + method
+            + reg_links_html(data.get("registry") or {}))
 
 
 def _item_html(r: dict, labels: dict, classes: dict | None = None) -> str:
@@ -908,8 +963,10 @@ def page(data: dict) -> str:
     world = trends_html(a, "world", "מגמות בעולם", "au-world",
                         "מכסים, ייצור ושרשרת אספקה, סוללות ויצרנים סיניים — ואיך כל אחת מגיעה לחברות בישראל.")
     lease = leasing_html(data, a)
+    impact = impact_html(a)
     toc = [("au-now", "תמונת מצב", True), ("au-lease", "ליסינג והשכרה", lease),
-           ("au-il", "ישראל", il), ("au-world", "עולם", world),
+           ("au-il", "ישראל", il), ("au-impact", "השפעה על החברות", impact),
+           ("au-world", "עולם", world),
            ("au-chain", "החברות בשרשרת", True), ("au-news", "כותרות", True)]
     return "\n".join(x for x in [
         '<div class="dash-head"><h1>ענף הרכב</h1>'
@@ -923,6 +980,7 @@ def page(data: dict) -> str:
         now_html(a, state),
         lease,
         il,
+        impact,
         world,
         chain_html(cfg, items, a),
         headlines_html(cfg, items),
