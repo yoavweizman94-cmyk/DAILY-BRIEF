@@ -594,10 +594,25 @@ def clean(d: dict, names: set[str], numbered: list[dict], facts: dict | None = N
             continue
         srcs_ok = srcs(r.get("sources"))
         named = any(name in (numbered[k - 1].get("companies") or []) for k in srcs_ok)
+        channel = _strip_refs(r.get("channel"))
+        magnitude = _strip_refs(r.get("magnitude") or "")
+        # **מספר בסעיף הזה מגיע לקורא כעובדה על חברה מסוימת**, ולכן הוא עובר
+        # את אותה בדיקה כמו הליסינג: מספר שאינו בבלוק הרשם או בכותרות — נפסל.
+        # בערוץ — כל הפריט נופל, כי המנגנון נשען עליו; בגודל — רק המספר,
+        # והשדה אומר במפורש שאין כימות במקום להציג מספר שלא נבדק.
+        if facts:
+            bad = number_problems(channel, facts, allowed)
+            if bad:
+                problems += [f"השפעה ({name}): {b}" for b in bad]
+                continue
+            bad = number_problems(magnitude, facts, allowed)
+            if bad:
+                problems += [f"השפעה ({name}), גודל: {b}" for b in bad]
+                magnitude = "לא ניתן לכמת מהנתונים כאן."
         impacts.append({
             "name": name,
-            "channel": _strip_refs(r.get("channel")),
-            "magnitude": _strip_refs(r.get("magnitude") or ""),
+            "channel": channel,
+            "magnitude": magnitude,
             "confirm": _strip_refs(r.get("confirm") or ""),
             "basis": "מוזכרת בפריט" if named else "דרך המנגנון",
             "direction": r.get("direction") if r.get("direction") in DIRECTIONS else "ניטרלי",
