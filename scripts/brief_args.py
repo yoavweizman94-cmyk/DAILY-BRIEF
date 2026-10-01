@@ -20,6 +20,11 @@
 שנקטעה, הטענה שנאכלה — ואז הבלם היה מוריד גם את המהדורה שבאמת חשובה.
 העקיפה מפורשת, לריצה אחת, ורשומה בקובץ.
 
+שדה `hard_usd` עושה אותו דבר לסף שמעליו לא מופק ברייף כלל. הוא נדרש
+כשהיום כבר עבר את הסף הקשה בגלל ריצות שלא היו צריכות לרוץ — 01/10/2026:
+$15.35 על מהדורות שנמסרו מ-GitHub באיחור של שעות — והמהדורה שבאמת
+חשובה הייתה נחסמת בגללן.
+
 הפלט הוא שורות KEY=VALUE, לטעינה לסביבה של השלב.
 """
 from __future__ import annotations
@@ -55,7 +60,7 @@ def main() -> int:
     event = os.environ.get("GITHUB_EVENT_NAME", "")
 
     topics_only = ""
-    soft = ""
+    soft = hard = ""
     source = (os.environ.get("IN_SOURCE") or "").strip()
     if event == "workflow_dispatch" or source:
         edition = (os.environ.get("IN_EDITION") or "").strip()
@@ -76,6 +81,7 @@ def main() -> int:
         edition = str(cfg.get("edition") or "").strip()
         reviews = str(cfg.get("reviews") or "").strip()
         soft = str(cfg.get("soft_usd") or "").strip()
+        hard = str(cfg.get("hard_usd") or "").strip()
         force = "1"
         # **רענון עמודי הסקטור בלי לשלם על ברייף.** סיכומי הנושאים הם
         # קריאה אחת למודל; הברייף הוא הקריאה היקרה בצינור. כשהתיקון נוגע
@@ -122,6 +128,14 @@ def main() -> int:
         print(f"::notice title=עקיפת הבלם היומי::הסף הרך הועלה ל-${soft} לריצה הזו",
               file=sys.stderr)
     print(f"BRIEF_SOFT_USD={soft}")
+    if hard and not hard.replace(".", "", 1).isdigit():
+        print(f"::warning::hard_usd={hard!r} אינו מספר — הבלם היומי נשאר כרגיל",
+              file=sys.stderr)
+        hard = ""
+    if hard:
+        print(f"::notice title=עקיפת הבלם הקשה::הסף שמעליו לא מופק ברייף הועלה ל-${hard} "
+              "לריצה הזו", file=sys.stderr)
+    print(f"BRIEF_HARD_USD={hard}")
     return 0
 
 

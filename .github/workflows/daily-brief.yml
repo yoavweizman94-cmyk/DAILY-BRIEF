@@ -159,6 +159,7 @@ jobs:
           # הרך לריצה אחת, כשיום שהתחיל בבזבוז היה מוריד גם את המהדורה
           # שחשובה באמת. ראה scripts/cost_guard.py.
           BRIEF_SOFT_USD: ${{ env.BRIEF_SOFT_USD }}
+          BRIEF_HARD_USD: ${{ env.BRIEF_HARD_USD }}
           # Govmap חוסם את טווחי הענן של הראנרים; הסריקה עוברת דרך
           # Cloudflare Functions של האתר.
           GOVMAP_PROXY: https://app.tlvtaseview.com/api/govmap
