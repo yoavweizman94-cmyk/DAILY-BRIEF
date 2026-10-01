@@ -336,7 +336,10 @@ python scripts/publish_news.py   || echo "::warning title=סיווג החדשו�
 # זזים בין מהדורה למהדורה, אבל הסיכום רץ בכל אחת מארבע — שלוש קריאות מודל
 # שנזרקות. כשהקובץ של היום כבר קיים, מדלגים; אם ריצה קודמת נכשלה הוא חסר,
 # והריצה הבאה תכתוב אותו.
-if [ -f "output/topics/${DATE}.json" ]; then
+# **TOPICS_ONLY עוקף את הדילוג.** זו בקשה מפורשת לרענן את עמודי הסקטור —
+# למשל אחרי שנוספה חברה לנושא — והדילוג היומי היה הופך אותה לריצה שלא
+# עושה דבר עד מחר.
+if [ -f "output/topics/${DATE}.json" ] && [ -z "${TOPICS_ONLY:-}" ]; then
   echo "סיכומי הנושאים של $DATE כבר נכתבו — מדלגים."
 else
   python scripts/summarize_topics.py   || echo "::warning title=סיכומי הנושאים לא נכתבו::עמודי הסקטור יציגו את הסיכום הקודם. בדוק את הפלט של scripts/summarize_topics.py בשלב הזה."

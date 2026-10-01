@@ -60,7 +60,7 @@ topics:
                megawatt, gigawatt, חשמל, סולארי, אנרגיה מתחדשת, רשות החשמל, מגה-וואט]
   - slug: polymers
     label: פולימרים ופלסטיק
-    companies: [פלרם, פלסאון תעשיות, רימוני, פלסטופיל, אבגול, ספאנטק, עלבד]
+    companies: [פלרם, פלסאון תעשיות, רימוני, פלסטופיל, אבגול, ספאנטק, עלבד, פולירם]
     keywords: [polymer, plastic, resin, polyethylene, polypropylene, PVC,
                polycarbonate, nonwoven, spunlace, פלסטיק, פולימר, לא-ארוג, פוליפרופילן]
   - slug: building-materials
@@ -70,7 +70,7 @@ topics:
                מלט, בטון, אגרגט, מחצבה, עץ לבנייה, תשומות בנייה]
   - slug: metals
     label: מתכות
-    companies: [קליל, עשות, שיכון ובינוי]
+    companies: [קליל, עשות, שיכון ובינוי, סקופ]
     keywords: [aluminium, aluminum, steel, copper, LME, scrap metal, iron ore,
                אלומיניום, פלדה, נחושת, ברזל, גרוטאות]
   - slug: shipping

@@ -731,7 +731,7 @@ def companies_html(cfg: dict, te: dict, wb: dict, a: dict | None, snap: dict | N
            if note_cards else "")
     return ('<h2 id="cm-cos">החברות והחשיפות</h2>'
             '<p class="cbs-sub">החברות הנסחרות בתל אביב לפי הסחורה שמזיזה אותן, והצד שלהן: יצרן מרוויח ממחיר גבוה, '
-            'צרכן משלם אותו, ובית זיקוק או משלח תלויים במרווח ולא במחיר. לצד כל קבוצה — המחירים הרלוונטיים עכשיו.</p>'
+            'צרכן משלם אותו, ובית זיקוק, משלח או משווק מהמלאי תלויים במרווח ולא במחיר. לצד כל קבוצה — המחירים הרלוונטיים עכשיו.</p>'
             + export_companies(cfg, te, wb, a, snap or {}) + top + f'<div class="au-chain cm-exps">{"".join(blocks)}</div>')
 
 

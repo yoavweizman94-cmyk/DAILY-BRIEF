@@ -1100,11 +1100,18 @@ companies:
   tase_sector: ביטוח
   maya_company_id: 1608
 - name_he: סקופ
+  name_en: Scope Metals Group
+  aliases:
+  - סקופ מתכות
   listing: TASE
   tase_id: 288019
   sector: trade_distribution
   tase_sector: מסחר ושרותים-מסחר
   generic_name: true
+  drivers_extra:
+  - aluminum_lme
+  - steel
+  - copper_lme
   maya_company_id: 288
 - name_he: אקויטל
   listing: TASE
@@ -1868,6 +1875,9 @@ companies:
   tase_sector: מסחר ושרותים-מלונאות ותיירות
   maya_company_id: 1435
 - name_he: פולירם
+  name_en: Polyram Plastic Industries
+  aliases:
+  - פולירם תעשיות פלסטיק
   listing: TASE
   tase_id: 1170216
   sector: industrials_plastics
