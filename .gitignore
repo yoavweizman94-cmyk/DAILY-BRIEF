@@ -204,3 +204,6 @@ output/
 ~$*.xls*
 *.xlsx
 *.xlsm
+
+# סימן של run_daily.sh: הריצה יצאה כי המהדורה כבר קיימת
+.brief_skip
