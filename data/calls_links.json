@@ -1,12 +1,4 @@
 {
- "1766778": {
-  "link": "https://us02web.zoom.us/webinar/register/WN_-icZjIg0S3-hONB3tbFxKA",
-  "certain": true,
-  "known": [
-   "https://us02web.zoom.us/webinar/register/WN_-icZjIg0S3-hONB3tbFxKA"
-  ],
-  "others": []
- },
  "1768670": {
   "link": "https://gk-biz.zoom.us/webinar/register/WN_FCBssrviRvqHhqou9v17NQ",
   "certain": true,
@@ -67,5 +59,11 @@
    "https://www.globenewswire.com/Tracker?data=HsM23zHymUoMhwuuTyVFzuetSOl7_McgCGRwzd7DjnjAzz6xR9jmGEDK3-hJAnL4CrYCM6DZqSTmOUxUn20jVw==",
    "https://www.globenewswire.com/Tracker?data=HsM23zHymUoMhwuuTyVFzv1OnqtR0ixPV2StV7oirc0MRbisGiAkm74mri4QjLRaUE0SB3MJdBh1nwhET3lBbw=="
   ]
+ },
+ "1773509": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": []
  }
 }
