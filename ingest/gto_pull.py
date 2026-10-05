@@ -150,6 +150,7 @@ def _hidden_rows(path: Path, wait_s: int = 120) -> tuple[list[list], str] | None
     pythoncom.CoInitialize()
     xl = win32com.client.DispatchEx("Excel.Application")
     wb = None
+    pid = _excel_pid(xl)
     try:
         xl.Visible = False
         xl.DisplayAlerts = False
@@ -157,10 +158,14 @@ def _hidden_rows(path: Path, wait_s: int = 120) -> tuple[list[list], str] | None
         wb = xl.Workbooks.Open(str(path), 0, True)
         deadline = time.time() + wait_s
         while time.time() < deadline:
+            # **רענון הוא ניסיון, לא תנאי.** בקשירה מאוחרת pywin32 לפעמים מפעיל
+            # מתודה כ-property ומחזיר את תוצאתה, וה-"()" שאחריה נכשל ב-TypeError
+            # ("'bool' object is not callable", 05/10/2026 ב-17:00 וב-18:00, בין
+            # קריאה מוצלחת ב-17:30). הרענון עצמו כבר רץ; רק הקריאה לתוצאה נכשלת.
             for f in (lambda: xl.RTD.RefreshData(), lambda: xl.CalculateFull()):
                 try:
                     f()
-                except pythoncom.com_error:
+                except Exception:  # noqa: BLE001
                     pass
             got = _read_workbook(wb)
             if got:
@@ -179,12 +184,43 @@ def _hidden_rows(path: Path, wait_s: int = 120) -> tuple[list[list], str] | None
         try:
             if wb is not None:
                 wb.Close(False)
-        except pythoncom.com_error:
+        except Exception:  # noqa: BLE001 — אותה קשירה מאוחרת כמו ברענון
             pass
         try:
             xl.Quit()
-        except pythoncom.com_error:
+        except Exception:  # noqa: BLE001
             pass
+        _reap(pid)
+
+
+def _excel_pid(xl) -> int | None:
+    """מזהה התהליך של מופע Excel שהסקריפט פתח — דרך החלון שלו."""
+    try:
+        import win32process
+        return win32process.GetWindowThreadProcessId(int(xl.Hwnd))[1]
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _reap(pid: int | None) -> None:
+    """סוגר בכוח את המופע הנסתר אם Quit לא סגר אותו.
+
+    **רק את המופע שהסקריפט עצמו פתח**, לפי ה-PID שנלקח מהחלון שלו — לעולם לא
+    Excel של המשתמש. ב-05/10/2026 נשאר מופע נסתר מהריצה של 16:30 פתוח שעות,
+    מחזיק את החוברת לקריאה, ושתי הריצות שאחריו נכשלו."""
+    if not pid:
+        return
+    time.sleep(2)
+    try:
+        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True,
+                             text=True, timeout=20,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+        if "excel" in out.lower():
+            subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True, timeout=20,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            log(f"מופע Excel נסתר ({pid}) לא נסגר ב-Quit — נסגר בכוח")
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 def _saved_rows(path: Path) -> tuple[list[list], str]:
@@ -427,7 +463,12 @@ def main() -> int:
     try:
         snap = collect(path)
     except Exception as e:  # noqa: BLE001
-        log(f"קריאת החוברת נכשלה: {type(e).__name__}: {e}")
+        # השורה שבה זה קרה: "TypeError: 'bool' object is not callable" לבדו
+        # לא אמר אם זה הרענון, הסגירה או הקריאה עצמה.
+        import traceback
+        tb = traceback.extract_tb(e.__traceback__)
+        where = f" (שורה {tb[-1].lineno}, {tb[-1].name})" if tb else ""
+        log(f"קריאת החוברת נכשלה: {type(e).__name__}: {e}{where}")
         return 1
 
     total = sum(r["value"] or 0 for r in snap["records"])
