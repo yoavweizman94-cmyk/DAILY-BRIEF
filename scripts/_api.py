@@ -50,10 +50,7 @@ def ask_json(system: str, data: str, schema: dict, *, job: str, max_tokens: int 
                                    max_usd=max_usd, schema=schema, stdin=data, max_turns=3)
         if err:
             return None, err, float(meta.get("cost") or 0)
-        try:
-            return json.loads(text or ""), None, float(meta.get("cost") or 0)
-        except ValueError:
-            return None, f"פלט שאינו JSON ({len(text or '')} תווים)", float(meta.get("cost") or 0)
+        return _parse(text or "", float(meta.get("cost") or 0))
 
     import anthropic  # רק כשיש מפתח: הרצה מקומית בלי מפתח אינה צריכה את הספרייה
 
@@ -78,7 +75,21 @@ def ask_json(system: str, data: str, schema: dict, *, job: str, max_tokens: int 
     if msg.stop_reason == "refusal":
         return None, "סירוב", usd
     text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+    return _parse(text, usd)
+
+
+def _parse(text: str, usd: float) -> tuple[dict | None, str | None, float]:
+    """JSON מהתשובה. סובלני לגדר markdown ולטקסט שאחרי האובייקט; בכשל — המקום
+    והסיבה בלבד, בלי הטקסט עצמו (הלוג ציבורי, והטקסט הוא התוכן)."""
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.split("\n", 1)[1] if "\n" in t else ""
+        t = t.rsplit("```", 1)[0]
+    start = t.find("{")
     try:
-        return json.loads(text), None, usd
-    except ValueError:
-        return None, f"פלט שאינו JSON ({len(text)} תווים)", usd
+        obj, _end = json.JSONDecoder().raw_decode(t[start:] if start >= 0 else t)
+        return obj, None, usd
+    except ValueError as e:
+        msg = getattr(e, "msg", type(e).__name__)
+        pos = getattr(e, "pos", None)
+        return None, f"פלט שאינו JSON ({len(text)} תווים; {msg} בתו {pos})", usd

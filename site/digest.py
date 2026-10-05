@@ -116,25 +116,28 @@ def page(data: dict) -> str:
     if not items:
         return "\n".join([head, lead, '<p class="au-quiet">טרם נבחרו כותרות. העמוד מתעדכן כל שלוש שעות.</p>'])
 
-    domains = [d for d in cfg.get("domains") or [] if any(r["domain"] == d for r in items)]
+    # התחום נשמר כמפתח באנגלית (config/digest.yaml), והתווית נלקחת מהתצורה —
+    # כך שינוי ניסוח של תווית חל גם על כותרות שכבר נשמרו
+    label = {d["key"]: d["label"] for d in cfg.get("domains") or []}
+    domains = [k for k in label if any(r["domain"] == k for r in items)]
     toc = ('<nav class="cbs-toc" aria-label="תחומים">'
-           + "".join(f'<a href="#dg-d{i}">{escape(d)} <span class="au-cnt">'
-                     f'{sum(1 for r in items if r["domain"] == d)}</span></a>'
-                     for i, d in enumerate(domains)) + "</nav>")
+           + "".join(f'<a href="#dg-{k}">{escape(label[k])} <span class="au-cnt">'
+                     f'{sum(1 for r in items if r["domain"] == k)}</span></a>'
+                     for k in domains) + "</nav>")
 
     must = [r for r in items if r.get("level") == 3]
     must_html = ""
     if must:
         lis = "".join(f'<li><span class="dg-time">{_when(r.get("ts"), today)}</span>'
                       f'<a href="#{escape(r["id"])}" dir="auto">{_txt(r["headline"])}</a>'
-                      f'<span class="dg-dtag">{escape(r["domain"])} · {escape(r["region"])}</span></li>'
+                      f'<span class="dg-dtag">{escape(label.get(r["domain"], ""))} · {escape(r["region"])}</span></li>'
                       for r in must)
         must_html = (f'<h2 id="dg-must">חשוב היום <span class="au-cnt">{len(must)}</span></h2>'
                      f'<ul class="dg-must">{lis}</ul>')
 
     secs = []
-    for i, d in enumerate(domains):
-        rows = [r for r in items if r["domain"] == d]
+    for k in domains:
+        rows = [r for r in items if r["domain"] == k]
         cols = []
         for reg in REGIONS:
             rr = [r for r in rows if r.get("region") == reg]
@@ -142,7 +145,7 @@ def page(data: dict) -> str:
                 cols.append(f'<div class="dg-col"><h3 class="dg-reg">{reg} <span class="au-cnt">{len(rr)}</span></h3>'
                             + "".join(_item(r, latest, today) for r in rr) + "</div>")
         cls = "dg-cols" + (" one" if len(cols) == 1 else "")
-        secs.append(f'<section class="dg-dom" id="dg-d{i}"><h2>{escape(d)} '
+        secs.append(f'<section class="dg-dom" id="dg-{k}"><h2>{escape(label[k])} '
                     f'<span class="au-cnt">{len(rows)}</span></h2><div class="{cls}">{"".join(cols)}</div></section>')
 
     src = (f'<p class="au-src">מקורות: {escape(", ".join(names))}. הבחירה והתמצית: TLV TASE View, '

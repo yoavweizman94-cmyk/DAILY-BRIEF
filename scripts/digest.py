@@ -87,6 +87,7 @@ PROMPT = """אתה עורך הכותרות של TLV TASE View. הקהל: מנה�
 
 
 def schema(domains: list[str]) -> dict:
+    """domains — מפתחות התחומים באנגלית (config/digest.yaml), לא התוויות."""
     return {
         "type": "object", "additionalProperties": False, "required": ["items"],
         "properties": {"items": {"type": "array", "items": {
@@ -213,10 +214,14 @@ def recent(now: datetime, hours: int = 24) -> list[dict]:
 
 
 def select(items: list[dict], cfg: dict, published: list[dict]) -> tuple[list[dict] | None, dict]:
-    domains = list(cfg["domains"])
+    # המודל עונה במפתח התחום באנגלית; התווית העברית היא של העמוד בלבד
+    labels = {d["key"]: d["label"] for d in cfg["domains"]}
+    domains = list(labels)
     cov, names = coverage_block()
     done = "\n".join(f"- [{r['domain']}] {r['headline']}" for r in published) or "— אין"
-    data = (f"=== חברות הכיסוי לפי סקטור ===\n{cov}\n\n"
+    data = ("=== התחומים (domain — המפתח באנגלית) ===\n"
+            + "\n".join(f"{k} — {v}" for k, v in labels.items())
+            + f"\n\n=== חברות הכיסוי לפי סקטור ===\n{cov}\n\n"
             f"=== כבר פורסם ב-24 השעות האחרונות ===\n{done}\n\n"
             f"=== פריטים חדשים ({len(items)}) ===\n{items_block(items)}")
     res, err, usd = _api.ask_json(PROMPT, data, schema(domains), job="digest", max_tokens=12000,
