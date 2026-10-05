@@ -99,7 +99,11 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_MODEL: claude-sonnet-5
           AUTO_EFFORT: medium
-          AUTO_MAX_USD: "1"
+          # **מקום לניסיון חוזר אחד.** סקירה רגילה היא תור אחד ב-$0.61–0.65
+          # (נמדד 01–02/10/2026). פלט שלא עובר את הסכמה מחייב תור נוסף על
+          # אותו קלט, ותקרה של $1 חתכה ב-05/10 סקירה בת שלושה תורות ב-$1.50 —
+          # כלומר כל ניסיון חוזר זרק את הסקירה כולה, אחרי ששולם עליה.
+          AUTO_MAX_USD: "2"
         run: |
           set +e
           python scripts/analyze_auto.py 2>&1 | tee analyze.log
