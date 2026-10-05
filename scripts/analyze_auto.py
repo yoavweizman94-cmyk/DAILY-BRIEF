@@ -148,7 +148,8 @@ PROMPT = """אתה אנליסט ענף הרכב של TLV TASE View, שירות �
   · channel — שני משפטים: דרך איזו שורה בדוח זה עובר. לא "השפעה שלילית" אלא
     "מחיר יבוא דולרי מול מלאי שנרכש בשער נמוך יותר — מרווח גולמי ברבעון הבא".
   · magnitude — מה הסדר גודל, ועל מה הוא נשען. כשאי אפשר לכמת מהפריטים: "לא
-    ניתן לכמת מהנתונים כאן".
+    ניתן לכמת מהנתונים כאן". ליבואנית נסחרת, נתח המסירות שלה בבלוק (החודש האחרון
+    ואשתקד) הוא העוגן הישיר לשורת ההכנסות — מותר לצטט אותו, עם החודש שלו.
   · basis — **שקיפות, לא קישוט**: "מוזכרת בפריט" כשהחברה נקובה בשם באחד
     הפריטים, או "דרך המנגנון" כשהקשר נגזר ממפת השרשרת בלבד. אל תכתוב "מוזכרת
     בפריט" בלי שהיא באמת שם.
@@ -392,6 +393,45 @@ def registry_text(cfg: dict) -> tuple[str, str | None, dict | None]:
         note("", "num", cnt)
         note("", "pct", now_s, prev_s)
         lines.append(f"- {name}: {cnt:,} ({now_s:.1f}%; אשתקד {prev_s:.1f}%)")
+
+    # מסירות רכב חדש (ingest/auto_deliveries.py) — מאגר נפרד של משרד התחבורה, והמקור
+    # למספרי "המסירות". נתח היבואנית הנסחרת הוא הנתון הישיר ביותר על שורת ההכנסות שלה.
+    try:
+        dv = json.loads((REGISTRY / "deliveries.json").read_text(encoding="utf-8")).get("months") or {}
+    except (OSError, ValueError):
+        dv = {}
+    if dv:
+        dk = sorted(dv)
+        dlast = dk[-1]
+        dya = dv.get(f"{int(dlast[:4]) - 1}{dlast[4:]}") or {}
+
+        def dtot(m: dict, name: str) -> int:
+            x = ((m or {}).get("importer") or {}).get(name) or {}
+            return int(x.get("p", 0)) + int(x.get("m", 0))
+
+        lines += ["", "מסירות רכב חדש — פרטי ומסחרי עד 3.5 טון (מאגר המסירות החודשי של משרד התחבורה; "
+                  "זה המקור למספרי המסירות, ולא רשם הבעלויות שלמעלה):"]
+        for k in dk[-13:]:
+            note(k, "num", dv[k]["n"])
+        lines.append("- לפי חודש: " + " · ".join(f"{k} {dv[k]['n']:,}" for k in dk[-13:]))
+        if dya.get("n"):
+            ch = float(f"{_pct(dv[dlast]['n'] - dya['n'], dya['n']):.1f}")
+            note("", "pct", abs(ch))
+            lines.append(f"  ↳ {dlast} מול {int(dlast[:4]) - 1}{dlast[4:]}: {ch:+.1f}%")
+        lines.append(f"- היבואניות הנסחרות ב-{dlast} (מסירות · נתח מהשוק · {int(dlast[:4]) - 1}{dlast[4:]}):")
+        for name, co in imap.items():
+            t, t_ya = dtot(dv[dlast], name), dtot(dya, name)
+            if not (t or t_ya):
+                continue
+            sh = float(f"{_pct(t, dv[dlast]['n']):.1f}")
+            sh_ya = float(f"{_pct(t_ya, dya.get('n') or 0):.1f}") if dya.get("n") else None
+            note(dlast, "num", t)
+            note(dlast, "pct", sh)
+            if sh_ya is not None:
+                note("", "num", t_ya)
+                note("", "pct", sh_ya)
+            lines.append(f"  - {name} (נסחרת: {co}): {t:,} · {sh:.1f}%"
+                         + (f" · אשתקד {t_ya:,} ({sh_ya:.1f}%)" if sh_ya is not None else ""))
 
     dm = disp.get("months") or {}
     if dm:

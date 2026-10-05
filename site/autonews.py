@@ -78,13 +78,22 @@ def load() -> dict:
             registry[name] = json.loads((AUTO / "registry" / f"{name}.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             registry[name] = {}
+    # מסירות רכב חדש (ingest/auto_deliveries.py) והדוח החודשי עליהן (scripts/analyze_deliveries.py).
+    # נפרדים מ-registry בכוונה: הקישורים שבסוף סעיף הליסינג נאספים מכל מה שב-registry.
+    deliv = {}
+    for name in ("deliveries", "deliveries_analysis"):
+        try:
+            deliv[name] = json.loads((AUTO / "registry" / f"{name}.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            deliv[name] = {}
     state = {}
     if (AUTO / "state.json").exists():
         try:
             state = json.loads((AUTO / "state.json").read_text(encoding="utf-8"))
         except ValueError:
             state = {}
-    return {"cfg": cfg, "items": items, "analyses": analyses, "state": state, "registry": registry}
+    return {"cfg": cfg, "items": items, "analyses": analyses, "state": state, "registry": registry,
+            "deliveries": deliv["deliveries"], "deliveries_analysis": deliv["deliveries_analysis"]}
 
 
 # --------------------------------------------------------------------------
@@ -836,6 +845,198 @@ def leasing_html(data: dict, a: dict | None) -> str:
             + reg_links_html(data.get("registry") or {}))
 
 
+# --------------------------------------------------------------------------
+# מסירות רכב חדש — מאגר המסירות החודשי של משרד התחבורה (ingest/auto_deliveries.py)
+
+DRIVE_HE = {"ev": "חשמלי", "phev": "פלאג-אין", "hev": "היברידי", "ice": "בנזין ודיזל", "other": "אחר"}
+
+
+def _dv_total(m: dict, field: str, name: str) -> int:
+    """מסירות של יבואנית או מותג בחודש — פרטי ומסחרי יחד."""
+    v = ((m or {}).get(field) or {}).get(name) or {}
+    return int(v.get("p", 0)) + int(v.get("m", 0))
+
+
+def _trend(d: float | None, unit: str = "%", digits: int = 0) -> str:
+    """תא שינוי בטבלה: "+12%", "−3.4", או "—". הסימן בתוך תא LTR, ולכן אינו נודד."""
+    if d is None:
+        return '<td class="trend flat" dir="ltr">—</td>'
+    cls = "up" if d > 0.05 else ("down" if d < -0.05 else "flat")
+    txt = f"0{unit}" if abs(d) < (0.5 if digits == 0 else 0.05) else f"{d:+.{digits}f}{unit}"
+    return f'<td class="trend {cls}" dir="ltr">{txt.replace("-", "−")}</td>'
+
+
+def _deliv_bars(months: dict, keys: list[str]) -> str:
+    """מסירות לפי חודש, פרטי ומסחרי יחד. החודש האחרון מודגש."""
+    W, H, L, R, T, B = 440.0, 180.0, 40.0, 8.0, 10.0, 22.0
+    vals = [months[k].get("n") or 0 for k in keys]
+    ticks = _ticks_n(max(vals) or 1)
+    hi = ticks[-1] or 1
+    pw, ph = W - L - R, H - T - B
+    slot = pw / len(keys)
+    parts = []
+    for t in ticks:
+        y = T + (hi - t) / hi * ph
+        parts.append(f'<line class="{"zero" if t == 0 else "grid"}" x1="{L:.0f}" x2="{W - R:.0f}" y1="{y:.1f}" y2="{y:.1f}"/>')
+        parts.append(f'<text class="ax" x="{L - 6:.0f}" y="{y + 3.5:.1f}" text-anchor="end">{t / 1000:g}K</text>')
+    for i, (k, v) in enumerate(zip(keys, vals)):
+        x = L + slot * i
+        if i and k.endswith("-01"):
+            parts.append(f'<line class="yr" x1="{x:.1f}" x2="{x:.1f}" y1="{T:.0f}" y2="{T + ph:.0f}"/>')
+            parts.append(f'<text class="ax" x="{x + 4:.1f}" y="{H - 7:.0f}">{k[:4]}</text>')
+        y = T + (hi - v) / hi * ph
+        cls = "bar" + (" last" if i == len(keys) - 1 else "")
+        parts.append(f'<rect class="{cls}" x="{x + slot * 0.19:.1f}" y="{y:.1f}" width="{slot * 0.62:.1f}" '
+                     f'height="{max(T + ph - y, 0.9):.1f}"/>')
+        ya = (months.get(_yago(k)) or {}).get("n")
+        yoy = f" · {_change_words(v, ya, _mm(_yago(k)))}" if ya else ""
+        parts.append(f'<rect class="hit" x="{x:.1f}" y="{T:.0f}" width="{slot:.1f}" height="{ph:.0f}">'
+                     f'<title>{_mm(k)} · {_n(v)} מסירות{yoy}</title></rect>')
+    return (f'<svg class="cbs-ch au-ch" viewBox="0 0 {W:.0f} {H:.0f}" role="img" '
+            f'aria-label="מסירות רכב חדש לפי חודש">{"".join(parts)}</svg>')
+
+
+def _deliv_report(an: dict, month: str) -> str:
+    """הדוח החודשי (scripts/analyze_deliveries.py) — רק כשהוא על החודש שבטבלאות."""
+    rep = ((an or {}).get("months") or {}).get(month) or {}
+    if not (rep.get("summary") or rep.get("points")):
+        return ""
+    cards = "".join(
+        f'<div class="cbs-card au-trend"><div class="cc-head"><h3>{_txt(p.get("title"))}</h3>'
+        f'{_dir(p.get("direction"))}</div>{_para(p.get("body"))}{_cos_html(p.get("companies"))}'
+        '<div class="au-foot"><span class="au-data">נתוני מסירות</span></div></div>'
+        for p in rep.get("points") or [])
+    return ((f'<div class="au-lease-sum">{_para(rep.get("summary"))}'
+             f'<p class="au-meta">דוח {_mon(month)}, נכתב {_stamp(rep.get("at"))} מנתוני משרד התחבורה בלבד. '
+             'כל מספר נבדק מול הטבלאות שלמטה. ניתוח השפעה, לא המלצת השקעה.</p></div>'
+             if rep.get("summary") else "")
+            + (f'<div class="cbs-cards">{cards}</div>' if cards else ""))
+
+
+def deliveries_html(data: dict) -> str:
+    dv = data.get("deliveries") or {}
+    months = dv.get("months") or {}
+    keys = sorted(months)
+    if not keys:
+        return ""
+    imap = ((data.get("cfg") or {}).get("registry") or {}).get("importers") or {}
+    last = keys[-1]
+    v, ya = months[last], months.get(_yago(last)) or {}
+    n, ya_n = v.get("n") or 0, ya.get("n") or 0
+    # מתחילת השנה — רק כשכל החודשים המקבילים אשתקד קיימים, אחרת ההשוואה עקומה
+    ytd = [k for k in keys if k[:4] == last[:4]]
+    ytd_prev = [_yago(k) for k in ytd]
+    has_prev = all(k in months for k in ytd_prev)
+
+    def tot(ks: list[str], field: str | None = None, name: str | None = None) -> int:
+        if field:
+            return sum(_dv_total(months[k], field, name) for k in ks if k in months)
+        return sum(months[k].get("n") or 0 for k in ks if k in months)
+
+    ytd_n, ytd_prev_n = tot(ytd), (tot(ytd_prev) if has_prev else 0)
+    listed = [x for x in imap if x in (v.get("importer") or {}) or x in (ya.get("importer") or {})]
+    lst, lst_ya = sum(_dv_total(v, "importer", x) for x in listed), sum(_dv_total(ya, "importer", x) for x in listed)
+    china, china_ya = (v.get("country") or {}).get("סין", 0), (ya.get("country") or {}).get("סין", 0)
+    fu, fu_ya = v.get("fuel") or {}, ya.get("fuel") or {}
+
+    tiles = [
+        (f"מסירות · {_mon(last)}", _n(n), _change_words(n, ya_n, _mon(_yago(last)))),
+        (f"מתחילת {last[:4]}", _n(ytd_n),
+         _change_words(ytd_n, ytd_prev_n, f"אותם חודשים ב-{int(last[:4]) - 1}") if has_prev else ""),
+        ("היבואניות הנסחרות", f"{_p(lst, n)}%", f"אשתקד {_p(lst_ya, ya_n)}%" if ya_n else ""),
+        ("תוצרת סין", f"{_p(china, n)}%", f"אשתקד {_p(china_ya, ya_n)}%" if ya_n else ""),
+        ("חשמלי · פלאג-אין", f"{_p(fu.get('ev', 0), n, 0)}% · {_p(fu.get('phev', 0), n, 0)}%",
+         f"אשתקד {_p(fu_ya.get('ev', 0), ya_n, 0)}% · {_p(fu_ya.get('phev', 0), ya_n, 0)}%" if ya_n else ""),
+    ]
+    strip = ('<section class="strip wide au-kpi">' + "".join(
+        f'<div class="tile"><span class="lbl">{escape(l)}</span><span class="val" dir="ltr">{escape(val)}</span>'
+        f'<span class="chg txt">{escape(c)}</span></div>' for l, val, c in tiles) + '</section>')
+
+    mix_rows = "".join(
+        f'<tr><td class="city">{DRIVE_HE[k]}</td><td dir="ltr">{_n(fu.get(k, 0))}</td>'
+        f'<td class="key" dir="ltr">{_p(fu.get(k, 0), n)}%</td>'
+        f'<td dir="ltr">{f"{_p(fu_ya.get(k, 0), ya_n)}%" if ya_n else "—"}</td>'
+        + _trend((_p(fu.get(k, 0), n) or 0) - (_p(fu_ya.get(k, 0), ya_n) or 0) if ya_n else None, "", 1) + '</tr>'
+        for k in ("ev", "phev", "hev", "ice") if fu.get(k) or fu_ya.get(k))
+    charts = ('<div class="au-charts">'
+              f'<figure><figcaption>מסירות רכב חדש לפי חודש — פרטי ומסחרי</figcaption>{_deliv_bars(months, keys)}'
+              '<p class="au-legend"><i class="sw dv-bar"></i>חודש <i class="sw bar"></i>החודש האחרון במאגר</p></figure>'
+              f'<figure><figcaption>סוג ההנעה ב{_mon(last)}, מול {_mon(_yago(last))}</figcaption>'
+              '<div class="tw"><table class="nadlan au-tbl"><thead><tr><th>הנעה</th><th>מסירות</th><th>חלק</th>'
+              '<th>אשתקד</th><th>שינוי (נק׳)</th></tr></thead><tbody>' + mix_rows + '</tbody></table></div></figure>'
+              '</div>')
+
+    # יבואניות: החודש האחרון, ומתחילת השנה מול אותם חודשים אשתקד
+    imp = v.get("importer") or {}
+    order = [x for x in sorted(imp, key=lambda x: -_dv_total(v, "importer", x)) if x != "לא ידוע"][:15]
+    order += [x for x in listed if x not in order]
+    rows = []
+    for name in order:
+        t, t_ya = _dv_total(v, "importer", name), _dv_total(ya, "importer", name)
+        y_t, y_p = tot(ytd, "importer", name), (tot(ytd_prev, "importer", name) if has_prev else 0)
+        sh_y, sh_p = _p(y_t, ytd_n), (_p(y_p, ytd_prev_n) if has_prev else None)
+        chip = f' <span class="co">{escape(imap[name])}</span>' if name in imap else ""
+        tr = '<tr class="listed">' if name in imap else "<tr>"
+        rows.append(f'{tr}<td class="city">{escape(name)}{chip}</td><td class="key" dir="ltr">{_n(t)}</td>'
+                    f'<td dir="ltr">{_p(t, n)}%</td><td dir="ltr">{_n(t_ya) if ya_n else "—"}</td>'
+                    + _trend(_p(t - t_ya, t_ya, 0) if t_ya >= 100 else None)
+                    + f'<td dir="ltr">{_n(y_t)}</td><td dir="ltr">{sh_y}%</td>'
+                    + _trend((sh_y or 0) - sh_p if sh_p is not None else None, "", 1) + '</tr>')
+    ytd_lbl = _mrange(ytd[0], ytd[-1]) if len(ytd) > 1 else _mon(ytd[0])
+    importers = (f'<h3 class="au-h3">היבואניות: מסירות ב{_mon(last)}, ומתחילת השנה ({ytd_lbl})</h3>'
+                 '<div class="tw"><table class="nadlan au-tbl"><thead><tr><th>יבואנית</th><th>מסירות</th>'
+                 '<th>נתח</th><th>אשתקד</th><th>שינוי</th><th>מתחילת השנה</th><th>נתח</th>'
+                 '<th>שינוי נתח (נק׳)</th></tr></thead><tbody>' + "".join(rows) + '</tbody></table></div>'
+                 '<p class="cbs-note">השם כפי שהוא במחירון משרד התחבורה — יבואנית עם כמה ישויות (למשל כלמוביל) '
+                 'מופיעה בכמה שורות. שינוי שנתי מוצג רק ליבואנית עם 100 מסירות לפחות באותו חודש אשתקד, ושינוי '
+                 'חד יכול לשקף מותג שעבר בין יבואניות. "שינוי נתח" — מתחילת השנה מול אותם חודשים אשתקד.</p>')
+
+    brand = v.get("brand") or {}
+    bc = v.get("brand_country") or {}
+    brows = []
+    for name in [x for x in sorted(brand, key=lambda x: -_dv_total(v, "brand", x)) if x != "לא ידוע"][:15]:
+        t, t_ya = _dv_total(v, "brand", name), _dv_total(ya, "brand", name)
+        y_t, y_p = tot(ytd, "brand", name), (tot(ytd_prev, "brand", name) if has_prev else 0)
+        sh_y, sh_p = _p(y_t, ytd_n), (_p(y_p, ytd_prev_n) if has_prev else None)
+        brows.append(f'<tr><td class="city">{escape(name)}</td><td>{escape(bc.get(name, "—"))}</td>'
+                     f'<td class="key" dir="ltr">{_n(t)}</td><td dir="ltr">{_p(t, n)}%</td>'
+                     + _trend(_p(t - t_ya, t_ya, 0) if t_ya >= 100 else None)
+                     + f'<td dir="ltr">{sh_y}%</td>' + _trend((sh_y or 0) - sh_p if sh_p is not None else None, "", 1)
+                     + '</tr>')
+    brands = (f'<h3 class="au-h3">המותגים: מסירות ב{_mon(last)}</h3>'
+              '<div class="tw"><table class="nadlan au-tbl"><thead><tr><th>מותג</th><th>ארץ תוצר</th><th>מסירות</th>'
+              '<th>נתח</th><th>מול אשתקד</th><th>נתח מתחילת השנה</th><th>שינוי נתח (נק׳)</th></tr></thead><tbody>'
+              + "".join(brows) + '</tbody></table></div>')
+
+    mrows = "".join(
+        f'<tr><td dir="ltr">{i}</td><td class="city">{escape(b)}</td><td dir="ltr">{escape(mdl)}</td>'
+        f'<td class="key" dir="ltr">{_n(cnt)}</td></tr>'
+        for i, (b, mdl, cnt) in enumerate((v.get("models") or [])[:12], 1))
+    models = (f'<h3 class="au-h3">הדגמים הנמסרים ביותר ב{_mon(last)} — רכב פרטי</h3>'
+              '<div class="tw"><table class="nadlan au-tbl"><thead><tr><th>#</th><th>מותג</th><th>דגם</th>'
+              '<th>מסירות</th></tr></thead><tbody>' + mrows + '</tbody></table></div>'
+              '<p class="cbs-note">הדגם בשמו המסחרי במאגר; גרסאות הנעה שונות של אותו דגם (היברידי, פלאג-אין) '
+              'נספרות בנפרד.</p>') if mrows else ""
+
+    moto = v.get("moto") or 0
+    method = ('<p class="cbs-note"><strong>מקור ושיטה.</strong> משרד התחבורה ב-data.gov.il: "כמות כלי רכב חדשים '
+              'בעלי קוד דגם העולים על הכביש בכל חודש" — המקור למספרי המסירות החודשיים. רכב פרטי ומסחרי עד 3.5 '
+              f'טון; דו-גלגלי נספר בנפרד ({_n(moto)} ב{_mon(last)}), ורכב בלי קוד דגם (אוטובוסים, משאיות) '
+              'ויבוא אישי אינם בטבלאות. היבואנית — ממחירון משרד התחבורה; סוג ההנעה — ממאגר הדגמים (WLTP); '
+              'ארץ התוצר — מטבלת התוצרים. המאגר מתעדכן בימים הראשונים של כל חודש, ומכסה עד החודש הקודם. '
+              f'עודכן {_stamp(dv.get("updated"))}.</p>')
+    links = "".join(
+        f'<a href="{escape(ln["url"])}" target="_blank" rel="noopener">{escape(ln.get("label") or "מקור")}</a> · '
+        for ln in dv.get("links") or [] if ln.get("url")).rstrip(" · ")
+    src = (f'<p class="au-srclinks"><span>הטבלאות עצמן ב-data.gov.il:</span> {links}</p>' if links else "")
+
+    return ('<h2 id="au-deliv">מסירות רכב חדש</h2>'
+            f'<p class="cbs-sub">כמה רכבים חדשים נמסרו בכל חודש — לפי יבואנית, מותג, דגם וסוג הנעה — מנתוני '
+            'משרד התחבורה. היבואניות הנסחרות מסומנות, ונתח השוק שלהן הוא הנתון שמגיע ישירות לשורת ההכנסות.</p>'
+            + _deliv_report(data.get("deliveries_analysis") or {}, last)
+            + strip + charts + importers + brands + models + method + src)
+
+
 def _item_html(r: dict, labels: dict, classes: dict | None = None) -> str:
     classes = THEME_CLASS if classes is None else classes
     d = _local(r.get("ts"))
@@ -962,9 +1163,10 @@ def page(data: dict) -> str:
                      "מחירים והשקות, מותגים סיניים, מיסוי ומימון — ומי מהחברות מושפע.")
     world = trends_html(a, "world", "מגמות בעולם", "au-world",
                         "מכסים, ייצור ושרשרת אספקה, סוללות ויצרנים סיניים — ואיך כל אחת מגיעה לחברות בישראל.")
+    deliv = deliveries_html(data)
     lease = leasing_html(data, a)
     impact = impact_html(a)
-    toc = [("au-now", "תמונת מצב", True), ("au-lease", "ליסינג והשכרה", lease),
+    toc = [("au-now", "תמונת מצב", True), ("au-deliv", "מסירות", deliv), ("au-lease", "ליסינג והשכרה", lease),
            ("au-il", "ישראל", il), ("au-impact", "השפעה על החברות", impact),
            ("au-world", "עולם", world),
            ("au-chain", "החברות בשרשרת", True), ("au-news", "כותרות", True)]
@@ -972,12 +1174,13 @@ def page(data: dict) -> str:
         '<div class="dash-head"><h1>ענף הרכב</h1>'
         f'<span class="stamp">{stamp}</span></div>',
         '<p class="lead">כותרות ומגמות מענף הרכב בישראל ובעולם, דרך החברות הנסחרות בשרשרת: '
-        'יבואניות, רכיבים, ליסינג, אשראי, ביטוח ודלק — ולצידן נתוני רשם כלי הרכב על מה שציי הליסינג '
-        'קונים ומוכרים. מתעדכן שלוש פעמים ביום.</p>',
+        'יבואניות, רכיבים, ליסינג, אשראי, ביטוח ודלק — ולצידן נתוני משרד התחבורה: המסירות החודשיות לפי '
+        'יבואנית ומותג, ומה שציי הליסינג קונים ומוכרים. מתעדכן שלוש פעמים ביום.</p>',
         '<nav class="cbs-toc" aria-label="בעמוד הזה">'
         + "".join(f'<a href="#{i}">{l}</a>' for i, l, present in toc if present) + '</nav>',
         fail_html,
         now_html(a, state),
+        deliv,
         lease,
         il,
         impact,

@@ -1959,6 +1959,7 @@ svg.au-ch .l-ev-end { fill: var(--warn); stroke: var(--surface); stroke-width: 1
 .au-legend .sw { display: inline-block; width: 0.8rem; height: 0.55rem; margin-inline-end: 0.3rem; vertical-align: middle; }
 .au-legend .sw.bar { background: var(--accent); opacity: 0.8; }
 .au-legend .sw.partial { background: var(--accent); opacity: 0.18; }
+.au-legend .sw.dv-bar { background: var(--accent); opacity: 0.35; }
 .au-legend .sw.l-china { height: 3px; background: var(--accent); }
 .au-legend .sw.l-ev { height: 3px; background: var(--warn); }
 .au-h3 { font-size: 0.98rem; margin: 1.5rem 0 0.4rem; }
