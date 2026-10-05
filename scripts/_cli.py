@@ -66,20 +66,34 @@ def envelope(out: str, rc: int, err: str) -> tuple[str | None, str | None, dict]
             "models": ", ".join((env.get("modelUsage") or {}).keys())}
     if env.get("is_error") or rc != 0:
         return None, (f"{env.get('subtype')}: " + " ".join(str(env.get("result") or "").split())[:240]), meta
+    # עם --json-schema הפלט המובנה יושב בשדה משלו, ו-result הוא טקסט חופשי
+    if isinstance(env.get("structured_output"), (dict, list)):
+        return json.dumps(env["structured_output"], ensure_ascii=False), None, meta
     return str(env.get("result") or ""), None, meta
 
 
 def run(prompt: str, *, job: str, model: str | None = None, max_usd: float | None = None,
-        timeout: int = 900, tools: str = "", **log) -> tuple[str | None, str | None, dict]:
-    """מריץ קריאה אחת ומחזיר (טקסט, שגיאה, מטא). רץ מתיקייה זמנית: בלי CLAUDE.md."""
+        timeout: int = 900, tools: str = "", schema: dict | None = None,
+        stdin: str | None = None, max_turns: int | None = None,
+        **log) -> tuple[str | None, str | None, dict]:
+    """מריץ קריאה אחת ומחזיר (טקסט, שגיאה, מטא). רץ מתיקייה זמנית: בלי CLAUDE.md.
+
+    schema — פלט JSON מובנה (--json-schema); הטקסט המוחזר הוא ה-JSON.
+    stdin — הנתונים עצמם, כשהם ארוכים מדי לשורת פקודה (גוף של PDF, למשל);
+    אז prompt הוא ההוראה הקצרה. כך עובדת גם סקירת הרכב.
+    """
     model = model or os.environ.get("CLAUDE_MODEL") or DEFAULT_MODEL
     cmd = ["claude", "-p", prompt, "--output-format", "json",
            "--permission-mode", "acceptEdits", "--allowedTools", tools, "--model", model]
     if max_usd:
         cmd += ["--max-budget-usd", str(max_usd)]
+    if schema:
+        cmd += ["--json-schema", json.dumps(schema, ensure_ascii=False)]
+    if max_turns:
+        cmd += ["--max-turns", str(max_turns)]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
-                              timeout=timeout, cwd=tempfile.gettempdir())
+                              timeout=timeout, cwd=tempfile.gettempdir(), input=stdin)
     except subprocess.TimeoutExpired:
         return None, f"חריגה מ-{timeout} שניות", {}
     except OSError as e:  # noqa: BLE001

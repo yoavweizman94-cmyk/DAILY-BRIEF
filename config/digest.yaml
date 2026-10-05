@@ -1,0 +1,48 @@
+# digest.yaml — עמוד הכותרות (headlines.html)
+#
+# כל שלוש שעות: כותרות חדשות מכל הפידים, ומודל שבוחר מהן את מה שמהותי למנהל
+# השקעות שמכסה את הבורסה בתל אביב — בתמצית עברית, לפי תחום, בארץ ובעולם.
+# הקוד: scripts/digest.py (איסוף ובחירה), site/digest.py (העמוד).
+#
+# **הפידים כאן מצטרפים ל-rss.feeds שב-sources.yaml, ואינם מחליפים אותם.**
+# הם לא נכנסו לברייף בכוונה: הברייף קורא את rss.jsonl במלואו, וכל פיד שם
+# מתומחר בכל תור של הסוכן. כאן הם עוברים קריאה אחת קצרה של בחירה.
+# כולם נבדקו חיים ב-05/10/2026 (פריטים מאותו יום, גישה בחיקוי דפדפן).
+
+feeds:
+  # --- ישראל ---
+  - {name: "כלכליסט",   url: "https://news.google.com/rss/search?q=when:1d+site:calcalist.co.il&hl=he&gl=IL&ceid=IL:he"}
+  - {name: "ביזפורטל",  url: "https://news.google.com/rss/search?q=when:1d+site:bizportal.co.il&hl=he&gl=IL&ceid=IL:he"}
+  - {name: "ynet כלכלה", url: "https://www.ynet.co.il/Integration/StoryRss6.xml"}
+  - {name: "CTech",     url: "https://news.google.com/rss/search?q=when:1d+site:calcalistech.com&hl=en-US&gl=US&ceid=US:en"}
+  # --- עולם ---
+  - {name: "Bloomberg",  url: "https://news.google.com/rss/search?q=when:1d+site:bloomberg.com&hl=en-US&gl=US&ceid=US:en"}
+  - {name: "Financial Times", url: "https://news.google.com/rss/search?q=when:1d+site:ft.com&hl=en-US&gl=US&ceid=US:en"}
+  - {name: "WSJ — שווקים", url: "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain"}
+  - {name: "WSJ — עולם",   url: "https://feeds.content.dowjones.io/public/rss/RSSWorldNews"}
+  - {name: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories"}
+  - {name: "CNBC",        url: "https://www.cnbc.com/id/100003114/device/rss/rss.html"}
+  - {name: "BBC Business", url: "https://feeds.bbci.co.uk/news/business/rss.xml"}
+  - {name: "OilPrice",    url: "https://oilprice.com/rss/main"}
+
+# התחומים שבהם העמוד מסודר. הסדר כאן הוא סדר הסעיפים בעמוד.
+domains:
+  - מאקרו, ריבית ומט"ח
+  - שוק ההון ופיננסים
+  - נדל"ן ובנייה
+  - אנרגיה, נפט וגז
+  - טכנולוגיה, שבבים וסייבר
+  - תעשייה, סחורות ושרשרת אספקה
+  - צריכה, מזון וקמעונאות
+  - פארמה ובריאות
+  - תחבורה, תעופה ותקשורת
+  - ביטחון וגיאופוליטיקה
+
+params:
+  window_hours: 30        # פריט ישן מזה אינו "חדש" גם אם לא נראה עד כה
+  first_run_hours: 6      # בריצה הראשונה, בלי היסטוריה — רק מה שפורסם ב-6 השעות האחרונות
+  max_items: 260          # פריטים לקריאת בחירה אחת; העודף נשאר לריצה הבאה
+  page_hours: 24          # כמה שעות אחורה מוצגות בעמוד
+  # תקרה להרצה מקומית בלי מפתח (דרך ה-CLI). ב-CI הקריאה ישירה ל-API, והגבול
+  # שם הוא אורך התשובה: 12,000 טוקני פלט — כ-$0.12 במחירון של Sonnet 5.
+  max_usd: 0.8

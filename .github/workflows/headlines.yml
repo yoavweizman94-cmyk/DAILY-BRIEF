@@ -1,0 +1,102 @@
+name: Headlines
+
+# עמוד הכותרות (headlines.html): מה מהותי מהחדשות בארץ ובעולם, לפי תחום.
+# האיסוף והבחירה: scripts/digest.py; הפידים והתחומים: config/digest.yaml.
+#
+# **כל שלוש שעות, כל יום** — חדשות אינן נחות בסוף שבוע. דקה 50 כדי לא ליפול
+# על שעה עגולה, שבה עומס ה-cron של GitHub מעכב ריצות בשעות:
+#   03:50 UTC — 06:50 קיץ / 05:50 חורף, ואחריה כל שלוש שעות עד 21:50 UTC.
+# הפער הלילי (00:50–06:50) מכוסה בריצת הבוקר: היא קוראת כל מה שלא נראה.
+#
+# עלות: קריאת Sonnet אחת לריצה, על כותרות ותקצירים בלבד; התקרה ב-digest.yaml.
+on:
+  schedule:
+    - cron: "50 3-21/3 * * *"
+  push:
+    paths:
+      - ".trigger/headlines.json"
+  workflow_dispatch: {}
+
+# אין כתיבה לריפו הציבורי: הכותרות נשמרות בריפו התוכן הפרטי.
+permissions:
+  contents: read
+
+concurrency:
+  group: headlines
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Jerusalem
+
+jobs:
+  headlines:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          npm install -g @anthropic-ai/claude-code
+
+      # בחירה שנכשלה אינה מפילה את הריצה: state.json רושם את הכישלון, העמוד
+      # אומר אותו, והפריטים נשארים לריצה הבאה (digest.py אינו מסמן אותם כנראו).
+      - name: Collect and select headlines
+        id: digest
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL: claude-sonnet-5
+        run: |
+          set +e
+          python scripts/digest.py
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "::warning title=עמוד הכותרות לא עודכן (קוד $rc)::הפריטים יעברו לריצה הבאה."
+          fi
+          exit 0
+
+      - name: Save content
+        if: steps.digest.outputs.changed == 'yes'
+        run: CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push headlines
+
+      # התוכן נמשך שוב לפני הבנייה: צנרת אחרת עשויה הייתה לדחוף מאז, ובנייה על
+      # עותק ישן הייתה דורסת באתר תוכן חדש יותר.
+      - name: Refresh content before build
+        if: steps.digest.outputs.changed == 'yes'
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Build site
+        if: steps.digest.outputs.changed == 'yes'
+        run: python site/build.py
+
+      - name: Check inline JS
+        if: steps.digest.outputs.changed == 'yes'
+        run: python scripts/check_inline_js.py
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.digest.outputs.changed == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
+          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
+            echo "::error::הפריסה לא החזירה כתובת"; exit 1; }
