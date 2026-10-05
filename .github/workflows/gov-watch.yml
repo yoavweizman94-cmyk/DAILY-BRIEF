@@ -51,8 +51,10 @@ jobs:
           CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
         run: bash scripts/content_repo.sh pull
 
+      # anthropic — המיון והסיקור קוראים ל-API ישירות (scripts/_api.py). בלעדיה
+      # הריצה הראשונה נפלה ב-ModuleNotFoundError, והאזהרה לא אמרה למה.
       - name: Install collector dependencies
-        run: pip install pyyaml truststore certifi curl_cffi pypdf
+        run: pip install pyyaml truststore certifi curl_cffi pypdf anthropic
 
       - name: Collect regulator publications
         id: collect
@@ -77,7 +79,9 @@ jobs:
           python scripts/analyze_gov.py 2>&1 | tee analyze.log
           rc=${PIPESTATUS[0]}
           if [ "$rc" -ne 0 ]; then
-            echo "::warning title=סיקור הרגולציה נכשל (קוד $rc)::הפרסומים נשמרים ונפרסים; הסיקור ינוסה שוב בריצה הבאה."
+            # סוג החריגה בלבד: הלוג ציבורי, והודעת חריגה עלולה לשאת תוכן
+            why=$(grep -E '^[A-Za-z_.]+(Error|Exception)' analyze.log | tail -1 | cut -d: -f1)
+            echo "::warning title=סיקור הרגולציה נכשל (קוד $rc)::${why:-בלי חריגה בלוג} — הפרסומים נשמרים ונפרסים; הסיקור ינוסה שוב בריצה הבאה."
           fi
           exit 0
 
