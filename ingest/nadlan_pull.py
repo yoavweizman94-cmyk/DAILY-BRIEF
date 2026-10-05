@@ -63,11 +63,22 @@ HEADERS = {
 DROP = {"shape", "objectid", "settlementNameEng", "streetNameEng", "streetCode"}
 
 
+def code_of(e: Exception) -> int | None:
+    """קוד ה-HTTP של שגיאה: מהתשובה (4xx, דרך raise_for_status) או מההודעה
+    ("HTTP 500" — _get מרים RuntimeError על 5xx, בלי אובייקט תשובה)."""
+    code = getattr(getattr(e, "response", None), "status_code", None)
+    if code:
+        return int(code)
+    m = re.match(r"HTTP (\d{3})", str(e))
+    return int(m.group(1)) if m else None
+
+
 def why(e: Exception) -> str:
     """שם השגיאה עם קוד ה-HTTP. "HTTPError" בלבד אינו ניתן לאבחון:
     403 הוא חסימת WAF, 404 הוא מזהה שגוי, 429 הוא קצב. בלי הקוד אי אפשר
-    לדעת מי משלושתם, וזה בדיוק מה שקרה בריצה שהחזירה 0 עסקאות."""
-    code = getattr(getattr(e, "response", None), "status_code", None)
+    לדעת מי משלושתם, וזה בדיוק מה שקרה בריצה שהחזירה 0 עסקאות. גם 5xx:
+    ארבע ערים נכשלו שבועות כ-"RuntimeError" בלי קוד, וזה הסתיר פוליגון שבור."""
+    code = code_of(e)
     return f"{type(e).__name__} {code}" if code else type(e).__name__
 
 
@@ -175,10 +186,20 @@ class Govmap:
         שהחזיר אפס עסקאות, לצד dealscount=9 שהחזיר 401. מיון לפי השדה
         הזה בחר שש חלקות ריקות ברצף, ורמת השרון, שדרות וקרית שמונה
         הוצגו כאילו לא נסחרה בהן דירה.
+
+        **פוליגון שמחזיר שגיאה אינו פורה.** Govmap מחזיר לחלק מהפוליגונים 500
+        קבוע ("Could not fetch neighborhood deals"), בכל גודל עמוד. עד כה
+        השגיאה עלתה מכאן ועצרה את כל העיר. 403 עולה הלאה: הוא חסימה של
+        הממסר כולו, לא של פוליגון אחד, ומי שמעליו צריך לדעת.
         """
         for dt in (2, 1):
-            d = self._get(f"{API}/real-estate/neighborhood-deals/{polygon_id}",
-                          params={"limit": 1, "dealType": dt})
+            try:
+                d = self._get(f"{API}/real-estate/neighborhood-deals/{polygon_id}",
+                              params={"limit": 1, "dealType": dt})
+            except Exception as e:
+                if code_of(e) == 403:
+                    raise
+                return False
             if isinstance(d, dict) and int(d.get("totalCount") or 0) > 0:
                 return True
         return False
@@ -236,6 +257,36 @@ def city_forms(city: dict) -> list[str]:
 
 def load_cfg() -> dict:
     return yaml.safe_load(CFG.read_text(encoding="utf-8"))
+
+
+def find_plots(g: "Govmap", pt, name: str, region_of: dict, need: int,
+               exclude: set, max_probe: int) -> tuple[list, list, int]:
+    """חלקות פוריות סביב העוגן: (המועמדות, הנבחרות, כמה נבדקו).
+
+    פוליגון ששייך ליישוב מחוץ לכיסוי אינו תורם דבר — עסקאותיו ייזרקו ב-clean()
+    בכל מקרה — אך הוא כן דוחק פוליגון שכן. exclude — פוליגונים שכבר נבחרו או
+    שנמצאו שבורים בריצה הזו, כדי שהחלפה לא תבחר אותם שוב.
+    """
+    cand = [p for p in g.polygons_multi(pt[0], pt[1])
+            if norm_city(p.get("settlementNameHeb")) in region_of]
+    # חלקות העיר עצמה נבדקות ראשונות. בלי זה הרצליה בזבזה 38 בדיקות על
+    # שכנותיה וסיימה עם עסקה אחת משלה.
+    own = norm_city(name)
+    polys = ([p for p in cand if norm_city(p.get("settlementNameHeb")) == own]
+             + [p for p in cand if norm_city(p.get("settlementNameHeb")) != own])
+    # פוליגון שנבחר מחזיר את **כל** השכונה שסביבו, ולכן די במעט פוליגונים
+    # פוריים; החיפוש הוא אחריהם, לא אחרי הראשונים ברשימה.
+    picked, probed = [], 0
+    for p in polys:
+        if len(picked) >= need or probed >= max_probe:
+            break
+        pid = p.get("polygon_id")
+        if not pid or pid in exclude:
+            continue
+        probed += 1
+        if g.has_deals(pid):
+            picked.append(pid)
+    return polys, picked, probed
 
 
 def developer_index() -> dict:
@@ -366,8 +417,39 @@ def main() -> int:
     plots = {} if reprobe else state.get("plots", {})
 
     found: dict[int, dict] = {}
-    failed, empty = [], []
+    failed, empty, repaired = [], [], []
+    # **חסימה של הממסר אינה 34 ערים שנכשלו.** ב-26/09/2026 החזיר הממסר 403 על
+    # כל בקשה; כל עיר ניסתה שלוש פעמים, ובסוף כל 34 נרשמו ב-failed — והברייף,
+    # שמדלג על עיר ב-failed, כתב את שוק הדיור בלי אף עיר, אף שבקבצים היו
+    # עסקאות מהסריקה הקודמת. האזהרה הציגה רק עשר ראשונות — כל גוש דן — וזה
+    # נראה כמו תקלה של גוש דן. 403 בשלוש הערים הראשונות, לפני שעיר כלשהי
+    # הצליחה, עוצר את הסריקה ומשאיר את מצב הריצה הקודמת כמות שהוא.
+    blocked, ok_cities, aborted = [], 0, False
+
+    def fetch(pids: list, name: str) -> tuple[int, set]:
+        """עסקאות מהפוליגונים. פוליגון שמחזיר שגיאה אינו מפיל את העיר —
+        הוא נרשם כשבור ומוחלף. 403 עולה הלאה: זו חסימה, לא פוליגון."""
+        got, bad = 0, set()
+        for pid in pids:
+            for dt in (1, 2):
+                try:
+                    rows = g.neighborhood_deals(pid, dt)
+                except Exception as e:
+                    if code_of(e) == 403:
+                        raise
+                    print(f"  {name}: פוליגון {pid} (dealType {dt}) — {why(e)}", file=sys.stderr)
+                    bad.add(pid)
+                    continue
+                for rec in rows:
+                    c = clean(rec, region_of, dt, devs)
+                    if c and c["deal_id"] and c["date"] >= cutoff:
+                        found[c["deal_id"]] = c
+                        got += 1
+        return got, bad
+
     for region in cfg["regions"]:
+        if aborted:
+            break
         for city in region["cities"]:
             name = city["name"]
             if only and only != name:
@@ -384,43 +466,35 @@ def main() -> int:
                         continue
                     coords[name] = list(pt)
 
-                # פוליגון ששייך ליישוב מחוץ לכיסוי אינו תורם דבר — עסקאותיו
-                # ייזרקו ב-clean() בכל מקרה — אך הוא כן דוחק פוליגון שכן.
-                picked, probed = plots.get(name) or [], 0
+                picked, probed = list(plots.get(name) or []), 0
                 if not picked:
-                    cand = [p for p in g.polygons_multi(pt[0], pt[1])
-                            if norm_city(p.get("settlementNameHeb")) in region_of]
-                    # חלקות העיר עצמה נבדקות ראשונות. בלי זה הרצליה בזבזה
-                    # 38 בדיקות על שכנותיה וסיימה עם עסקה אחת משלה.
-                    own = norm_city(name)
-                    polys = ([p for p in cand
-                              if norm_city(p.get("settlementNameHeb")) == own]
-                             + [p for p in cand
-                                if norm_city(p.get("settlementNameHeb")) != own])
+                    polys, picked, probed = find_plots(g, pt, name, region_of, per_city,
+                                                       set(), max_probe)
                     if not polys:
                         print(f"  {name}: אין חלקות בערי הכיסוי סביב העוגן — מדולג",
                               file=sys.stderr)
                         failed.append(name)
                         continue
-                    # פוליגון שנבחר מחזיר את **כל** השכונה שסביבו, ולכן די
-                    # במעט פוליגונים פוריים; החיפוש הוא אחריהם, לא אחרי
-                    # הראשונים ברשימה.
-                    for p in polys:
-                        if len(picked) >= per_city or probed >= max_probe:
-                            break
-                        probed += 1
-                        if g.has_deals(p["polygon_id"]):
-                            picked.append(p["polygon_id"])
                     if picked:
                         plots[name] = picked
-                n = 0
-                for pid in picked:
-                    for dt in (1, 2):
-                        for rec in g.neighborhood_deals(pid, dt):
-                            c = clean(rec, region_of, dt, devs)
-                            if c and c["deal_id"] and c["date"] >= cutoff:
-                                found[c["deal_id"]] = c
-                                n += 1
+                n, bad = fetch(picked, name)
+                if bad:
+                    # **פוליגון שבור מוחלף באותה ריצה.** הרצליה, אשדוד, קרית ביאליק
+                    # ונהריה נכשלו בכל ריצה מ-29/08/2026: בכל אחת פוליגון שמור אחד
+                    # החזיר 500 קבוע, והשגיאה זרקה את חמשת האחרים יחד איתו.
+                    keep = [p for p in picked if p not in bad]
+                    _, extra, more = find_plots(g, pt, name, region_of, per_city - len(keep),
+                                                set(picked) | bad, max_probe)
+                    probed += more
+                    n2, bad2 = fetch(extra, name)
+                    n += n2
+                    picked = keep + [p for p in extra if p not in bad2]
+                    repaired.append(f"{name} ({len(bad)} הוחלפו ב-{len(extra) - len(bad2)})")
+                    if picked:
+                        plots[name] = picked
+                    else:
+                        plots.pop(name, None)
+                ok_cities += 1
                 if not n and plots.get(name):
                     # המטמון הצביע על חלקות שהתרוקנו. מוחקים אותו כדי
                     # שהריצה הבאה תחפש מחדש במקום לקפוא על עיר ריקה.
@@ -437,6 +511,25 @@ def main() -> int:
             except Exception as e:
                 print(f"  {name}: {why(e)} — מדולג", file=sys.stderr)
                 failed.append(name)
+                if code_of(e) == 403 and not ok_cities:
+                    blocked.append(name)
+                    if len(blocked) >= 3:
+                        aborted = True
+                        break
+
+    if aborted:
+        # שום דבר לא נכתב: לא קבצי העסקאות ולא failed/empty. הנתונים מהסריקה
+        # הקודמת תקפים — רשות המסים מדווחת בפיגור של שישה שבועות, ויום אחד
+        # בלי סריקה אינו משנה תמונה רבעונית.
+        if STATE.exists():
+            prev = json.loads(STATE.read_text(encoding="utf-8"))
+            prev["blocked"] = {"at": datetime.now().isoformat(timespec="seconds"),
+                               "status": 403, "cities": blocked}
+            STATE.write_text(json.dumps(prev, ensure_ascii=False), encoding="utf-8")
+        print(f"::error title=Govmap חסם את הסריקה (403)::{len(blocked)} הערים הראשונות "
+              f"({', '.join(blocked)}) החזירו 403 — חסימה של {'הממסר' if PROXY else 'הגישה'}, "
+              "לא של ערים. הסריקה נעצרה; מצב הסריקה הקודמת והעסקאות שכבר נאספו נשארו כמות שהם.")
+        return 1
 
     OUT.mkdir(parents=True, exist_ok=True)
     by_year: dict[str, dict] = {}
@@ -464,7 +557,11 @@ def main() -> int:
                                 ensure_ascii=False), encoding="utf-8")
     print(f"\nסה\"כ {len(found)} עסקאות ייחודיות ({added} חדשות) | ערים שנכשלו: {len(failed)}")
     if failed:
-        print(f"::warning::ערים ללא נתונים: {', '.join(failed[:10])}")
+        # כל השמות, לא עשרה ראשונים: עשרה ראשונים לפי סדר הקונפיג הם כל גוש דן,
+        # וב-26/09 זה נראה כמו תקלה של גוש דן כשנכשלו כל 34 הערים.
+        print(f"::warning::ערים ללא נתונים ({len(failed)}): {', '.join(failed)}")
+    if repaired:
+        print(f"::notice::פוליגונים שבורים הוחלפו: {', '.join(repaired)}")
     if empty:
         print(f"::warning::ערים שנסרקו והמקור החזיר בהן אפס עסקאות: {', '.join(empty)}")
 
