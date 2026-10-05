@@ -414,9 +414,13 @@ def registry_text(cfg: dict) -> tuple[str, str | None, dict | None]:
         for k in dk[-13:]:
             note(k, "num", dv[k]["n"])
         lines.append("- לפי חודש: " + " · ".join(f"{k} {dv[k]['n']:,}" for k in dk[-13:]))
+        # **כל מספר רשום תחת החודש שלו.** הבדיקה מצמידה מספר לחודש שנכתב לידו: "18.2%
+        # (ספטמבר 2025)" נפסל ב-05/10/2026 כי נתח אשתקד נרשם בלי חודש, ושלוש
+        # קביעות גודל בסעיף ההשפעה נמחקו אף שהמספרים היו בבלוק.
+        dya_k = f"{int(dlast[:4]) - 1}{dlast[4:]}"
         if dya.get("n"):
             ch = float(f"{_pct(dv[dlast]['n'] - dya['n'], dya['n']):.1f}")
-            note("", "pct", abs(ch))
+            note(dlast, "pct", abs(ch))
             lines.append(f"  ↳ {dlast} מול {int(dlast[:4]) - 1}{dlast[4:]}: {ch:+.1f}%")
         lines.append(f"- היבואניות הנסחרות ב-{dlast} (מסירות · נתח מהשוק · {int(dlast[:4]) - 1}{dlast[4:]}):")
         for name, co in imap.items():
@@ -428,8 +432,8 @@ def registry_text(cfg: dict) -> tuple[str, str | None, dict | None]:
             note(dlast, "num", t)
             note(dlast, "pct", sh)
             if sh_ya is not None:
-                note("", "num", t_ya)
-                note("", "pct", sh_ya)
+                note(dya_k, "num", t_ya)
+                note(dya_k, "pct", sh_ya)
             lines.append(f"  - {name} (נסחרת: {co}): {t:,} · {sh:.1f}%"
                          + (f" · אשתקד {t_ya:,} ({sh_ya:.1f}%)" if sh_ya is not None else ""))
 
