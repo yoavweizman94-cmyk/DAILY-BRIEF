@@ -84,10 +84,17 @@ def _item(r: dict, latest: str | None, today) -> str:
         tags += ' <span class="dg-tag dg-imp">חשוב</span>'
     if latest and r.get("run") == latest:
         tags += ' <span class="dg-tag dg-new">חדש</span>'
-    srcs = " · ".join(
-        f'<a href="{escape(s["url"])}" target="_blank" rel="noopener" title="{escape(s.get("title") or "")}">'
-        f'{escape(s["name"])}</a>'
-        for s in r.get("sources") or [] if (s.get("url") or "").startswith("http"))
+    # כמה כתבות מאותו אתר: השם פעם אחת, והכתבות הנוספות כמספרים — "WSJ · 2 · 3",
+    # ולא "WSJ · WSJ · WSJ"
+    links, seen_names = [], {}
+    for s in r.get("sources") or []:
+        if not (s.get("url") or "").startswith("http"):
+            continue
+        n = seen_names[s["name"]] = seen_names.get(s["name"], 0) + 1
+        text = escape(s["name"]) if n == 1 else str(n)
+        links.append(f'<a href="{escape(s["url"])}" target="_blank" rel="noopener" '
+                     f'title="{escape(s.get("title") or "")}">{text}</a>')
+    srcs = " · ".join(links)
     cos = ("" if not r.get("companies") else
            '<div class="cc-cos">' + "".join(f'<span class="co">{escape(c)}</span>' for c in r["companies"]) + "</div>")
     return (f'<article class="dg-item" id="{escape(r["id"])}">'
@@ -125,7 +132,8 @@ def page(data: dict) -> str:
                      f'{sum(1 for r in items if r["domain"] == k)}</span></a>'
                      for k in domains) + "</nav>")
 
-    must = [r for r in items if r.get("level") == 3]
+    # עשר לכל היותר: "חשוב היום" שמתארך לעשרים שורות כבר אינו מסנן
+    must = [r for r in items if r.get("level") == 3][:10]
     must_html = ""
     if must:
         lis = "".join(f'<li><span class="dg-time">{_when(r.get("ts"), today)}</span>'
