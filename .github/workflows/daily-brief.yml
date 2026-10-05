@@ -238,6 +238,21 @@ jobs:
           fi
           if [ "$sync_rc" -ne 0 ]; then exit 1; fi
 
+      # **הבנייה חוזרת אחרי הדחיפה, על התוכן המאוחד.** הצינור בנה את האתר
+      # מהשכפול שנעשה בתחילת הריצה, וריצת ברייף נמשכת חצי שעה — בזמן הזה
+      # צינורות אחרים מספיקים לדחוף תוכן טרי ולפרוס אותו. הפריסה כאן הייתה
+      # דורסת אותו בגרסה הישנה: נמדד 05/10/2026 שסחורות (13:15) ורכב (13:25)
+      # נפרסו טריים, והברייף שנפרס ב-13:42 החזיר את שניהם ל-02/10. אחרי
+      # הדחיפה לריפו התוכן השכפול הטרי מכיל את הכל — את הברייף ואת מה
+      # שהאחרים דחפו — ובנייה ממנו היא מה שנפרס. כמו ב-maya-watch.
+      - name: Rebuild site with merged content
+        if: steps.pipeline.outputs.produced == 'yes'
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: |
+          bash scripts/content_repo.sh pull
+          python site/build.py
+
       # פריסה ל-Cloudflare Pages. החליף את GitHub Pages, שאינו יודע לבקש
       # הזדהות בכלל — Cloudflare Access יושב לפני האתר וחוסם כברירת מחדל.
       - uses: actions/setup-node@v7
