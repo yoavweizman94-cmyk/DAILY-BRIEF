@@ -48,7 +48,7 @@ jobs:
         run: bash scripts/content_repo.sh pull
 
       - name: Install collector dependencies
-        run: pip install pyyaml truststore certifi curl_cffi requests yfinance openpyxl
+        run: pip install pyyaml truststore certifi curl_cffi requests yfinance openpyxl anthropic
 
       # כשל של כל המקורות מפיל את הריצה באדום; מקור בודד שנכשל — אזהרה.
       - name: Collect prices, curves and headlines

@@ -16,9 +16,7 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 import sys
-import tempfile
 import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -28,6 +26,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _api  # noqa: E402
 import _cli  # noqa: E402
 
 JOB = "auto-review"
@@ -40,7 +39,6 @@ REGISTRY = OUT / "registry"
 WINDOW_H = 72
 MAX_IL = 90
 MAX_WORLD = 90
-TIMEOUT = 900
 DIRECTIONS = ("חיובי", "שלילי", "מעורב", "ניטרלי")
 HEB = "֐-׿"
 
@@ -57,7 +55,9 @@ IL = _tz()
 
 
 def _obj(props: dict) -> dict:
-    return {"type": "object", "required": list(props), "properties": props}
+    # additionalProperties: false — הפלט המובנה של ה-API דורש אותו בכל אובייקט
+    return {"type": "object", "additionalProperties": False, "required": list(props),
+            "properties": props}
 
 
 _STR = {"type": "string"}
@@ -689,46 +689,16 @@ def clean(d: dict, names: set[str], numbered: list[dict], facts: dict | None = N
 
 
 def run_model(prompt: str) -> tuple[str | None, str | None, dict]:
-    """קריאה אחת ל-CLI — אותו דפוס כמו scripts/analyze_cbs.py (ראה ההסבר שם):
-    פלט JSON עם מטא-דאטה, סכמה, בלי כלים, ומתיקייה זמנית מחוץ לריפו כדי
-    ש-CLAUDE.md של הברייף לא ייטען וישולם בכל קריאה."""
-    cmd = ["claude", "-p", "נתח את הכותרות לפי ההוראות והנתונים שבקלט. אל תשתמש בכלים.",
-           "--output-format", "json", "--max-turns", "3",
-           "--json-schema", json.dumps(SCHEMA, ensure_ascii=False),
-           "--permission-mode", "acceptEdits", "--allowedTools", ""]
-    if os.environ.get("CLAUDE_MODEL"):
-        cmd += ["--model", os.environ["CLAUDE_MODEL"]]
-    if os.environ.get("AUTO_EFFORT"):
-        cmd += ["--effort", os.environ["AUTO_EFFORT"]]
-    if os.environ.get("AUTO_MAX_USD"):
-        cmd += ["--max-budget-usd", os.environ["AUTO_MAX_USD"]]
-    try:
-        proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
-                              encoding="utf-8", timeout=TIMEOUT, cwd=tempfile.gettempdir())
-    except subprocess.TimeoutExpired:
-        return None, f"חריגה מ-{TIMEOUT} שניות", {}
-    except OSError as e:
-        return None, f"{type(e).__name__}: {e}", {}
-    out, meta = proc.stdout or "", {}
-    try:
-        env = json.loads(out)
-    except ValueError:
-        env = None
-    if isinstance(env, dict) and ("result" in env or "subtype" in env):
-        _cli.log_cost(JOB, env.get("total_cost_usd"), model=os.environ.get("CLAUDE_MODEL") or "default")
-        usage = env.get("usage") or {}
-        meta = {"cost": env.get("total_cost_usd"), "ms": env.get("duration_ms"),
-                "turns": env.get("num_turns"), "out_tokens": usage.get("output_tokens")}
-        if env.get("is_error") or proc.returncode != 0:
-            return None, (f"שגיאת CLI ({env.get('subtype')}, {env.get('num_turns')} תורות): "
-                          + " ".join(str(env.get("result") or "").split())[:200]), meta
-        if isinstance(env.get("structured_output"), dict):
-            return json.dumps(env["structured_output"], ensure_ascii=False), None, meta
-        return str(env.get("result") or ""), None, meta
-    if proc.returncode != 0:
-        err = " ".join((proc.stderr or out or "").split())[-240:] or "בלי פלט שגיאה"
-        return None, f"קוד {proc.returncode} — {err}", meta
-    return out, None, meta
+    """קריאה אחת למודל — ישירות ל-API (scripts/_api.py), פלט מובנה לפי SCHEMA.
+
+    **לא דרך ה-CLI מאז 05/10/2026.** קריאת CLI שילמה על ~54K טוקני הנחיות סוכן לפני
+    שקראה את הקלט. כאן נשמרו שלושה דברים: אותה רמת מאמץ (AUTO_EFFORT, עם שלב
+    חשיבה), אותה תקרה (AUTO_MAX_USD — חלה רק בהרצה מקומית בלי מפתח, דרך ה-CLI),
+    ואותו חוזה — (טקסט JSON, שגיאה, מטא) — כך ש-parse() והבדיקות שאחריו לא השתנו.
+    """
+    return _api.run_review(prompt, SCHEMA, job=JOB,
+                           effort=os.environ.get("AUTO_EFFORT") or "medium",
+                           max_usd=float(os.environ.get("AUTO_MAX_USD") or 2))
 
 
 def main() -> int:

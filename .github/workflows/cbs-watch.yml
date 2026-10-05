@@ -54,7 +54,7 @@ jobs:
         run: bash scripts/content_repo.sh pull
 
       - name: Install collector dependencies
-        run: pip install pyyaml truststore certifi pypdf
+        run: pip install pyyaml truststore certifi pypdf anthropic
 
       # כשל מלא (כל המקורות) מפיל את הריצה באדום עם הסיבה באנוטציה. כשל
       # חלקי — מקור אחד, או PDF שלא נקרא — נאמר כאזהרה, והשאר ממשיך.

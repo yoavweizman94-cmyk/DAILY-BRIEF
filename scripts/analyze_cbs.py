@@ -24,9 +24,7 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 import sys
-import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -35,6 +33,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _api  # noqa: E402
 import _cli  # noqa: E402
 
 JOB = "cbs-review"
@@ -49,12 +48,13 @@ RUN_BUDGET = int(os.environ.get("CBS_RUN_BUDGET_SEC", "1800"))
 FAILED = OUT / "failed"
 HEB = "\u0590-\u05FF"
 MAX_ATTEMPTS = 3
-TIMEOUT = 900
 DIRECTIONS = ("חיובי", "שלילי", "מעורב", "ניטרלי")
 
 
 def _obj(props: dict) -> dict:
-    return {"type": "object", "required": list(props), "properties": props}
+    # additionalProperties: false — הפלט המובנה של ה-API דורש אותו בכל אובייקט
+    return {"type": "object", "additionalProperties": False, "required": list(props),
+            "properties": props}
 
 
 _STR = {"type": "string"}
@@ -306,64 +306,16 @@ def clean(d: dict, names: set[str]) -> tuple[dict, int]:
 
 
 def run_model(prompt: str) -> tuple[str | None, str | None, dict]:
-    """קריאה אחת ל-CLI. מחזיר (טקסט התשובה, שגיאה, מטא-דאטה של הריצה).
+    """קריאה אחת למודל — ישירות ל-API (scripts/_api.py), פלט מובנה לפי SCHEMA.
 
-    **--output-format json** נותן את התשובה יחד עם משך, עלות, מספר תורות
-    וטוקני פלט. בלעדיו כשל נראה כ"פלט שאינו JSON" ותו לא — כך בדיוק נראה
-    הכשל הראשון כאן, אחרי עשר דקות, בלי שום דרך לדעת מה קרה.
-
-    **--max-turns 3**: ניתוח הוא תשובה אחת, אבל פלט מובנה עשוי לדרוש תור
-    פנימי נוסף. התקרה עדיין מונעת לולאה של ניסיונות לפתוח את הקישור שבפרומפט.
+    **לא דרך ה-CLI מאז 05/10/2026.** קריאת CLI שילמה על ~54K טוקני הנחיות סוכן לפני
+    שקראה את הקלט. כאן נשמרו שלושה דברים: אותה רמת מאמץ (CBS_EFFORT, עם שלב
+    חשיבה), אותה תקרה (CBS_MAX_USD — חלה רק בהרצה מקומית בלי מפתח, דרך ה-CLI),
+    ואותו חוזה — (טקסט JSON, שגיאה, מטא) — כך ש-parse() והבדיקות שאחריו לא השתנו.
     """
-    cmd = ["claude", "-p", "נתח את ההודעה לפי ההוראות והנתונים שבקלט. אל תשתמש בכלים.",
-           "--output-format", "json", "--max-turns", "3",
-           "--json-schema", json.dumps(SCHEMA, ensure_ascii=False),
-           "--permission-mode", "acceptEdits", "--allowedTools", ""]
-    # **העלות נקבעת כאן.** נמדד 16/09/2026 על הודעת החשבונות הלאומיים, בברירת
-    # המחדל של ה-CLI: 525 שניות, 58,807 טוקני פלט ו-2.09 דולר להודעה אחת —
-    # רובם חשיבה פנימית ולא הניתוח עצמו. המודל, רמת המאמץ ותקרת הדולרים
-    # לקריאה נקבעים ב-workflow ולא כאן, כדי שאפשר יהיה לשנות אותם בלי קוד.
-    if os.environ.get("CLAUDE_MODEL"):
-        cmd += ["--model", os.environ["CLAUDE_MODEL"]]
-    if os.environ.get("CBS_EFFORT"):
-        cmd += ["--effort", os.environ["CBS_EFFORT"]]
-    if os.environ.get("CBS_MAX_USD"):
-        cmd += ["--max-budget-usd", os.environ["CBS_MAX_USD"]]
-    try:
-        # הפרומפט עובר ב-stdin ולא כארגומנט: הודעה ארוכה עם מפת הכיסוי חוצה
-        # בקלות את מגבלת אורך שורת הפקודה של Windows.
-        # **הריצה מתיקייה זמנית, מחוץ לריפו.** מתוך הריפו ה-CLI טוען את
-        # CLAUDE.md — הוראות הברייף, עם תבנית פלט אחרת לגמרי — ומשלם עליהן
-        # בכל קריאה.
-        proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
-                              encoding="utf-8", timeout=TIMEOUT, cwd=tempfile.gettempdir())
-    except subprocess.TimeoutExpired:
-        return None, f"חריגה מ-{TIMEOUT} שניות", {}
-    except OSError as e:
-        return None, f"{type(e).__name__}: {e}", {}
-    out, meta = proc.stdout or "", {}
-    try:
-        env = json.loads(out)
-    except ValueError:
-        env = None
-    if isinstance(env, dict) and ("result" in env or "subtype" in env):
-        _cli.log_cost(JOB, env.get("total_cost_usd"), model=os.environ.get("CLAUDE_MODEL") or "default")
-        usage = env.get("usage") or {}
-        meta = {"cost": env.get("total_cost_usd"), "ms": env.get("duration_ms"),
-                "turns": env.get("num_turns"), "subtype": env.get("subtype"),
-                "out_tokens": usage.get("output_tokens"), "in_tokens": usage.get("input_tokens")}
-        if env.get("is_error") or proc.returncode != 0:
-            return None, (f"שגיאת CLI ({env.get('subtype')}, {env.get('num_turns')} תורות): "
-                          + " ".join(str(env.get("result") or "").split())[:200]), meta
-        # עם --json-schema האובייקט מגיע מפורסר ב-structured_output; בלעדיו,
-        # או בגרסת CLI ישנה, הטקסט ב-result עובר את parse() כרגיל.
-        if isinstance(env.get("structured_output"), dict):
-            return json.dumps(env["structured_output"], ensure_ascii=False), None, meta
-        return str(env.get("result") or ""), None, meta
-    if proc.returncode != 0:
-        err = " ".join((proc.stderr or out or "").split())[-240:] or "בלי פלט שגיאה"
-        return None, f"קוד {proc.returncode} — {err}", meta
-    return out, None, meta
+    return _api.run_review(prompt, SCHEMA, job=JOB,
+                           effort=os.environ.get("CBS_EFFORT") or "medium",
+                           max_usd=float(os.environ.get("CBS_MAX_USD") or 2))
 
 
 def main() -> int:
