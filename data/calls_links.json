@@ -65,5 +65,14 @@
   "certain": false,
   "known": [],
   "others": []
+ },
+ "1774121": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": [
+   "https://www.nyse.com/quote/XNYS:ORA",
+   "https://investor.ormat.com/corporate-profile/"
+  ]
  }
 }
