@@ -29,6 +29,7 @@ import otc
 import offex
 import jumbo
 import transcripts
+import mcp_data
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "site" / "dist"
@@ -1261,9 +1262,10 @@ def main() -> int:
               + (f" ועוד {len(_nomaya) - 15}" if len(_nomaya) > 15 else "")
               + " — הדיווחים שלהן אינם נמשכים. להריץ ingest/resolve_tase_ids.py.")
 
+    _nadlan_rows = nadlan.load()
     (OUT / "nadlan.html").write_text(
         PAGE.format(title=f"שוק הדיור · {site_title}", site_title=site_title,
-                    root="", body=nadlan.page(nadlan.load())),
+                    root="", body=nadlan.page(_nadlan_rows)),
         encoding="utf-8")
 
     # שתי שכבות בעמוד אחד: הסקירה של הבורסה נותנת שלמות, מאיה נותנת
@@ -1308,6 +1310,20 @@ def main() -> int:
         PAGE.format(title=f"שיחות ועידה · {site_title}", site_title=site_title,
                     root="", body=calls_page(calls, date.today().isoformat())),
         encoding="utf-8")
+
+    # שכבת ה-JSON של שרת ה-MCP (site/functions/api/mcp/). נבנית מאותם
+    # אובייקטים שהעמודים נבנו מהם, ולכן הכלי והאתר אומרים אותו דבר.
+    _ed_raw = {f: e for _d, _o, e, f in found}
+    _mcp_counts = mcp_data.export(
+        OUT,
+        briefs=[(slugs[p], _ed_raw[p], entries[i][1], p) for i, p in enumerate(briefs)],
+        markets=markets, te=te, reports=all_reports or [], calls=calls,
+        coverage=_cov, nadlan_rows=_nadlan_rows, otc_rows=_otc_rows,
+        offex_rows=_off_rows, jumbo_rows=_jumbo_rows,
+        topic_sums=topic_sums, topic_day=topic_sums_day, topics_cfg=topics,
+        digest=_dg, cbs=_cbs, commod=_commod)
+    print("::notice::שכבת ה-MCP: "
+          + " · ".join(f"{k} {v}" for k, v in _mcp_counts.items()))
 
     # התמלילים והלוח הם שני חצאים של אותו נושא: הלוח אומר מתי, התמליל
     # אומר מה נאמר. הופרדו לשני עמודים כי הלוח נצרך לפני השיחה והתמליל

@@ -117,6 +117,22 @@ jobs:
             [ "$c" = "200" ] && bad "$APP/api/$ep השיב 200 בלי סשן — שער פתוח"
           done
 
+          # --- שרת ה-MCP: נפרס, ומסרב בלי אסימון ---
+          # 401 = הקוד חי והאסימון נדרש. 503 = נפרס אך MCP_TOKEN לא הוצב
+          # (להריץ mcp-token-sync). 404 = הפונקציה לא נפרסה. 200 = שער פתוח.
+          echo "=== שרת ה-MCP ==="
+          c=$(curl -s -o /dev/null --max-time 25 -w '%{http_code}' -X POST \
+                -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"ping"}' \
+                "$APP/api/mcp" || true)
+          note "api/mcp → $c"
+          case "$c" in
+            401) note "שרת ה-MCP חי ונעול ✓" ;;
+            503) echo "::warning::שרת ה-MCP נפרס אך MCP_TOKEN אינו מוצב ב-Pages — להריץ את MCP Token Sync" ;;
+            404) bad "$APP/api/mcp לא נפרס (404)" ;;
+            200) bad "$APP/api/mcp השיב 200 בלי אסימון — שער פתוח" ;;
+            *)   bad "$APP/api/mcp השיב $c" ;;
+          esac
+
           # --- pages.dev: חייב להפנות לדומיין ולא להגיש בעצמו ---
           echo "=== forest-brief.pages.dev ==="
           rd=$(curl -s -o /dev/null --max-time 25 -w '%{redirect_url}' "https://forest-brief.pages.dev/" || true)

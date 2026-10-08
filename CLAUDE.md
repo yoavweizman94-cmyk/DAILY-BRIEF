@@ -24,7 +24,8 @@
 tlv-tase-view/
 ├── CLAUDE.md                  # הקובץ הזה
 ├── .claude/skills/            # israeli-statistics, israeli-land-tenders, israeli-real-estate
-├── .mcp.json                  # israel-statistics (למ"ס) + nadlan (עסקאות Govmap)
+├── .mcp.json                  # israel-statistics (למ"ס) + nadlan (עסקאות Govmap) + tlv-tase-view (שרת ה-MCP של האתר, לסשנים אינטראקטיביים)
+├── config/mcp.brief.json      # רק למ"ס + nadlan — מה שמהדורת הברייף טוענת (run_daily.sh)
 ├── vendor/                    # clone-on-demand, מחוץ לגיט: nadlan-mcp, remy-mcp
 ├── config/
 │   ├── companies.yaml         # יקום הכיסוי + פרופילי סקטור + קטלוג דרייברים
