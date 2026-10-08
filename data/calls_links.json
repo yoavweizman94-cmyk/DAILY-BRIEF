@@ -1,18 +1,4 @@
 {
- "1767830": {
-  "link": null,
-  "certain": false,
-  "known": [],
-  "others": []
- },
- "1768090": {
-  "link": "https://us06web.zoom.us/webinar/register/WN_T8DIxqLJT_CIVUXToEs0bA",
-  "certain": true,
-  "known": [
-   "https://us06web.zoom.us/webinar/register/WN_T8DIxqLJT_CIVUXToEs0bA"
-  ],
-  "others": []
- },
  "1768011": {
   "link": "https://us02web.zoom.us/webinar/register/WN_LOhEKuOAR8OTZxKpbLMXOA",
   "certain": true,
