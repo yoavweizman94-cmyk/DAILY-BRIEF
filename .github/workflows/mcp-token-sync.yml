@@ -1,0 +1,45 @@
+name: MCP Token Sync
+
+# מעביר את אסימון שרת ה-MCP של האתר מ-GitHub ל-Cloudflare Pages.
+#
+# שרת ה-MCP (site/functions/api/mcp/) מאמת כל קריאה מול MCP_TOKEN בסביבת
+# ה-Pages. האסימון נבחר פעם אחת — מחרוזת אקראית ארוכה, למשל הפלט של
+# `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` — ונשמר
+# ב-GitHub → Settings → Secrets and variables → Actions בשם **MCP_TOKEN**.
+# הריצה הזו מציבה אותו בפרויקט ה-Pages באותו שם. אותו ערך הוא מה שמזינים
+# במחבר ב-claude.ai (`/api/mcp/<MCP_TOKEN>`) או במשתנה TLV_MCP_TOKEN של
+# סביבת Claude Code.
+#
+# הערך אינו מודפס ואינו נשמר בשום מקום אחר. האימות בסוף בודק שהשם קיים
+# ושסוגו מוצפן, לא את ערכו. אחרי ההצבה: הפריסה הבאה (כל דחיפה ל-main)
+# מרימה את האתר עם האסימון. החלפת אסימון = עדכון הסוד ב-GitHub והרצה חוזרת.
+on:
+  push:
+    paths:
+      - ".trigger/mcp-token-sync.json"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-token-sync
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/pages_env.py
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - name: Put token into Pages
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VAR_NAME: MCP_TOKEN
+          VAR_VALUE: ${{ secrets.MCP_TOKEN }}
+        run: python3 scripts/pages_env.py

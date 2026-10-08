@@ -35,6 +35,7 @@ GitHub Actions — שלוש מהדורות ביום (בוקר 06:45 · נעיל�
 | `CONTENT_DEPLOY_KEY` | מפתח SSH פרטי לריפו התוכן | `ssh-keygen`; החלק הציבורי → Deploy keys של `DAILY-BRIEF-content` עם הרשאת כתיבה |
 | `TELEGRAM_BOT_TOKEN` | טוקן בוט (אופציונלי, **לא מוגדר כרגע**) | @BotFather בטלגרם → ‎/newbot |
 | `TELEGRAM_CHAT_ID` | יעד השליחה (אופציונלי, **לא מוגדר כרגע**) | להוסיף את הבוט לקבוצה/ערוץ ולקרוא את ה-id דרך `getUpdates` |
+| `MCP_TOKEN` | אסימון שרת ה-MCP של האתר (ראה "שרת ה-MCP של האתר") | מחרוזת אקראית: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`; אחרי השמירה להריץ את workflow **MCP Token Sync** |
 
 בלי שני האחרונים `send_telegram.py` מדלג בשקט; שאר הצנרת אינה מושפעת.
 
@@ -284,6 +285,51 @@ Cloudflare Access הוסר — הוא יודע לזהות רק מול ספק ז�
 תכונות העוגייה ואת דחיית סיסמה שגויה וחשבון מושבת, ומוחק את החשבון
 ומאמת שנמחק. `users.py` הוא כלי הניהול, וגיבוב הסיסמה בו זהה בת"ו
 למימוש ב-JS.
+
+### שרת ה-MCP של האתר
+
+האתר חושף את התוכן שלו גם כשרת MCP (Model Context Protocol), כך שכל סשן
+של Claude — claude.ai, Claude Code, Cowork — יכול לשאול אותו ישירות:
+הברייף האחרון או לפי תאריך, חיפוש בברייפים, רצועת השווקים ומאקרו ישראל,
+דיווחי מאיה מסוכמים, שיחות ועידה, שוק הדיור, עסקאות מחוץ לבורסה, סיכומי
+סקטורים, כותרות, למ"ס, סחורות, רשימת הכיסוי ואינדקס הדוחות הכספיים.
+
+| חלק | איפה | מה עושה |
+|-----|------|---------|
+| `site/mcp_data.py` | בנייה | כותב `site/dist/mcp/*.json` + `briefs/*.md` מאותם לואדרים שבונים את העמודים |
+| `site/functions/api/mcp/[[path]].js` | Cloudflare | שרת MCP (Streamable HTTP, JSON-RPC, ללא מצב) שקורא את הקבצים האלה דרך `env.ASSETS` |
+| `scripts/mcp_smoke.mjs` | CI ומקומי | בדיקת עשן: אימות, לחיצת יד, וכל כלי על ה-dist שנבנה. רץ ב-`cloudflare-deploy` לפני הפריסה |
+| `mcp-token-sync.yml` | פעם אחת | מעביר את הסוד `MCP_TOKEN` מ-GitHub ל-Pages |
+
+**כתובת:** `https://app.tlvtaseview.com/api/mcp`. **אימות:** אסימון אחד,
+`MCP_TOKEN`, בשתי צורות — `Authorization: Bearer <token>`, או כמקטע בנתיב:
+`https://app.tlvtaseview.com/api/mcp/<token>`. הצורה השנייה קיימת כי מחבר
+מותאם ב-claude.ai מקבל כתובת בלבד. בלי `MCP_TOKEN` ב-Pages השרת מחזיר 503
+(נכשל סגור); `site-check` בודק זאת בכל בוקר.
+
+**הקמה (פעם אחת):**
+
+1. ליצור אסימון: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`.
+2. לשמור אותו ב-GitHub → Settings → Secrets and variables → Actions בשם
+   `MCP_TOKEN`, ולהריץ Actions → **MCP Token Sync**. הפריסה הבאה (כל דחיפה
+   ל-main) מרימה את האתר עם האסימון.
+3. לחבר את Claude — אחת משתי הדרכים, או שתיהן:
+   - **לכל סשן ב-claude.ai (כולל Claude Code בדפדפן):** Settings → Connectors
+     → Add custom connector, עם הכתובת `https://app.tlvtaseview.com/api/mcp/<token>`.
+     המחבר זמין מאותו רגע בכל שיחה ובכל סשן.
+   - **לסשנים של הריפו הזה ב-Claude Code:** `.mcp.json` כבר מכיל את השרת
+     `tlv-tase-view` עם הכותרת `Bearer ${TLV_MCP_TOKEN}`. יש להגדיר את
+     משתנה הסביבה `TLV_MCP_TOKEN` (בסביבת הענן: Edit environment →
+     Environment variables; מקומית: בפרופיל השל). בלעדיו השרת מופיע כ"נכשל
+     בחיבור" ואינו פוגע בשאר.
+
+**מה זה לא משנה.** `run_daily.sh` מריץ את מהדורת הברייף עם
+`config/mcp.brief.json` ו-`--strict-mcp-config`, כלומר רק הלמ"ס ו-nadlan.
+שרת האתר אינו נטען שם: הסוכן קורא את `data/raw` ישירות, וכל כלי שנטען
+הוא הגדרות שנשלחות מחדש בכל תור.
+
+**החלפת אסימון:** לעדכן את הסוד ב-GitHub, להריץ MCP Token Sync, ולעדכן
+את המחבר ואת `TLV_MCP_TOKEN`. האסימון הישן מפסיק לעבוד בפריסה הבאה.
 
 ### חוב אבטחה פתוח
 

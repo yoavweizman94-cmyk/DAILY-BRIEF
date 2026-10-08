@@ -64,6 +64,12 @@ jobs:
       - name: Check inline JS
         run: python scripts/check_inline_js.py
 
+      # שרת ה-MCP (site/functions/api/mcp/) נבדק מול ה-dist שזה עתה נבנה:
+      # שער האימות, לחיצת היד, וכל כלי על הנתונים האמיתיים של הפריסה.
+      # כלי שנופל על צורת נתון חדשה נתפס כאן ולא אצל מי שקורא לו.
+      - name: Check MCP server
+        run: node scripts/mcp_smoke.mjs
+
       # אבחון הטוקן הוא כלי הקמה, ולא משהו שצריך לרוץ בכל דחיפה. שלב
       # הפריסה עצמו נכשל ברעש כשהאימות שבור, ולכן שום אות לא הולך לאיבוד.
       - name: Diagnose token

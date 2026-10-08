@@ -301,9 +301,13 @@ echo "מודל: $BRIEF_MODEL · תקרה: \$$BRIEF_MAX_USD · היום עד כה
 # · ToolSearch — אין כאן כלים נדחים שצריך לטעון.
 # WebFetch נשאר: לפעמים צריך לפתוח גוף של ידיעה שהכותרת בלבד אינה מספיקה
 # לה, וזה בדיוק מה שמעקה 3 דורש.
+# **config/mcp.brief.json ולא .mcp.json.** קובץ הפרויקט מכיל גם את שרת
+# ה-MCP של האתר (tlv-tase-view) — הוא לסשנים אינטראקטיביים, לא למהדורה:
+# הסוכן קורא את data/raw ישירות, וכל כלי שנטען הוא הגדרות שנשלחות מחדש
+# בכל תור. --strict-mcp-config מונע מ-.mcp.json להיטען לצד הקובץ שניתן.
 claude -p "$PROMPT" \
   --output-format stream-json --verbose \
-  --mcp-config .mcp.json \
+  --mcp-config config/mcp.brief.json --strict-mcp-config \
   --permission-mode acceptEdits \
   --allowedTools "Read,Write,Edit,Glob,Grep,Skill,WebFetch,Bash(python:*),mcp__israel-statistics__*,mcp__nadlan__*" \
   --disallowedTools "Agent,Task,WebSearch,ToolSearch,Read(//home/runner/.claude/**),Read(~/.claude/**)" \

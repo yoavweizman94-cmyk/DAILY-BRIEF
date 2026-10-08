@@ -9,13 +9,6 @@
       "type": "stdio",
       "command": "python",
       "args": ["scripts/nadlan_server.py"]
-    },
-    "tlv-tase-view": {
-      "type": "http",
-      "url": "https://app.tlvtaseview.com/api/mcp",
-      "headers": {
-        "Authorization": "Bearer ${TLV_MCP_TOKEN:-}"
-      }
     }
   }
 }
