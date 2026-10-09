@@ -275,3 +275,128 @@ jobs:
           (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
           grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
             echo "::error::הפריסה לא החזירה כתובת"; exit 1; }
+
+  # ---------------------------------------------------------------------------
+  # **הכפתור מרענן את כל האתר, לא רק את הברייף.** כל עמוד מתעדכן בצנרת משלו, וה-cron
+  # של GitHub מדלל אותן: offex-backfill, "כל שעה", רץ ב-04–05/10/2026 כל שלוש עד שש
+  # שעות. לחיצה על הכפתור הפיקה ברייף טרי לצד עמודים בני חצי יום. בריצת כפתור —
+  # workflow_dispatch, או source מתור ה-KV — ורק בה, מופעלות כאן כל צנרות העמודים,
+  # במקביל לברייף. טריגר של רשת הביטחון רץ חמש פעמים ביום, ואין סיבה לשלם בכל אחד
+  # מהם על סקירות.
+  refresh-pages:
+    if: github.event_name == 'workflow_dispatch' || inputs.source != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    outputs:
+      since: ${{ steps.go.outputs.since }}
+      workflows: ${{ steps.go.outputs.workflows }}
+    steps:
+      - name: Start every page pipeline
+        id: go
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          ok=""
+          # רכב וסחורות עם force: בלעדיו הסקירה נכתבת רק כשנאספו מספיק כותרות
+          # חדשות, והעמוד היה מתרענן בנתונים ונשאר עם סקירה של הבוקר.
+          for spec in 'maya-watch.yml|{}' 'auto-watch.yml|{"force":"true"}' \
+                      'commodities-watch.yml|{"force":"true"}' 'cbs-watch.yml|{}' \
+                      'gov-watch.yml|{}' 'headlines.yml|{}' 'offex-backfill.yml|{}'; do
+            wf=${spec%%|*}
+            inputs=${spec#*|}
+            code=$(curl -sS -o resp.txt -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$wf/dispatches" \
+              -d "{\"ref\":\"main\",\"inputs\":$inputs}")
+            if [ "$code" = "204" ]; then
+              ok="$ok${ok:+,}$wf"
+            else
+              echo "::warning title=רענון עמוד לא הופעל::$wf — HTTP $code $(head -c 160 resp.txt)"
+            fi
+          done
+          echo "since=$since" >> "$GITHUB_OUTPUT"
+          echo "workflows=$ok" >> "$GITHUB_OUTPUT"
+          echo "::notice title=רענון כל העמודים::הופעלו במקביל לברייף: ${ok:-אף אחת}"
+
+  # **פריסה אחרונה, כשכולן הסתיימו.** כל צנרת פורסת את האתר בעצמה, מהתוכן שהיה
+  # בריפו ברגע הבנייה שלה; שמונה צנרות שמסתיימות בטווח של דקות דורסות זו את זו,
+  # ועמוד שנפרס טרי חוזר לגרסה הקודמת בפריסה של שכנתו. כאן — אחרי הברייף ואחרי
+  # כל צנרות העמודים — נבנה האתר פעם אחת מהתוכן המאוחד, וזו הגרסה שנשארת.
+  final-deploy:
+    needs: [brief, refresh-pages]
+    if: always() && needs.refresh-pages.result == 'success' && needs.refresh-pages.outputs.workflows != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Wait for the page pipelines
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SINCE: ${{ needs.refresh-pages.outputs.since }}
+          WORKFLOWS: ${{ needs.refresh-pages.outputs.workflows }}
+        run: |
+          # עד 35 דקות מעכשיו. הצנרות רצו במקביל לברייף, ולרוב כבר הסתיימו.
+          # צנרת שעדיין רצה אחרי זה — העמוד שלה ייפרס בסיום הריצה שלה עצמה.
+          deadline=$(( $(date +%s) + 35 * 60 ))
+          IFS=, read -ra wfs <<< "$WORKFLOWS"
+          while :; do
+            pending=""
+            for wf in "${wfs[@]}"; do
+              st=$(curl -sS -G -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+                     --data-urlencode "event=workflow_dispatch" --data-urlencode "created=>=$SINCE" \
+                     --data-urlencode "per_page=1" \
+                     "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$wf/runs" \
+                   | python3 -c "import json,sys; r=(json.load(sys.stdin).get('workflow_runs') or [None])[0]; print(f\"{r['status']}/{r['conclusion']}\" if r else 'missing')")
+              case "$st" in completed/*) ;; *) pending="$pending $wf" ;; esac
+            done
+            if [ -z "$pending" ]; then
+              echo "כל צנרות העמודים הסתיימו"
+              break
+            fi
+            if [ "$(date +%s)" -gt "$deadline" ]; then
+              echo "::warning title=רענון העמודים לא הסתיים בזמן::עוד רצות:$pending — נפרס מה שכבר נדחף; הן יפרסו את שלהן בסיומן."
+              break
+            fi
+            sleep 30
+          done
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Fetch merged content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Build site
+        run: |
+          pip install -r requirements.txt
+          python site/build.py
+
+      - name: Check inline JS
+        run: python scripts/check_inline_js.py
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
+          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
+            echo "::error::הפריסה לא החזירה כתובת"; exit 1; }
+          echo "::notice title=האתר כולו עודכן::ברייף ו-$(echo '${{ needs.refresh-pages.outputs.workflows }}' | tr ',' '\n' | grep -c .) צנרות עמודים, בפריסה אחת"

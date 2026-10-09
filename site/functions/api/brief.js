@@ -97,8 +97,8 @@ export async function onRequestPost({ request, env }) {
       edition,
       queued: true,
       label: LABEL[edition],
-      message: `נרשמה בקשה להפקת ברייף (${LABEL[edition]}). ההפקה מתחילה ${QUEUE_WAIT} ונמשכת 10–15 דקות. `
-        + "להתחלה מיידית צריך אסימון — ראה המדריך.",
+      message: `נרשמה בקשה להפקת ברייף (${LABEL[edition]}) ולרענון כל עמודי האתר. ההפקה מתחילה `
+        + `${QUEUE_WAIT} ונמשכת 15–25 דקות. להתחלה מיידית צריך אסימון — ראה המדריך.`,
       runs: `https://github.com/${REPO}/actions/workflows/brief-request.yml`,
     }, 202, NO_STORE);
   }
@@ -122,7 +122,11 @@ export async function onRequestPost({ request, env }) {
     ok: true,
     edition,
     label: LABEL[edition],
-    message: `הופעלה הפקת ברייף (${LABEL[edition]}). היא נמשכת 10–15 דקות, והעמוד יתעדכן בסיומה.`,
+    // הלחיצה מרעננת את כל האתר ולא רק את הברייף (daily-brief.yml, refresh-pages ו-final-deploy):
+    // כל צנרות העמודים רצות במקביל לברייף, והאתר נפרס פעם אחרונה כשכולן מסתיימות.
+    message: `הופעלה הפקת ברייף (${LABEL[edition]}) ורענון של כל עמודי האתר — רכב, סחורות, למ"ס, `
+      + "רגולציה, כותרות, דיווחים ועסקאות מחוץ לבורסה. הברייף מוכן תוך 10–20 דקות, והאתר כולו "
+      + "נפרס מחדש כשכל העמודים מסתיימים — לרוב תוך 25 דקות.",
     runs: `https://github.com/${REPO}/actions/workflows/${WORKFLOW}`,
   }, 202, NO_STORE);
 }

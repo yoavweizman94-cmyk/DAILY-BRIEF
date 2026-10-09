@@ -18,7 +18,15 @@ on:
   push:
     paths:
       - ".trigger/commodities-watch.json"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      # כפתור הברייף באתר מפעיל את הצנרת הזו עם force=true (daily-brief.yml,
+      # refresh-pages): רענון העמוד כולל סקירה חדשה, ולא רק כותרות.
+      force:
+        description: "לכפות סקירה גם בלי מספיק כותרות חדשות"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -56,7 +64,7 @@ jobs:
         env:
           TRADINGECONOMICS_KEY: ${{ secrets.TRADINGECONOMICS_KEY }}
         run: |
-          if [ "${{ github.event_name }}" = "push" ] && grep -q '"force": *true' .trigger/commodities-watch.json; then
+          if { [ "${{ github.event_name }}" = "push" ] && grep -q '"force": *true' .trigger/commodities-watch.json; }              || [ "${{ inputs.force }}" = "true" ]; then
             export COMMOD_FORCE=1
           fi
           python ingest/commodities_pull.py

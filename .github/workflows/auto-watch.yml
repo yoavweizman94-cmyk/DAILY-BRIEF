@@ -21,7 +21,15 @@ on:
   push:
     paths:
       - ".trigger/auto-watch.json"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      # כפתור הברייף באתר מפעיל את הצנרת הזו עם force=true (daily-brief.yml,
+      # refresh-pages): רענון העמוד כולל סקירה חדשה, ולא רק כותרות.
+      force:
+        description: "לכפות סקירה גם בלי מספיק כותרות חדשות"
+        type: boolean
+        required: false
+        default: false
 
 # אין כתיבה לריפו הציבורי: הכותרות והסקירות נשמרות בריפו התוכן הפרטי.
 permissions:
@@ -59,7 +67,7 @@ jobs:
       - name: Collect auto headlines
         id: collect
         run: |
-          if [ "${{ github.event_name }}" = "push" ] && grep -q '"force": *true' .trigger/auto-watch.json; then
+          if { [ "${{ github.event_name }}" = "push" ] && grep -q '"force": *true' .trigger/auto-watch.json; }              || [ "${{ inputs.force }}" = "true" ]; then
             export AUTO_FORCE=1
           fi
           python ingest/auto_pull.py

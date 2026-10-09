@@ -82,6 +82,11 @@ jobs:
     needs: poll
     if: needs.poll.outputs.run == 'true'
     uses: ./.github/workflows/daily-brief.yml
+    # actions: write — ריצת כפתור מפעילה גם את צנרות העמודים (daily-brief.yml,
+    # refresh-pages). הרשאות של workflow שנקרא מוגבלות לאלה של הקורא.
+    permissions:
+      contents: write
+      actions: write
     with:
       edition: ${{ needs.poll.outputs.edition }}
       source: kv
