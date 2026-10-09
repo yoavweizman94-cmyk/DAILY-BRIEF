@@ -50,5 +50,13 @@
    "https://www.nyse.com/quote/XNYS:ORA",
    "https://investor.ormat.com/corporate-profile/"
   ]
+ },
+ "1774731": {
+  "link": "https://us06web.zoom.us/j/86215803563?pwd=daQfOSlilQXWAqoOBiPaZq4ewMZEr4.1",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/j/86215803563?pwd=daQfOSlilQXWAqoOBiPaZq4ewMZEr4.1"
+  ],
+  "others": []
  }
 }
