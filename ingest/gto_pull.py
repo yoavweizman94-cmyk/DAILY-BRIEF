@@ -509,18 +509,27 @@ def main() -> int:
 
     # **פריסה פעם אחת ביום, בסיום המסחר.** כל דחיפה ל-main מריצה את
     # Cloudflare Deploy; תמונות ביניים נכנסות לאתר בפריסות של הצנרת הרגילה.
-    if snap["final"] and not args.no_deploy and st.get("deployed") != snap["day"]:
+    # **ועוד פעם, כשהתמונה הסופית השתנתה אחרי שכבר נפרסה.** קריאות ההשלמה של
+    # הערב (21:00, 23:30) קיימות בשביל ימים כמו 12/10/2026: GTO נפתח מאוחר,
+    # הקריאות של הנעילה נפלו לשמירה, ורק ב-23:40 נקראו 26 ניירות במקום 5. נתון
+    # שתוקן בערב ולא נפרס היה מחכה לצנרת אחרת.
+    changed_final = pushed and st.get("deployed_fp") != fp
+    if snap["final"] and not args.no_deploy and (st.get("deployed") != snap["day"] or changed_final):
         site = Repo(SITE_URL, HOME / "site", "/.trigger/")
 
         def touch(d: Path) -> None:
             t = d / ".trigger" / "gto.json"
             t.parent.mkdir(parents=True, exist_ok=True)
+            # "at" — פריסה שנייה לאותו יום חייבת קובץ שונה, אחרת אין מה לדחוף
             t.write_text(json.dumps({"reason": "עסקאות מתואמות — סיום יום מסחר",
-                                     "date": snap["day"]}, ensure_ascii=False) + "\n",
+                                     "date": snap["day"],
+                                     "at": datetime.now().isoformat(timespec="minutes")},
+                                    ensure_ascii=False) + "\n",
                          encoding="utf-8")
         try:
             site.commit_push(f"gto: עסקאות מתואמות {snap['day']}", touch, [".trigger/gto.json"])
             st["deployed"] = snap["day"]
+            st["deployed_fp"] = fp
             log("פריסת האתר הופעלה")
         except Exception as e:  # noqa: BLE001
             log(f"טריגר הפריסה נכשל: {e}")
