@@ -821,6 +821,11 @@ def sector_depth(md: str) -> list[tuple[str, int, int, float, int]]:
             wc += len(re.findall(r"\S+", line))
     flush_item()
     flush_sec()
+    # **סעיף שחסר כולו הוא הכשל הגדול מכולם, ולא היה נספר כלל.** מהדורת הנעילה
+    # של 12/10/2026 יצאה בלי "## פיננסים" — בלי בנקים, ביטוח ואשראי — והבדיקה,
+    # שעוברת רק על סעיפים שנמצאו, לא התריעה. סעיף חסר נרשם כאן כאפס אייטמים.
+    seen = {sec for sec, *_ in out}
+    out += [(sec, 0, need, 0.0, 0) for sec, need in SECTOR_MIN.items() if sec not in seen]
     return out
 
 
