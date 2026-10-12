@@ -395,8 +395,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          set -o pipefail
-          (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
-          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
-            echo "::error::הפריסה לא החזירה כתובת"; exit 1; }
+          # **ניסיון שני אחרי דקה.** 12/10/2026 נכשלה כאן פריסה על שגיאה פנימית של
+          # Cloudflare ("Failed to publish your Function. Got error: Unknown internal
+          # error occurred") — לא בקוד ולא בתוכן — והפריסה היחידה שמאחדת את כל העמודים
+          # אבדה. שגיאה כזו חולפת; פריסה שנכשלה פעמיים היא תקלה אמיתית.
+          ok=""
+          for attempt in 1 2; do
+            (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) > dep.log 2>&1
+            cat dep.log
+            if grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log; then ok=1; break; fi
+            [ "$attempt" = 1 ] && { echo "::warning title=הפריסה נכשלה — ניסיון שני בעוד דקה::$(grep -m1 -iE 'error' dep.log | cut -c1-160)"; sleep 60; }
+          done
+          [ -n "$ok" ] || { echo "::error::הפריסה לא החזירה כתובת גם בניסיון השני"; exit 1; }
           echo "::notice title=האתר כולו עודכן::ברייף ו-$(echo '${{ needs.refresh-pages.outputs.workflows }}' | tr ',' '\n' | grep -c .) צנרות עמודים, בפריסה אחת"
