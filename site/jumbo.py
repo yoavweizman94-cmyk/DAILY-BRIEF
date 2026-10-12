@@ -556,19 +556,31 @@ def tiles_a(a: dict, j_rows: list[dict], year: str) -> str:
     per_day = [(d, sum(r["value"] for r in shares if r["date"] == d)
                 + sum(r["value"] for r in j_rows if r["date"] == d)) for d in days]
     med = statistics.median([v for _, v in per_day]) if per_day else 0
-    top = aggregate_all(o_day, j_day)[:6]
+    # **הגדולות מול היום כולו.** הנתח של כל נייר מסך היום, שורת "ועוד" לשאר
+    # הניירות ושורת סך של היום — שהיא המספר שבאריח הראשון, כך שהטבלה והאריח
+    # נסגרים זה על זה.
+    agg = aggregate_all(o_day, j_day)
+    top, rest = agg[:6], agg[6:]
+    day_tot = sum(e["value"] for e in agg)
+    o_tot, j_tot = sum(e["otc"] for e in agg), sum(e["jumbo"] for e in agg)
     blocks = [
-        {"type": "stats", "items": [{"label": l, "value": v, "cap": " · ".join(c)} for l, v, c in tiles]},
+        {"type": "stats", "items": [{"label": l, "value": v, "cap": c} for l, v, c in tiles]},
         {"type": "columns", "title": f"מחוץ לבורסה ומתואמות ביום · {len(per_day)} ימים",
          "items": [{"label": f"{d[8:10]}/{d[5:7]}", "value": v, "text": otc.money(v)} for d, v in per_day],
          "maxText": otc.money(max(v for _, v in per_day)), "median": med,
          "medianText": f"חציון: {otc.money(med)}"} if len(per_day) >= 2 else None,
         {"type": "table", "title": f"הגדולות · {hd(ref)}",
          "cols": [["נייר", "name", "rtl"], ["מחוץ לבורסה", "otc", "ltr"],
-                  ["מתואמות", "jumbo", "ltr"], ["סה\"כ", "value", "ltr"]],
+                  ["מתואמות", "jumbo", "ltr"], ["סה\"כ", "value", "ltr"], ["נתח מהיום", "share", "ltr"]],
          "rows": [{"name": e["name"], "otc": otc.money(e["otc"]) if e["otc"] else "—",
                    "jumbo": otc.money(e["jumbo"]) if e["jumbo"] else "—",
-                   "value": otc.money(e["value"])} for e in top]} if top else None,
+                   "value": otc.money(e["value"]),
+                   "share": _pct(e["value"] / day_tot * 100) if day_tot else "—"} for e in top],
+         "moreText": (f"ועוד {len(rest)} ניירות · {otc.money(sum(e['value'] for e in rest))}"
+                      if rest else ""),
+         "totalRow": {"name": "סך הכל", "otc": otc.money(o_tot) if o_tot else "—",
+                      "jumbo": otc.money(j_tot) if j_tot else "—",
+                      "value": otc.money(day_tot), "share": ""}} if top else None,
     ]
     payload = otc.card(f"מחוץ לבורסה ומתואמות · {hd(ref)}",
                        "העסקאות הגדולות במניות, משני המנגנונים יחד.",
