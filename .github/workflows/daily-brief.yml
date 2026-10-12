@@ -303,9 +303,13 @@ jobs:
           ok=""
           # רכב וסחורות עם force: בלעדיו הסקירה נכתבת רק כשנאספו מספיק כותרות
           # חדשות, והעמוד היה מתרענן בנתונים ונשאר עם סקירה של הבוקר.
+          # **בלי offex-backfill.** צנרת הברייף עצמה מושכת את עסקאות מחוץ לבורסה
+          # (offex_pull, otc_pull), ו-final-deploy בונה את העמוד. כשהופעלה גם היא,
+          # שתיהן כתבו את otc/2026.jsonl באותן דקות, והקונפליקט זרק ברייף ששולם
+          # (12/10/2026, 8.07 דולר).
           for spec in 'maya-watch.yml|{}' 'auto-watch.yml|{"force":"true"}' \
                       'commodities-watch.yml|{"force":"true"}' 'cbs-watch.yml|{}' \
-                      'gov-watch.yml|{}' 'headlines.yml|{}' 'offex-backfill.yml|{}'; do
+                      'gov-watch.yml|{}' 'headlines.yml|{}'; do
             wf=${spec%%|*}
             inputs=${spec#*|}
             code=$(curl -sS -o resp.txt -w '%{http_code}' -X POST \
