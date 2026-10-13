@@ -857,7 +857,9 @@ companies:
 - name_he: בית שמש
   listing: TASE
   tase_id: 1081561
-  sector: building_products
+  # 13/10/2026: לפי תיאור הפעילות במאיה — "ייצור ושיפוץ חלקי מנועי מטוסים אזרחיים
+  # וצבאיים". הסיווג הרשמי (מתכת ומוצרי בנייה) הכניס אותה לרשימת המלט והברזל.
+  sector: defense_industry
   tase_sector: תעשייה-מתכת ומוצרי בניה
   maya_company_id: 1054
 - name_he: אלוני חץ
@@ -3107,7 +3109,9 @@ companies:
 - name_he: ניסן
   listing: TASE
   tase_id: 660019
-  sector: paper_wood
+  # 13/10/2026: לפי מאיה — "ייצור בד לא ארוג ע"י 'ספאנטק'". הדרייבר הוא הפוליפרופילן
+  # של הלא-ארוגים, לא עץ ועיסה כמו בסיווג הרשמי.
+  sector: nonwovens
   tase_sector: תעשייה-עץ, נייר ודפוס
   generic_name: true
   maya_company_id: 660
