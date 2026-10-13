@@ -42,5 +42,46 @@
    "https://us06web.zoom.us/j/86215803563?pwd=daQfOSlilQXWAqoOBiPaZq4ewMZEr4.1"
   ],
   "others": []
+ },
+ "1775472": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": [
+   "http://towersemi.com/",
+   "http://finance.yahoo.com/q?s=tsem&d=t",
+   "https://ir.towersemi.com/",
+   "http://www.towersemi.com/"
+  ]
+ },
+ "1775400": {
+  "link": "https://register-conf.media-server.com/register/BIf60e72c108f7438789f445795b04ba52",
+  "certain": true,
+  "known": [
+   "https://register-conf.media-server.com/register/BIf60e72c108f7438789f445795b04ba52",
+   "https://edge.media-server.com/mmc/p/xho8qjz7",
+   "https://enlightenergy-com.zoom.us/webinar/register/WN_PWB4sBeuST-GBSN6mwXkRA#/registration"
+  ],
+  "others": [
+   "https://link.accessidoc.com/BwzjKLOA6gHCAfOMwPU-RyeUjDPHcrbDLleO2mdqOwmLMyWJWPttnzxLkRO-wjYbW5rmiu3Fa_4iwYiLvDdYfstfNa",
+   "https://enlightenergy.com/data/financial-reports/",
+   "https://enlightenergy.com/events/"
+  ]
+ },
+ "1775348": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": []
+ },
+ "1775239": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_uCvPuJ87QAW7RfOuv2lBhA",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_uCvPuJ87QAW7RfOuv2lBhA"
+  ],
+  "others": [
+   "https://www.mivnegroup.co.il/financial/"
+  ]
  }
 }
