@@ -152,11 +152,19 @@ def companies_slim() -> str | None:
         print(f"  כיסוי: לא נטען ({ex})")
         return None
 
+    # **מה החברה עושה, ממקור.** תיאור הפעילות שהחברה מסרה למאיה ושווי השוק שלה
+    # (data/company_profiles.json). בלעדיהם ההסבר על חברה ספציפית נשען על
+    # הזיכרון של המודל או נעצר ב"השפעה על הענף".
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import _profiles  # noqa: PLC0415
     comps = cfg.get("companies", [])
-    lines = [f"# רשימת הכיסוי — {len(comps)} חברות. מקור: config/companies.yaml",
-             "# שם | אנגלית | כינויים | סקטור | דרייברים נוספים | גנרי=התאמה רק בהקשר עסקי",
+    lines = [f"# רשימת הכיסוי — {len(comps)} חברות. מקור: config/companies.yaml; "
+             f"פעילות ושווי שוק — מאיה ({_profiles.updated() or 'לא נטען'})",
+             "# שם | אנגלית | כינויים | סקטור | דרייברים נוספים | גנרי=התאמה רק בהקשר עסקי"
+             " | פעילות (מאיה) | שווי שוק",
              ""]
     for c in comps:
+        prof = _profiles.load().get(c.get("name_he") or "") or {}
         lines.append(" | ".join((
             str(c.get("name_he") or ""),
             str(c.get("name_en") or ""),
@@ -164,6 +172,8 @@ def companies_slim() -> str | None:
             str(c.get("sector") or ""),
             ",".join(c.get("drivers_extra") or []),
             "גנרי" if c.get("generic_name") else "",
+            _profiles.activity(c.get("name_he") or "", 110),
+            _profiles.cap_text(prof.get("market_cap_m")),
         )).rstrip(" |"))
 
     lines += ["", "# פרופילי סקטור — לאיזה דרייבר כל סקטור חשוף", ""]

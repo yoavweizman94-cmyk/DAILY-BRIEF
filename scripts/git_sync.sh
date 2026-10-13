@@ -21,6 +21,8 @@ GENERATED_PATHS=(
   "data/offex_state.json"          # עד היכן נסרקו דיווחי מחוץ לבורסה
   "data/otc_state.json"            # עד היכן נסרקה סקירת הבורסה
   "data/nadlan_state.json"         # קואורדינטות ערים + תוצאת הסריקה האחרונה
+  "data/capital.json"              # הון מונפק לכל נייר — ingest/capital_pull.py
+  "data/company_profiles.json"     # פעילות ושווי שוק לכל חברה — אותו סקריפט
   "output/calls/upcoming.json"     # לוח שיחות — נבנה מה-API בכל ריצה
   "output/filings/manifest.json"   # נגזר לחלוטין מקובצי השנה
 )

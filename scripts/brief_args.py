@@ -74,6 +74,13 @@ def main() -> int:
         reviews = (os.environ.get("IN_REVIEWS") or "").strip()
         force = "1"
         src = source or "workflow_dispatch"
+        # **עקיפת הבלם לריצה אחת גם בשיגור מכוון** — אותם soft_usd/hard_usd של קובץ
+        # הטריגר, כ-inputs. עד 13/10/2026 הם היו רק בטריגר, שאינו מרענן את העמודים:
+        # כשהבלם נסגר, "בריף של כל העמודים" לא היה אפשרי בכלל. הכפתור באתר אינו
+        # שולח אותם, ולכן הוא נשאר כפוף לבלם.
+        if event == "workflow_dispatch" and not source:
+            soft = (os.environ.get("IN_SOFT") or "").strip()
+            hard = (os.environ.get("IN_HARD") or "").strip()
     elif event == "schedule":
         # המהדורה נקבעת מה-cron בשלב Resolve edition; כאן רק ברירות מחדל.
         edition, reviews, force, src = "", "", "", "schedule"

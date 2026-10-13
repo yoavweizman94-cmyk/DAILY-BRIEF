@@ -41,6 +41,14 @@ on:
         description: "כמה סקירות דוחות לכתוב בריצה (ריק = 0, כלומר בלחיצה בלבד)"
         required: false
         default: ""
+      soft_usd:
+        description: "לריצה הזו בלבד: הסף היומי שמעליו המהדורה יורדת למודל זול (ריק = כרגיל)"
+        required: false
+        default: ""
+      hard_usd:
+        description: "לריצה הזו בלבד: הסף היומי שמעליו לא מופק ברייף (ריק = כרגיל)"
+        required: false
+        default: ""
   # קריאה מ-brief-request.yml, שתובע בקשת הפקה שהכפתור באתר כתב ל-KV.
   # `source` אינו קישוט: ריצה שנקראת יורשת את event_name של הקוראת
   # ("schedule"), וברירת המחדל של schedule היא לדלג על ברייף קיים —
@@ -114,6 +122,8 @@ jobs:
           IN_EDITION: ${{ inputs.edition }}
           IN_REVIEWS: ${{ inputs.reviews }}
           IN_SOURCE: ${{ inputs.source }}
+          IN_SOFT: ${{ inputs.soft_usd }}
+          IN_HARD: ${{ inputs.hard_usd }}
         run: |
           python scripts/brief_args.py > /tmp/brief.env
           cat /tmp/brief.env >> "$GITHUB_ENV"

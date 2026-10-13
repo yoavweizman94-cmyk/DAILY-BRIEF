@@ -808,8 +808,9 @@ def sector_depth(md: str) -> list[tuple[str, int, int, float, int]]:
         if re.match(r"^###\s", line):
             continue
         head = re.match(r"^\s*(?:[-*]\s+)?\*\*([^*]{3,}?)\*\*(.*)$", line)
+        # "בענף:" ו"בחברות:" הן שורות גוף מסומנות (CLAUDE.md, "הענף והחברות"), לא כותרת.
         if head and not head.group(1).strip().startswith(
-                ("משמעות", "כיוון השפעה", "מקור")):
+                ("משמעות", "כיוון השפעה", "מקור", "בענף", "בחברות")):
             flush_item()
             items += 1
             # הטקסט שאחרי הכותרת באותה שורה הוא גוף לכל דבר, גם כשהוא

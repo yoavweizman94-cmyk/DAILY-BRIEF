@@ -92,6 +92,29 @@ jobs:
           PY
           then echo "new=yes" >> "$GITHUB_OUTPUT"; else echo "new=no" >> "$GITHUB_OUTPUT"; fi
 
+      # **פעם בשבוע — הון מונפק, פעילות ושווי שוק לכל חברת כיסוי** (ingest/capital_pull.py,
+      # 400 קריאות למאיה בלי מודל). הניתוחים מסבירים מה אירוע עושה לחברה מסוימת מתוך
+      # תיאור הפעילות שלה, ומשווים עסקה לשווי השוק שלה — שווי שוק בן חודש הוא מספר שגוי.
+      # כשל כאן אינו עוצר את הריצה: הקובץ הקודם נשאר, והשבוע הבא ינסה שוב.
+      - name: Weekly company data
+        run: |
+          set +e
+          age=$(python -c "import json, datetime as d; u = json.load(open('data/company_profiles.json', encoding='utf-8')).get('updated') or '2000-01-01'; print((d.date.today() - d.date.fromisoformat(u)).days)" 2>/dev/null)
+          if [ "${age:-99}" -lt 7 ]; then
+            echo "נתוני החברות בני $age ימים — אין צורך ברענון."
+            exit 0
+          fi
+          if python ingest/capital_pull.py; then
+            git config user.name "forest-brief-bot"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/capital.json data/company_profiles.json
+            git diff --cached --quiet || git commit -m "company data: $(date +%F)"
+            bash scripts/git_sync.sh
+          else
+            echo "::warning title=רענון נתוני החברות נכשל::ingest/capital_pull.py — הקובץ הקודם נשאר, השבוע הבא ינסה שוב."
+          fi
+          exit 0
+
       # אינדקס הדוחות מתעדכן בכל מחזור ולא רק כשיש מה לסכם: דוח כספי חדש שייך
       # לאינדקס גם אם אינו עובר את סף המהותיות לסיכום. השלב זול — 1–3 קריאות
       # API ובלי מודל — ולכן הוא רץ תמיד.

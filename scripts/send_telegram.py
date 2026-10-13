@@ -48,7 +48,7 @@ def level3_headlines(md: str) -> list[str]:
                   "", md, flags=re.MULTILINE | re.DOTALL)
     for m in re.finditer(r"^(?:[-*+]\s+)?\*\*(.+?)\*\*", body, re.MULTILINE):
         h = m.group(1).strip().rstrip(":—-")
-        if h and h not in seen and not h.startswith(("כיוון", "משמעות")):
+        if h and h not in seen and not h.startswith(("כיוון", "משמעות", "בענף", "בחברות")):
             seen.add(h)
             out.append(h)
     return out[:MAX_HEADLINES]

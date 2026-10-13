@@ -17,6 +17,12 @@
 **הון משתנה לעיתים רחוקות** — הנפקה, פיצול, מימוש אופציות — ולכן די
 בריצה שבועית. הקובץ נשמר עם תאריך, וקריאה שנכשלה משאירה את הערך הקודם
 במקום למחוק אותו.
+
+**ומאותה קריאה — פרופיל עסקי לכל חברה** (`data/company_profiles.json`):
+תיאור הפעילות שהחברה מסרה למאיה (`companyActivites`, שוב בכתיב של מאיה),
+ענף ותת-ענף ושווי שוק. הניתוחים נדרשים להסביר מה אירוע עושה לחברה מסוימת,
+ובלי תיאור ממקור הם נאלצו לבחור בין ניחוש לבין "השפעה על הענף". מכאן הם
+מקבלים מה החברה עושה — ממקור, ולא מהזיכרון של המודל.
 """
 from __future__ import annotations
 
@@ -37,6 +43,7 @@ from _maya_api import MayaSession  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 CFG = ROOT / "config" / "companies.yaml"
 OUT = ROOT / "data" / "capital.json"
+PROFILES = ROOT / "data" / "company_profiles.json"
 
 
 def coverage() -> list[dict]:
@@ -52,6 +59,12 @@ def main() -> int:
             have = json.loads(OUT.read_text(encoding="utf-8")).get("securities") or {}
         except json.JSONDecodeError:
             have = {}
+    profiles: dict = {}
+    if PROFILES.exists():
+        try:
+            profiles = json.loads(PROFILES.read_text(encoding="utf-8")).get("companies") or {}
+        except json.JSONDecodeError:
+            profiles = {}
 
     s = MayaSession()
     companies = coverage()
@@ -64,6 +77,15 @@ def main() -> int:
             if failed <= 5:
                 print(f"  {c['name_he']}: {type(e).__name__}", file=sys.stderr)
             continue
+        mv = d.get("marketValue")
+        profiles[c["name_he"]] = {
+            "long_name": d.get("longName") or "",
+            "branch": " · ".join(x for x in (d.get("branch"), d.get("subBranch")) if x),
+            "activity": " ".join(str(d.get("companyActivites") or "").split()),
+            # marketValue באלפי ש"ח — כמו marketCap של הנייר במיליונים, פי אלף.
+            "market_cap_m": round(mv / 1000, 1) if isinstance(mv, (int, float)) and mv else None,
+            "asof": d.get("securitiesValidityDate") or date.today().isoformat(),
+        }
         for sec in (d.get("secrities") or []):
             sid = str(sec.get("securityId") or "")
             issued = sec.get("issuedPaidUp")
@@ -94,6 +116,13 @@ def main() -> int:
         "failed": failed,
         "securities": have,
     }, ensure_ascii=False, indent=1), encoding="utf-8")
+    PROFILES.write_text(json.dumps({
+        "updated": date.today().isoformat(),
+        "source": "מאיה — /api/v1/companies/<id>/details (companyActivites, branch, marketValue)",
+        "companies": profiles,
+    }, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"פרופילים: {len(profiles)} חברות, "
+          f"{sum(1 for p in profiles.values() if p.get('activity'))} עם תיאור פעילות")
 
     print(f"\nניירות עם הון מונפק: {len(have)} (רועננו {fresh}) · "
           f"חברות שנכשלו: {failed}")
