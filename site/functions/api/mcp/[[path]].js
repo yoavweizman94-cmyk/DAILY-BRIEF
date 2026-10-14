@@ -7,11 +7,12 @@
 // site/dist/mcp/*.json שנכתבו בבנייה (site/mcp_data.py) מאותם אובייקטים
 // שהעמודים נבנו מהם.
 //
-// **אימות: אסימון אחד, בשתי צורות.** `Authorization: Bearer <MCP_TOKEN>`,
-// או האסימון כמקטע בנתיב — `/api/mcp/<MCP_TOKEN>`. הצורה השנייה קיימת כי
-// מחברים מותאמים ב-claude.ai מקבלים כתובת בלבד ואינם יודעים לשלוח כותרת.
-// ההשוואה בזמן קבוע, כמו בשאר שכבת האימות. **נכשל סגור**: בלי MCP_TOKEN
-// בסביבת ה-Pages התשובה היא 503, לא מעבר חופשי.
+// **אימות: OAuth מהחשבון באתר, או אסימון קבוע.** מחבר ב-claude.ai מתחבר
+// ב-OAuth (site/functions/_lib/oauth.js): תשובת 401 נושאת את כתובת המטא-דאטה
+// (RFC 9728), ומשם הלקוח מוצא את דף ההרשאה, והבעלים מאשר פעם אחת בחשבון
+// שלו באתר. האסימון הקבוע MCP_TOKEN נשאר לסשנים של Claude Code — בכותרת
+// `Authorization: Bearer`, או כמקטע בנתיב `/api/mcp/<MCP_TOKEN>`. כל השוואה
+// בזמן קבוע. **נכשל סגור**: בלי אף אחד מהשניים מוגדר — 503, לא מעבר חופשי.
 //
 // **ללא מצב בכוונה.** אין Mcp-Session-Id ואין זרם SSE: כל קריאה היא
 // POST אחד עם תשובת JSON אחת. זה כל מה שהכלים האלה צריכים, וזה מה
@@ -20,6 +21,7 @@
 // פרוטוקול: JSON-RPC 2.0 לפי מפרט MCP (2025-06-18, ותואם לאחור ל-2025-03-26
 // ו-2024-11-05). GET מחזיר 405 — השרת אינו פותח זרם משלו.
 import { timingSafeEqual } from "../../_lib/auth.js";
+import { readAccessToken, resourceMetadataUrl, origin } from "../../_lib/oauth.js";
 
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const SERVER = { name: "tlv-tase-view", version: "1.0.0" };
@@ -726,7 +728,7 @@ const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
   "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, Mcp-Session-Id, MCP-Protocol-Version",
-  "Access-Control-Expose-Headers": "MCP-Protocol-Version",
+  "Access-Control-Expose-Headers": "MCP-Protocol-Version, WWW-Authenticate",
 };
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -753,10 +755,21 @@ export async function onRequest(context) {
       405, { Allow: "POST, OPTIONS" });
   }
 
-  if (!env.MCP_TOKEN) return reply({ error: "שרת ה-MCP אינו מוגדר (MCP_TOKEN חסר)" }, 503);
+  if (!env.MCP_TOKEN && !env.SESSION_SECRET) {
+    return reply({ error: "שרת ה-MCP אינו מוגדר (אין MCP_TOKEN ואין SESSION_SECRET)" }, 503);
+  }
   const tok = presentedToken(request, params && params.path);
-  if (!tok || !timingSafeEqual(tok, String(env.MCP_TOKEN))) {
-    return reply({ error: "נדרש אסימון" }, 401, { "WWW-Authenticate": 'Bearer realm="tlv-tase-view"' });
+  let ok = Boolean(tok && env.MCP_TOKEN && timingSafeEqual(tok, String(env.MCP_TOKEN)));
+  if (!ok && tok && env.SESSION_SECRET) {
+    const c = await readAccessToken(env.SESSION_SECRET, tok);
+    ok = Boolean(c && (!c.aud || String(c.aud).startsWith(origin(request))));
+  }
+  if (!ok) {
+    // הכותרת היא נקודת הכניסה של OAuth: ממנה הלקוח מוצא את המטא-דאטה ואת דף ההרשאה.
+    const err = tok ? ', error="invalid_token"' : "";
+    return reply({ error: "נדרשת הרשאה" }, 401, {
+      "WWW-Authenticate": `Bearer realm="tlv-tase-view", resource_metadata="${resourceMetadataUrl(request)}"${err}`,
+    });
   }
 
   let body;

@@ -118,20 +118,36 @@ jobs:
           done
 
           # --- שרת ה-MCP: נפרס, ומסרב בלי אסימון ---
-          # 401 = הקוד חי והאסימון נדרש. 503 = נפרס אך MCP_TOKEN לא הוצב
-          # (להריץ mcp-token-sync). 404 = הפונקציה לא נפרסה. 200 = שער פתוח.
+          # 401 = הקוד חי והאסימון נדרש. 503 = אין לא SESSION_SECRET ולא
+          # MCP_TOKEN ב-Pages. 404 = הפונקציה לא נפרסה. 200 = שער פתוח.
           echo "=== שרת ה-MCP ==="
-          c=$(curl -s -o /dev/null --max-time 25 -w '%{http_code}' -X POST \
+          c=$(curl -s -D mcp.h -o /dev/null --max-time 25 -w '%{http_code}' -X POST \
                 -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"ping"}' \
                 "$APP/api/mcp" || true)
           note "api/mcp → $c"
           case "$c" in
             401) note "שרת ה-MCP חי ונעול ✓" ;;
-            503) echo "::warning::שרת ה-MCP נפרס אך MCP_TOKEN אינו מוצב ב-Pages — להריץ את MCP Token Sync" ;;
+            503) bad "$APP/api/mcp השיב 503 — אין SESSION_SECRET ואין MCP_TOKEN ב-Pages" ;;
             404) bad "$APP/api/mcp לא נפרס (404)" ;;
             200) bad "$APP/api/mcp השיב 200 בלי אסימון — שער פתוח" ;;
             *)   bad "$APP/api/mcp השיב $c" ;;
           esac
+
+          # --- המחבר ב-claude.ai: OAuth ניתן לגילוי ---
+          # בלי resource_metadata בתשובת ה-401, או בלי מטא-דאטה שמוגשת לפני
+          # שער הסשן, claude.ai אינו מוצא את דף ההרשאה והמחבר נכשל ב"Connect".
+          echo "=== OAuth של המחבר ==="
+          grep -qi 'resource_metadata=' mcp.h && note "401 נושא resource_metadata ✓" || \
+            bad "$APP/api/mcp: תשובת 401 בלי resource_metadata — המחבר לא ימצא את ההרשאה"
+          for wk in oauth-protected-resource oauth-authorization-server; do
+            body=$(curl -s --max-time 25 "$APP/.well-known/$wk" || true)
+            echo "$body" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if (d.get('resource') or d.get('token_endpoint')) else 1)" 2>/dev/null \
+              && note "$wk ✓" || bad "$APP/.well-known/$wk אינו מחזיר מטא-דאטה (${body:0:80})"
+          done
+          c=$(curl -s -o /dev/null --max-time 25 -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+                --data '{}' "$APP/api/oauth/token" || true)
+          note "api/oauth/token בלי לקוח → $c"
+          [ "$c" = "401" ] || bad "$APP/api/oauth/token השיב $c בלי לקוח (צפוי 401)"
 
           # --- pages.dev: חייב להפנות לדומיין ולא להגיש בעצמו ---
           echo "=== forest-brief.pages.dev ==="

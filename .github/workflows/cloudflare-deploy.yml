@@ -70,6 +70,12 @@ jobs:
       - name: Check MCP server
         run: node scripts/mcp_smoke.mjs
 
+      # זרימת ה-OAuth של המחבר ב-claude.ai (site/functions/api/oauth/): גילוי,
+      # רישום, כניסה ואישור, PKCE, רענון, ביטול — וכל מה שחייב להיכשל. מחבר
+      # שנשבר כאן הוא מחבר שמתנתק אצל הבעלים בלי שום סימן באתר.
+      - name: Check MCP OAuth
+        run: node scripts/oauth_smoke.mjs
+
       # אבחון הטוקן הוא כלי הקמה, ולא משהו שצריך לרוץ בכל דחיפה. שלב
       # הפריסה עצמו נכשל ברעש כשהאימות שבור, ולכן שום אות לא הולך לאיבוד.
       - name: Diagnose token

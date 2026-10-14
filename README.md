@@ -300,36 +300,44 @@ Cloudflare Access הוסר — הוא יודע לזהות רק מול ספק ז�
 | `site/functions/api/mcp/[[path]].js` | Cloudflare | שרת MCP (Streamable HTTP, JSON-RPC, ללא מצב) שקורא את הקבצים האלה דרך `env.ASSETS` |
 | `scripts/mcp_smoke.mjs` | CI ומקומי | בדיקת עשן: אימות, לחיצת יד, וכל כלי על ה-dist שנבנה. רץ ב-`cloudflare-deploy` לפני הפריסה |
 | `mcp-token-sync.yml` | פעם אחת | מעביר את הסוד `MCP_TOKEN` מ-GitHub ל-Pages |
+| `site/functions/api/oauth/` + `_lib/oauth.js` | Cloudflare | OAuth 2.1 למחבר ב-claude.ai: רישום דינמי, דף אישור, אסימונים ורענון |
+| `scripts/oauth_smoke.mjs` | CI ומקומי | בדיקת הזרימה כולה, כולל כל מה שחייב להיכשל. רץ ב-`cloudflare-deploy` לפני הפריסה |
 
-**כתובת:** `https://app.tlvtaseview.com/api/mcp`. **אימות:** אסימון אחד,
-`MCP_TOKEN`, בשתי צורות — `Authorization: Bearer <token>`, או כמקטע בנתיב:
-`https://app.tlvtaseview.com/api/mcp/<token>`. הצורה השנייה קיימת כי מחבר
-מותאם ב-claude.ai מקבל כתובת בלבד. בלי `MCP_TOKEN` ב-Pages השרת מחזיר 503
-(נכשל סגור); `site-check` בודק זאת בכל בוקר.
+**כתובת:** `https://app.tlvtaseview.com/api/mcp`. **אימות — שתי דרכים:**
 
-**הקמה (פעם אחת):**
+- **OAuth מהחשבון באתר (מ-14/10/2026) — הדרך למחבר ב-claude.ai.** תשובת 401
+  נושאת `resource_metadata` (RFC 9728); ממנה Claude מוצא את שרת ההרשאה
+  (`/.well-known/oauth-authorization-server`), נרשם בעצמו (RFC 7591), ושולח
+  לדף הכניסה של האתר ולדף אישור. **רק משתמש פעיל שהוא `OWNER_EMAIL` יכול
+  לאשר.** אסימון הגישה חתום ותקף יממה; אסימון הרענון בלי תפוגה ומתחלף בכל
+  רענון (הישן תקף עוד עשר דקות) — כלומר החיבור נשאר פעיל עד שמנתקים אותו,
+  ובכל רענון נבדק שהחשבון עדיין פעיל. נשען על `SESSION_SECRET` ועל ה-KV של
+  המשתמשים, שכבר קיימים; אין סוד חדש להגדיר.
+- **אסימון קבוע `MCP_TOKEN`** — לסשנים של Claude Code: `Authorization: Bearer
+  <token>`, או כמקטע בנתיב `/api/mcp/<token>`. אופציונלי.
 
-1. ליצור אסימון: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`.
-2. לשמור אותו ב-GitHub → Settings → Secrets and variables → Actions בשם
-   `MCP_TOKEN`, ולהריץ Actions → **MCP Token Sync**. הפריסה הבאה (כל דחיפה
-   ל-main) מרימה את האתר עם האסימון.
-3. לחבר את Claude — אחת משתי הדרכים, או שתיהן:
-   - **לכל סשן ב-claude.ai (כולל Claude Code בדפדפן):** Settings → Connectors
-     → Add custom connector, עם הכתובת `https://app.tlvtaseview.com/api/mcp/<token>`.
-     המחבר זמין מאותו רגע בכל שיחה ובכל סשן.
-   - **לסשנים של הריפו הזה ב-Claude Code:** `.mcp.json` כבר מכיל את השרת
-     `tlv-tase-view` עם הכותרת `Bearer ${TLV_MCP_TOKEN}`. יש להגדיר את
-     משתנה הסביבה `TLV_MCP_TOKEN` (בסביבת הענן: Edit environment →
-     Environment variables; מקומית: בפרופיל השל). בלעדיו השרת מופיע כ"נכשל
-     בחיבור" ואינו פוגע בשאר.
+בלי אף אחד מהשניים השרת מחזיר 503 (נכשל סגור); `site-check` בודק בכל בוקר
+שהשרת נעול ושהמטא-דאטה של OAuth מוגשת.
+
+**חיבור ב-claude.ai (פעם אחת):** Settings → Connectors → Add custom connector,
+שם `TLV TASE View`, כתובת `https://app.tlvtaseview.com/api/mcp` → Connect →
+כניסה לאתר בחשבון הבעלים → "אישור". המחבר זמין מאותו רגע בכל שיחה, בדסקטופ
+ובנייד. ניתוק: Settings → Connectors → Disconnect (מבטל את אסימון הרענון).
+
+**לסשנים של הריפו הזה ב-Claude Code:** `.mcp.json` מכיל את השרת `tlv-tase-view`
+עם הכותרת `Bearer ${TLV_MCP_TOKEN}`. עם `MCP_TOKEN` מוגדר (Actions → **MCP Token
+Sync**) — להגדיר את אותו ערך במשתנה `TLV_MCP_TOKEN`. בלעדיו השרת מופיע כ"נכשל
+בחיבור" ואינו פוגע בשאר.
 
 **מה זה לא משנה.** `run_daily.sh` מריץ את מהדורת הברייף עם
 `config/mcp.brief.json` ו-`--strict-mcp-config`, כלומר רק הלמ"ס ו-nadlan.
 שרת האתר אינו נטען שם: הסוכן קורא את `data/raw` ישירות, וכל כלי שנטען
 הוא הגדרות שנשלחות מחדש בכל תור.
 
-**החלפת אסימון:** לעדכן את הסוד ב-GitHub, להריץ MCP Token Sync, ולעדכן
-את המחבר ואת `TLV_MCP_TOKEN`. האסימון הישן מפסיק לעבוד בפריסה הבאה.
+**החלפת אסימון קבוע:** לעדכן את הסוד ב-GitHub, להריץ MCP Token Sync, ולעדכן
+את `TLV_MCP_TOKEN`. האסימון הישן מפסיק לעבוד בפריסה הבאה. **ניתוק כל מחברי
+ה-OAuth בבת אחת:** החלפת `SESSION_SECRET` מבטלת את כל אסימוני הגישה (וגם את
+עוגיות הכניסה לאתר); אסימוני רענון נמחקים מה-KV לפי הקידומת `oauth:rt:`.
 
 ### חוב אבטחה פתוח
 

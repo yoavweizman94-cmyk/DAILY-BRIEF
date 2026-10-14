@@ -14,6 +14,7 @@
 // חריגה בדרך, התשובה היא הפניה לדף הכניסה ולא מעבר הלאה. תקלת תצורה
 // שמפילה את השער פתוח היא בדיוק הכשל שאסור שיקרה כאן.
 import { readCookie, readSession, COOKIE } from "./_lib/auth.js";
+import { wellKnown } from "./_lib/oauth.js";
 
 const APEX = "tlvtaseview.com";
 const APP = "app.tlvtaseview.com";
@@ -59,6 +60,12 @@ export async function onRequest(context) {
   }
 
   if (host === APP) {
+    // מטא-דאטה של OAuth לשרת ה-MCP (site/functions/_lib/oauth.js). ציבורית
+    // מעצם הגדרתה — ממנה המחבר ב-claude.ai מוצא את דף ההרשאה — ולכן לפני השער.
+    if (url.pathname.startsWith("/.well-known/")) {
+      const meta = wellKnown(request, url.pathname);
+      if (meta) return meta;
+    }
     if (url.pathname === "/landing.html" || url.pathname === "/landing") {
       return Response.redirect(`https://${APEX}/`, 302);
     }
