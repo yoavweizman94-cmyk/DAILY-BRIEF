@@ -270,7 +270,7 @@ def _cell(key: str, v, trend: str = "", bold: bool = False) -> str:
 
 def _section(title: str, sub: str, key: str, cols: list, cells: list[dict], total_row: dict,
              stats: list[dict], bits: list[str], more: str, file: str, kicker: str,
-             source: str, tweet_text: str, notes: str = "") -> str:
+             source: str, tweet_text: str, notes: str = "", legend: list | None = None) -> str:
     """אותה תבנית כמו otc.period_table: כותרת, סקירה, תקציר, ייצוא וטבלה.
 
     **הטבלה והתמונה נבנות מאותן שורות** — אותו כלל כמו בטבלאות מחוץ
@@ -279,7 +279,7 @@ def _section(title: str, sub: str, key: str, cols: list, cells: list[dict], tota
     payload = otc.card(title, sub, [
         {"type": "stats", "items": stats},
         {"type": "notes", "title": "עיקרי התקופה", "items": bits[1:]} if len(bits) > 1 else None,
-        {"type": "table", "title": "לפי נייר", "cols": cols,
+        {"type": "table", "title": "לפי נייר", "cols": cols, "legend": legend,
          "rows": [otc._public(c) for c in cells], "moreText": more, "totalRow": total_row},
     ], file=file, kicker=kicker, source=source)
     out = [f"<h2>{_esc(title, quote=False)}</h2>",
@@ -318,11 +318,13 @@ def table_j(title: str, sub: str, rows: list[dict], key: str, label: str,
     cols = [["נייר", "name", "rtl"]]
     if not day_mode:
         cols.append(["ימים", "days", "ltr"])
-    cols += [["היקף", "value", "ltr"],
-             ["% ממחזור היום" if day_mode else "% מהמחזור", "pday", "ltr"],
+    # בתמונה: פס יחסי להיקף, ומד מול 100% לחלק מהמחזור — כך "רוב המסחר" נראה
+    # כפס שעובר את האמצע. ב-HTML האפשרויות מתעלמות.
+    cols += [["היקף", "value", "ltr", {"viz": "bar"}],
+             ["% ממחזור היום" if day_mode else "% מהמחזור", "pday", "ltr", {"viz": "meter", "max": 100}],
              ["% מההון (משוער)", "cap", "ltr"]]
     if day_mode:
-        cols.append(["שינוי המניה", "chg", "ltr"])
+        cols.append(["שינוי המניה", "chg", "ltr", {"viz": "chip"}])
     shown = agg[:limit]
     cells = [{"name": e["name"], "days": str(e["days"]), "value": otc.money(e["value"]),
               "pday": _pct(e["pct_day"]), "cap": _pct(e["pct_capital"], 2),
@@ -354,8 +356,11 @@ def table_a(title: str, sub: str, otc_rows: list[dict], j_rows: list[dict], key:
     cols = [["נייר", "name", "rtl"]]
     if not day_mode:
         cols.append(["ימים", "days", "ltr"])
-    cols += [["מחוץ לבורסה", "otc", "ltr"], ["מתואמות", "jumbo", "ltr"],
-             ["סה\"כ", "value", "ltr"], ["% מההון (משוער)", "cap", "ltr"]]
+    # הסך כפס מוערם משני המנגנונים, וריבוע בצבע החלק בכותרת של כל אחד —
+    # כך רואים לא רק כמה עבר בנייר אלא באיזה ערוץ.
+    cols += [["מחוץ לבורסה", "otc", "ltr", {"swatch": 0}], ["מתואמות", "jumbo", "ltr", {"swatch": 1}],
+             ["סה\"כ", "value", "ltr", {"viz": "stack", "parts": ["otc", "jumbo"]}],
+             ["% מההון (משוער)", "cap", "ltr"]]
     shown = agg[:limit]
     cells = [{"name": e["name"], "days": str(e["days"]),
               "otc": otc.money(e["otc"]) if e["otc"] else "—",
@@ -513,17 +518,23 @@ def tiles_j(j_rows: list[dict], year: str) -> str:
     per_day = [(d, sum(r["value"] for r in j_rows if r["date"] == d)) for d in days[-22:]]
     med = statistics.median([v for _, v in per_day]) if per_day else 0
     top = aggregate(day_rows)[:6]
+    items = [{"label": l, "value": v, "cap": c} for l, v, c in tiles]
+    if len(per_day) >= 5:
+        items[0]["spark"] = [v for _, v in per_day]
+    if med and day and final:
+        items[0]["deltas"] = [{"label": "מול החציון", "text": f"{(day / med - 1) * 100:+.0f}%"}]
     blocks = [
-        {"type": "stats", "items": [{"label": l, "value": v, "cap": c} for l, v, c in tiles]},
+        {"type": "stats", "items": items},
         {"type": "columns", "title": f"העסקאות המתואמות ביום · {len(per_day)} ימי המסחר האחרונים",
          "items": [{"label": f"{d[8:10]}/{d[5:7]}", "value": v, "text": otc.money(v)} for d, v in per_day],
          "maxText": otc.money(max(v for _, v in per_day)), "median": med,
          "medianText": f"חציון: {otc.money(med)}"} if len(per_day) >= 2 else None,
-        {"type": "table", "title": f"הגדולות · {dlabel}",
-         "cols": [["נייר", "name", "rtl"], ["היקף", "value", "ltr"],
-                  ["% ממחזור היום", "pday", "ltr"], ["% מההון (משוער)", "cap", "ltr"]],
-         "rows": [{"name": e["name"], "value": otc.money(e["value"]), "pday": _pct(e["pct_day"]),
-                   "cap": _pct(e["pct_capital"], 2)} for e in top]} if top else None,
+        {"type": "rank", "title": f"הגדולות · {dlabel}",
+         "rows": [{"label": e["name"], "value": e["value"], "text": otc.money(e["value"]),
+                   "meta": " · ".join(t for t in [
+                       f"{_pct(e['pct_day'])} ממחזור היום" if e["pct_day"] is not None else "",
+                       f"{_pct(e['pct_capital'], 2)} מההון (משוער)" if e["pct_capital"] else ""] if t)}
+                  for e in top]} if top else None,
     ]
     payload = otc.card(f"עסקאות מתואמות · {hd(ref)}",
                        "היקף העסקאות המתואמות במניות — ביום ובמצטבר.",
@@ -553,8 +564,9 @@ def tiles_a(a: dict, j_rows: list[dict], year: str) -> str:
         tiles.append((lbl, otc.money(tot), cap))
 
     days = sorted({r["date"] for r in shares} | {r["date"] for r in j_rows})[-22:]
-    per_day = [(d, sum(r["value"] for r in shares if r["date"] == d)
-                + sum(r["value"] for r in j_rows if r["date"] == d)) for d in days]
+    parts = [(d, sum(r["value"] for r in shares if r["date"] == d),
+              sum(r["value"] for r in j_rows if r["date"] == d)) for d in days]
+    per_day = [(d, o + j) for d, o, j in parts]
     med = statistics.median([v for _, v in per_day]) if per_day else 0
     # **הגדולות מול היום כולו.** הנתח של כל נייר מסך היום, שורת "ועוד" לשאר
     # הניירות ושורת סך של היום — שהיא המספר שבאריח הראשון, כך שהטבלה והאריח
@@ -565,13 +577,19 @@ def tiles_a(a: dict, j_rows: list[dict], year: str) -> str:
     o_tot, j_tot = sum(e["otc"] for e in agg), sum(e["jumbo"] for e in agg)
     blocks = [
         {"type": "stats", "items": [{"label": l, "value": v, "cap": c} for l, v, c in tiles]},
+        # **עמודה מוערמת לכל יום** — מחוץ לבורסה ומתואמות, כל אחד בצבעו. הסך
+        # לבדו הסתיר יום שכולו מתואמות מאחורי אותו גובה כמו יום שכולו מחוץ לבורסה.
         {"type": "columns", "title": f"מחוץ לבורסה ומתואמות ביום · {len(per_day)} ימים",
-         "items": [{"label": f"{d[8:10]}/{d[5:7]}", "value": v, "text": otc.money(v)} for d, v in per_day],
+         "series": ["מחוץ לבורסה", "מתואמות"],
+         "items": [{"label": f"{d[8:10]}/{d[5:7]}", "value": o + j, "parts": [o, j],
+                    "text": otc.money(o + j)} for d, o, j in parts],
          "maxText": otc.money(max(v for _, v in per_day)), "median": med,
          "medianText": f"חציון: {otc.money(med)}"} if len(per_day) >= 2 else None,
         {"type": "table", "title": f"הגדולות · {hd(ref)}",
-         "cols": [["נייר", "name", "rtl"], ["מחוץ לבורסה", "otc", "ltr"],
-                  ["מתואמות", "jumbo", "ltr"], ["סה\"כ", "value", "ltr"], ["נתח מהיום", "share", "ltr"]],
+         "cols": [["נייר", "name", "rtl"], ["מחוץ לבורסה", "otc", "ltr", {"swatch": 0}],
+                  ["מתואמות", "jumbo", "ltr", {"swatch": 1}],
+                  ["סה\"כ", "value", "ltr", {"viz": "stack", "parts": ["otc", "jumbo"]}],
+                  ["נתח מהיום", "share", "ltr"]],
          "rows": [{"name": e["name"], "otc": otc.money(e["otc"]) if e["otc"] else "—",
                    "jumbo": otc.money(e["jumbo"]) if e["jumbo"] else "—",
                    "value": otc.money(e["value"]),

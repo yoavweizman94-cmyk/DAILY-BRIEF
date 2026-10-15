@@ -271,8 +271,11 @@ def holders_summary(rows: list[dict], year: str) -> str:
     # ושורת ה"ועוד" ספרה מדווחים וקראה להם "ניירות".
     cols = [["מדווח", "name", "rtl"], ["חברה", "co", "rtl"],
             ["כיוון", "side", "rtl"], ["עסקאות", "n", "ltr"],
-            ["היקף נטו", "value", "ltr"], ["שינוי נטו בהון", "cap", "ltr"],
-            ["החזקה אחרי", "after", "ltr"]]
+            ["היקף נטו", "value", "ltr"],
+            # בתמונה: פס סביב אפס לשינוי נטו (צבירה ימינה, מימוש שמאלה) ומד מול
+            # 100% להחזקה שאחרי — כמה מהחברה בידיו. ב-HTML האפשרויות מתעלמות.
+            ["שינוי נטו בהון", "cap", "ltr", {"viz": "div"}],
+            ["החזקה אחרי", "after", "ltr", {"viz": "meter", "max": 100}]]
     cells = [{
         "name": e["holder"], "co": e["company"], "side": side(e),
         "n": str(e["n"]), "value": signed(e["net"]),
@@ -479,9 +482,9 @@ def page(rows: list[dict], year: str, head: bool = True) -> str:
                 {"label": "עסקאות מתחילת השנה", "value": str(st["n"]), "cap": f'ב-{st["days"]} ימים'},
                 {"label": "היקף כספי מצטבר", "value": money(st["vol"]), "cap": "בלי ספירה כפולה"},
                 {"label": "חברות", "value": str(len(st["companies"])), "cap": "מניות בלבד"}]},
-             {"type": "bars", "title": f"{len(top)} החברות עם השיעור הגבוה",
-              "rows": [{"label": name, "pct": v["pct"], "pctText": pct(v["pct"], 2),
-                        "volText": money(v["vol"])} for name, v in top]}],
+             {"type": "rank", "title": f"{len(top)} החברות עם השיעור הגבוה",
+              "rows": [{"label": name, "value": v["pct"], "text": pct(v["pct"], 2),
+                        "meta": f"היקף {money(v['vol'])}" if v["vol"] else ""} for name, v in top]}],
             file=f"tlv-offex-companies-{year}", kicker=KICKER, source=SRC_MAYA)))
         out.append(f'<p class="otc-acts">{png_button(key="companies")}</p>')
         out.append('<ul class="offex-bars">')

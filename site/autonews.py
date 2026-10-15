@@ -608,7 +608,10 @@ def _lease_exports(data: dict, a: dict | None, months: dict, keys: list[str], fu
         yoy = _p(t - before.get(name, 0), before.get(name, 0), 0) if before.get(name, 0) >= 300 else None
         listed = (" · נסחרת" if imap[name] == name else f" · נסחרת: {imap[name]}") if name in imap else ""
         rows.append({"name": name + listed, "t": _n(t), "l": _n(lz.get(name, 0)),
-                     "lp": f"{_p(lz.get(name, 0), t, 0)}%", "d": _n(dl.get(name, 0)),
+                     # עיגול לשלם — _p מחזיר float, ו-"28.0%" נראה כמו דיוק שאין.
+                     "lp": f"{lz.get(name, 0) / t * 100:.0f}%", "d": _n(dl.get(name, 0)),
+                     # השאר — פרטי, חברות ואחר — רק לפס המוערם, לא עמודה בטבלה.
+                     "o": max(0, t - lz.get(name, 0) - dl.get(name, 0)),
                      "y": share.signed(yoy, 0) if yoy is not None else "—"})
     for name in order[:4] + [x for x in imap if x in tot and x not in order[:4]]:
         yoy = _p(tot[name] - before.get(name, 0), before.get(name, 0), 0) if before.get(name, 0) >= 300 else None
@@ -616,9 +619,14 @@ def _lease_exports(data: dict, a: dict | None, months: dict, keys: list[str], fu
     rng = _mrange(last3[0], last3[-1])
     payload = share.card(kick, f"היבואניות: רכב חדש ב{rng}",
                          "רכב פרטי חדש לפי יבואנית, ומה ממנו נרשם לליסינג ולסוחרים.",
-                         [{"type": "table", "cols": [["יבואנית", "name", "rtl"], ["רכב חדש", "t", "ltr"],
-                                                     ["לליסינג", "l", "ltr"], ["% לליסינג", "lp", "ltr"],
-                                                     ["לסוחרים", "d", "ltr"], ["מול אשתקד", "y", "ltr"]],
+                         # **הרכב החדש כפס מוערם**: כמה הלך לליסינג, כמה לסוחרים ומה נשאר —
+                         # היבואנית שמוכרת בעיקר לציים נראית כך במבט, בלי לחשב אחוזים.
+                         [{"type": "table", "legend": ["לליסינג", "לסוחרים", "פרטי ואחר"],
+                           "cols": [["יבואנית", "name", "rtl"],
+                                    ["רכב חדש", "t", "ltr", {"viz": "stack", "parts": ["l", "d", "o"]}],
+                                    ["לליסינג", "l", "ltr", {"swatch": 0}], ["% לליסינג", "lp", "ltr"],
+                                    ["לסוחרים", "d", "ltr", {"swatch": 1}],
+                                    ["מול אשתקד", "y", "ltr", {"viz": "chip"}]],
                            "rows": rows},
                           {"type": "notes", "items": [
                               "השוואה שנתית רק ליבואנית עם 300 רכבים לפחות אשתקד. שינוי חד יכול לשקף מותג שעבר בין "
@@ -636,16 +644,17 @@ def _lease_exports(data: dict, a: dict | None, months: dict, keys: list[str], fu
     rows, tlines = [], []
     for name in sorted(brands, key=lambda x: -brands[x])[:12]:
         sh, ps = brands[name] / bsum * 100, bprev.get(name, 0) / bpsum * 100
-        rows.append({"name": name, "c": bc.get(name, "—"), "n": _n(brands[name]), "sh": f"{sh:.1f}%",
-                     "ps": f"{ps:.1f}%", "d": _pts(sh - ps)})
+        # **אשתקד מול עכשיו כמשקולת** (dumbbell): נקודה לכל תקופה על ציר משותף,
+        # והקו ביניהן בצבע הכיוון — מי עלה ומי ירד נקרא בלי לקרוא מספר.
+        rows.append({"label": name, "sub": f'{bc.get(name, "—")} · {_n(brands[name])} רכבים',
+                     "a": round(ps, 2), "b": round(sh, 2), "text": f"{sh:.1f}%",
+                     "delta_text": f"{_pts(sh - ps)} נק׳"})
         if len(tlines) < 5 and name != "לא ידוע":
             tlines.append(f"{name} {sh:.1f}% (אשתקד {ps:.1f}%)")
     payload = share.card(kick, f"מה קונים הציים: המותגים בליסינג ב{rng}",
                          "חלק כל מותג מהרכב הפרטי החדש שנרשם לליסינג, מול אותם חודשים אשתקד.",
-                         [{"type": "table", "cols": [["מותג", "name", "rtl"], ["ארץ תוצר", "c", "rtl"],
-                                                     ["רכבים", "n", "ltr"], ["חלק מהליסינג", "sh", "ltr"],
-                                                     ["אשתקד", "ps", "ltr"], ["שינוי (נק׳)", "d", "ltr"]],
-                           "rows": rows}],
+                         [{"type": "dumbbell", "title": "חלק מהליסינג, % · והשינוי בנקודות אחוז",
+                           "legend": ["אותם חודשים אשתקד", rng], "suffix": "%", "rows": rows}],
                          src, file=f"tlv-auto-brands-{last}")
     out["brands"] = share.controls("au-brands", payload,
                                    share.tweet(f"מה קונים ציי הליסינג · {rng}", tlines, tsrc))
@@ -653,14 +662,19 @@ def _lease_exports(data: dict, a: dict | None, months: dict, keys: list[str], fu
     # ---- מה יוצא מהציים
     if dm:
         dks = sorted(dm)[-12:]
-        drows, dvals = [], []
+        drows, dvals, dparts = [], [], []
         for k in dks:
             f = dm[k].get("flows") or {}
             o = sum(x for kk, x in f.items() if kk.startswith("ליסינג>"))
             h = (dm[k].get("held_median") or {}).get("ליסינג")
             dvals.append(o)
+            to = [f.get("ליסינג>סוחר", 0), f.get("ליסינג>פרטי", 0), f.get("ליסינג>חברה", 0)]
+            dparts.append(to + [max(0, o - sum(to))])
             drows.append({"m": _mm(k), "o": _n(o), "d": _n(f.get("ליסינג>סוחר", 0)), "p": _n(f.get("ליסינג>פרטי", 0)),
                           "c": _n(f.get("ליסינג>חברה", 0)), "h": str(h) if h is not None else "—"})
+        # "אחר" רק כשיש בו משהו שנראה בגרף — סדרה של רכב או שניים בחודש היא
+        # ריבוע במקרא בלי פס מולו.
+        nser = 4 if any(pp[3] >= 0.01 * max(dvals) for pp in dparts) else 3
         hi_k, lo_k = dks[dvals.index(max(dvals))], dks[dvals.index(min(dvals))]
         tl = [f"{_n(d_out)} רכבים — {_n(fl.get('ליסינג>סוחר', 0))} לסוחרים, {_n(fl.get('ליסינג>פרטי', 0))} לפרטיים",
               f"חציון {held} חודשים בצי" if held else "",
@@ -668,12 +682,18 @@ def _lease_exports(data: dict, a: dict | None, months: dict, keys: list[str], fu
         payload = share.card(kick, "מה יוצא מהציים: רכבים שנמכרו מבעלות ליסינג",
                              "רכב שבעלות חדשה עליו התחילה בחודש, אחרי תקופה בבעלות ליסינג — ההיצע שנכנס לשוק "
                              "היד השנייה.",
-                             [{"type": "columns", "title": "יצאו מציי הליסינג, לפי חודש",
-                               "items": [{"label": f"{k[5:7]}/{k[2:4]}", "value": x, "text": _n(x)}
-                                         for k, x in zip(dks, dvals)], "maxText": _n(max(dvals))},
+                             # **לאן הלכו, בכל חודש**: עמודה מוערמת לפי הקונה. הסך לבדו לא
+                             # הבחין בין חודש שבו הסוחרים קנו הכל לחודש שבו קנו פרטיים.
+                             [{"type": "columns", "title": "יצאו מציי הליסינג, לפי חודש ולפי הקונה",
+                               "series": ["לסוחר", "לפרטי", "לחברה", "אחר"][:nser],
+                               "items": [{"label": f"{k[5:7]}/{k[2:4]}", "value": x, "text": _n(x),
+                                          "parts": pp[:nser]}
+                                         for k, x, pp in zip(dks, dvals, dparts)], "maxText": _n(max(dvals))},
                               {"type": "table", "cols": [["חודש", "m", "ltr"], ["יצאו מליסינג", "o", "ltr"],
-                                                         ["לסוחר", "d", "ltr"], ["לפרטי", "p", "ltr"],
-                                                         ["לחברה", "c", "ltr"], ["חציון חודשים בצי", "h", "ltr"]],
+                                                         ["לסוחר", "d", "ltr", {"swatch": 0}],
+                                                         ["לפרטי", "p", "ltr", {"swatch": 1}],
+                                                         ["לחברה", "c", "ltr", {"swatch": 2}],
+                                                         ["חציון חודשים בצי", "h", "ltr"]],
                                "rows": drows}],
                              src, file=f"tlv-auto-disposals-{dk}")
         out["disp"] = share.controls("au-disp", payload,

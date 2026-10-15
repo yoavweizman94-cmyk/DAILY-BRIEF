@@ -154,7 +154,7 @@ def _quote(key: str, te: dict, wb: dict, ins: dict) -> dict | None:
                 "unit": _unit_he(s.get("unit")), "d": None, "w": None,
                 "m": _pct_of(last["value"], (pm or {}).get("value")),
                 "y": _pct_of(last["value"], (ya or {}).get("value")),
-                "month": last["month"], "src": "wb"}
+                "month": last["month"], "src": "wb", "hist": [p["value"] for p in pts[-13:]]}
     row = te.get(key)
     if not row or row.get("Last") is None:
         return None
@@ -180,15 +180,38 @@ def _qname(q: dict, generic: set, always: bool = False) -> str:
     return q["label"]
 
 
-def _tile(q: dict, generic: set) -> dict:
-    """אריח בכרטיס: שם, מחיר ביחידה בעברית, ושורת שינוי בחצים."""
+def _hist(snaps: list[dict]) -> dict[str, list]:
+    """המחיר האחרון בכל תמונה יומית, לפי סימול — לקו המגמה."""
+    hist: dict[str, list] = {}
+    for s in snaps or []:
+        for sym, row in (s.get("te") or {}).items():
+            hist.setdefault(sym, []).append(row.get("Last"))
+    return hist
+
+
+def _tile(q: dict, generic: set, hist: dict | None = None) -> dict:
+    """אריח בכרטיס: שם, מחיר ביחידה בעברית, שבבי שינוי וקו מגמה.
+
+    **השינויים כשבבים ולא כשורת טקסט** — סימן, צבע ורקע לכל אחד, כך שאריח
+    שירד ביום ועלה בשנה נקרא כך במבט. הקו הוא המחיר בימים שנאספו כאן (או
+    13 החודשים האחרונים בסדרה חודשית), והנקודה בסופו היא המחיר שבאריח.
+    """
     if q["src"] == "wb":
         m = q["month"]
-        cap = " · ".join(x for x in (f"{m[5:7]}/{m[:4]}", f"שנה {share.arrow(q['y'])}" if q["y"] is not None else "") if x)
+        chg = [("חודש", q["m"], 1), ("שנה", q["y"], 0)]
+        cap = f"נתון חודשי · {m[5:7]}/{m[:4]}"
+        line = q.get("hist") or []
     else:
-        cap = " · ".join(f"{w} {share.arrow(q[k], 0 if k == 'y' else 1)}"
-                         for k, w in (("d", "יום"), ("m", "חודש"), ("y", "שנה")) if q[k] is not None)
-    return {"label": _qname(q, generic, always=True), "value": f'{_num(q["last"])} {q["unit"]}'.strip(), "cap": cap}
+        # מדד שבועי (SCFI) מראה אפס ביום בלי פרסום — אז השבועי, כמו בציוץ.
+        first = (("שבוע", q["w"], 1) if q["d"] is not None and abs(q["d"]) < 1e-9 and q["w"]
+                 else ("יום", q["d"], 1))
+        chg = [first, ("חודש", q["m"], 1), ("שנה", q["y"], 0)]
+        cap = ""
+        line = (hist or {}).get(q["key"]) or []
+    line = [v for v in line if isinstance(v, (int, float))]
+    return {"label": _qname(q, generic, always=True), "value": f'{_num(q["last"])} {q["unit"]}'.strip(),
+            "deltas": [{"label": w, "text": share.signed(v, dg)} for w, v, dg in chg if v is not None],
+            "spark": line if len(line) >= 5 else None, "cap": cap}
 
 
 def _qline(q: dict, generic: set) -> str:
@@ -237,14 +260,14 @@ def _export(key: str, snap: dict, kicker: str, title: str, sub: str, blocks: lis
     return share.controls(key, payload, share.tweet(head, lines, tsource or source))
 
 
-def export_now(a: dict | None, snap: dict, te: dict, wb: dict, cfg: dict) -> str:
+def export_now(a: dict | None, snap: dict, te: dict, wb: dict, cfg: dict, hist: dict | None = None) -> str:
     if not a:
         return ""
     ins = {i["symbol"]: i for i in cfg.get("instruments") or []}
     generic = _generic(cfg)
     qs = [q for q in (_quote(k, te, wb, ins) for k in (cfg.get("export") or {}).get("now") or []) if q]
     watch = [w for w in a.get("watch") or [] if isinstance(w, dict) and w.get("what")]
-    blocks = [{"type": "stats", "items": [_tile(q, generic) for q in qs]} if qs else None,
+    blocks = [{"type": "stats", "items": [_tile(q, generic, hist) for q in qs]} if qs else None,
               {"type": "notes", "title": "תמונת מצב", "items": share.sentences(a.get("overview"))},
               {"type": "notes", "title": "מה לעקוב",
                "items": [(f'{share.plain(w.get("when"))} — ' if w.get("when") else "") + share.plain(w["what"])
@@ -257,7 +280,8 @@ def export_now(a: dict | None, snap: dict, te: dict, wb: dict, cfg: dict) -> str
                    [share.lead(a.get("headline"))] + [_qline(q, generic) for q in qs], _ai_tsource(refs, used))
 
 
-def export_section(m: dict, a: dict, snap: dict, te: dict, wb: dict, cfg: dict) -> str:
+def export_section(m: dict, a: dict, snap: dict, te: dict, wb: dict, cfg: dict,
+                   hist: dict | None = None) -> str:
     group = m.get("group") or ""
     label = _group_label(cfg).get(group, "")
     ins = {i["symbol"]: i for i in cfg.get("instruments") or []}
@@ -265,7 +289,7 @@ def export_section(m: dict, a: dict, snap: dict, te: dict, wb: dict, cfg: dict) 
     keys = ((cfg.get("export") or {}).get("groups") or {}).get(group) or []
     qs = [q for q in (_quote(k, te, wb, ins) for k in keys) if q]
     cos = [str(c) for c in m.get("companies") or []]
-    blocks = [{"type": "stats", "items": [_tile(q, generic) for q in qs]} if qs else None,
+    blocks = [{"type": "stats", "items": [_tile(q, generic, hist) for q in qs]} if qs else None,
               {"type": "notes", "title": "מה זז ולמה", "items": share.sentences(m.get("body"))},
               {"type": "notes", "title": "החברות", "items": ["מושפעות לפי הסקירה: " + ", ".join(cos) + "."]}
               if cos else None]
@@ -319,35 +343,32 @@ def _shape(v) -> str:
 def export_curves(snap: dict, cfg: dict) -> str:
     cv = snap.get("curves") or {}
     horizons = cfg.get("curve_horizons") or [3, 6, 12, 24]
-    rows, ranked = [], []
+    # **עקום לכל סחורה, על ציר אחוזים משותף** (small multiples). טבלת אחוזים
+    # ביקשה מהקורא לבנות את העקום בראש; כאן הוא רואה אותו — יורד, עולה או
+    # שטוח — ובציר משותף עקום תלול נראה תלול גם ליד שכנו. הנקודה הראשונה היא
+    # החוזה הקרוב עצמו (0%), והאחרונה נושאת את ההפרש במספר.
+    items, ranked = [], []
     for c in cv.values():
         f = (c.get("front") or {}).get("price")
-        pts = {p["ahead"]: p for p in c.get("points") or []}
+        pts = {p["ahead"]: p for p in c.get("points") or [] if p.get("vs_front_pct") is not None}
         if f is None or not pts:
             continue
-        r = {"name": c["label"], "front": f'{_num(f)} {_unit_he(c.get("unit"))}'.strip(),
-             "shape": _shape((pts.get(12) or {}).get("vs_front_pct"))}
-        for h in horizons:
-            v = (pts.get(h) or {}).get("vs_front_pct")
-            # אפס מדויק: החוזה לאותו מועד הוא החוזה הקרוב עצמו, לא עקום שטוח.
-            r[f"h{h}"] = "=" if v is not None and abs(v) < 0.005 else share.signed(v)
-        rows.append(r)
-        far = max((h for h in pts if pts[h].get("vs_front_pct") is not None), default=None)
-        if far is not None:
-            ranked.append((abs(pts[far]["vs_front_pct"]), c["label"], pts[far], r["shape"]))
-    if not rows:
+        shape = _shape((pts.get(12) or {}).get("vs_front_pct"))
+        items.append({"name": c["label"], "front": f'{_num(f)} {_unit_he(c.get("unit"))}'.strip(),
+                      "shape": shape,
+                      "points": [[0, 0]] + [[h, round(pts[h]["vs_front_pct"], 2)] for h in sorted(pts) if h]})
+        far = max(pts)
+        ranked.append((abs(pts[far]["vs_front_pct"]), c["label"], pts[far], shape))
+    if not items:
         return ""
-    cols = [["סחורה", "name", "rtl"], ["חוזה קרוב", "front", "ltr"]] + \
-           [[f"{h} ח׳", f"h{h}", "ltr"] for h in horizons] + [["מבנה", "shape", "rtl"]]
     lines = [f'{lab}: {an._mon(p["month"])} {share.arrow(p["vs_front_pct"])} מהחוזה הקרוב ({shape})'
              for _, lab, p, shape in sorted(ranked, reverse=True)[:4]]
     day, date = _when(snap)
-    same = any(r.get(f"h{h}") == "=" for r in rows for h in horizons)
-    blocks = [{"type": "table", "cols": cols, "rows": rows},
+    blocks = [{"type": "curves", "title": "ההפרש מהחוזה הקרוב, באחוזים · חודשים קדימה",
+               "ticks": [0] + list(horizons), "items": items},
               {"type": "notes", "items": [
                   "בקוורדיישן — חוזים רחוקים זולים מהקרוב: השוק מתמחר מחסור עכשיו שיתמתן.",
-                  "קונטנגו — חוזים רחוקים יקרים מהקרוב: יש היצע עכשיו, והמחיר העתידי כולל אחסון ומימון."]
-               + (["= החוזה לאותו מועד הוא החוזה הקרוב עצמו."] if same else [])}]
+                  "קונטנגו — חוזים רחוקים יקרים מהקרוב: יש היצע עכשיו, והמחיר העתידי כולל אחסון ומימון."]}]
     return _export("cm-curves", snap, "סחורות · חוזים עתידיים", "ספוט מול חוזים",
                    f"החוזה הקרוב מול חוזים לאספקה בעוד {', '.join(str(h) for h in horizons[:-1])} ו-{horizons[-1]} "
                    f"חודשים — ההפרש מהקרוב. מחירי סגירה מ-{date}.", blocks, share.source_line([SRC_FUT]),
@@ -379,7 +400,8 @@ def export_fertilizers(wb: dict, cfg: dict, snap: dict) -> str:
                "series": [{"name": f'{series[k]["label"]} · {series[k].get("region") or ""}',
                            "values": [vals[k].get(m) for m in months]} for k in keys]},
               {"type": "table", "cols": [["סדרה", "name", "rtl"], ["אזור", "region", "rtl"], ["מחיר", "price", "ltr"],
-                                         ["חודש", "month", "ltr"], ["מול חודש קודם", "m", "ltr"], ["שנתי", "y", "ltr"]],
+                                         ["חודש", "month", "ltr"], ["מול חודש קודם", "m", "ltr", {"viz": "chip"}],
+                                         ["שנתי", "y", "ltr", {"viz": "chip"}]],
                "rows": rows}]
     updated = (wb.get("updated") or "").replace("Updated on", "").strip()
     try:
@@ -433,21 +455,26 @@ def export_companies(cfg: dict, te: dict, wb: dict, a: dict | None, snap: dict) 
     ids = sorted({i for c in notes for i in c.get("sources") or []})
     day, _ = _when(snap)
     return _export("cm-cos", snap, "סחורות · החברות", "החברות בתל אביב, דרך הסחורות", _ai_sub(a, snap),
-                   [{"type": "table", "cols": [["חברה", "co", "rtl"], ["כיוון", "dir", "rtl"], ["מה זז", "note", "rtl"]],
-                     "rows": rows}],
+                   # **כרטיס לכל חברה**: שם, שבב כיוון עם סמל (לא צבע לבדו) והמנגנון.
+                   # בטבלה עמודת ההסבר נדחסה לצד שתי עמודות קצרות ונקראה כקיר.
+                   [{"type": "cards", "items": [{"title": r["co"], "tone": r["dir"], "text": r["note"]}
+                                                for r in rows]}],
                    _ai_source((a or {}).get("refs") or {}, ids),
                    f"סחורות והחברות בתל אביב · {day}", lines, _ai_tsource((a or {}).get("refs") or {}, ids))
 
 
-def export_board(group: dict, rows: list[tuple], snap: dict, generic: set) -> str:
+def export_board(group: dict, rows: list[tuple], snap: dict, generic: set,
+                 hist: dict | None = None) -> str:
     """טבלת קבוצה אחת בלוח המחירים. rows — (instrument, te row)."""
     out = []
     for i, row in rows:
+        line = [v for v in (hist or {}).get(i["symbol"]) or [] if isinstance(v, (int, float))]
         out.append({"name": i["label"], "region": _region(i, row),
                     "price": f'{_num(row["Last"])} {_unit_he(row.get("unit"))}'.strip(),
                     "d": share.signed(row.get("DailyPercentualChange")),
                     "m": share.signed(row.get("MonthlyPercentualChange")),
-                    "y": share.signed(row.get("YearlyPercentualChange"), 0)})
+                    "y": share.signed(row.get("YearlyPercentualChange"), 0),
+                    "t": line if len(line) >= 3 else ""})
     movers = sorted((r for r in rows if abs(r[1].get("DailyPercentualChange") or 0) >= 0.05),
                     key=lambda r: -abs(r[1]["DailyPercentualChange"]))[:4]
     lines = [f'{_qname({"label": i["label"], "region": _region(i, row), "src": "te"}, generic)} '
@@ -456,8 +483,10 @@ def export_board(group: dict, rows: list[tuple], snap: dict, generic: set) -> st
     return _export(f'cm-b-{group["key"]}', snap, "סחורות · מחירים", group["label"],
                    f"מחירים ושינויים, {date}. אזור מוצג כשהוא ידוע, או לפי מטבע המחיר.",
                    [{"type": "table", "cols": [["סחורה", "name", "rtl"], ["אזור", "region", "rtl"],
-                                               ["מחיר", "price", "ltr"], ["יום", "d", "ltr"], ["חודש", "m", "ltr"],
-                                               ["שנה", "y", "ltr"]], "rows": out}],
+                                               ["מחיר", "price", "ltr"], ["יום", "d", "ltr", {"viz": "chip"}],
+                                               ["חודש", "m", "ltr", {"viz": "chip"}],
+                                               ["שנה", "y", "ltr", {"viz": "chip"}],
+                                               ["מגמה", "t", "ltr", {"viz": "spark"}]], "rows": out}],
                    share.source_line([SRC_TE]), f'{group["label"]} · מה זז היום · {day}', lines)
 
 
@@ -465,7 +494,7 @@ def export_board(group: dict, rows: list[tuple], snap: dict, generic: set) -> st
 # חלקי העמוד
 
 def now_html(a: dict | None, snap: dict | None = None, te: dict | None = None,
-             wb: dict | None = None, cfg: dict | None = None) -> str:
+             wb: dict | None = None, cfg: dict | None = None, hist: dict | None = None) -> str:
     if not a:
         return ('<h2 id="cm-now">תמונת מצב</h2><p class="cbs-note">הסקירה הראשונה תיכתב בריצה הקרובה של '
                 'הצנרת. בינתיים — המחירים, העקומים והחשיפות למטה מחושבים מהנתונים עצמם.</p>')
@@ -478,7 +507,7 @@ def now_html(a: dict | None, snap: dict | None = None, te: dict | None = None,
                   + "".join(f'<li><span class="wn">{escape(an._t(w.get("when")) or "—")}</span>'
                             f'<span>{an._txt(w["what"])}</span></li>' for w in watch)
                   + '</ul></div>') if watch else ""
-    exp = export_now(a, snap or {}, te or {}, wb or {}, cfg or {})
+    exp = export_now(a, snap or {}, te or {}, wb or {}, cfg or {}, hist)
     return ('<h2 id="cm-now">תמונת מצב</h2>' + stale + exp + '<div class="au-now">'
             f'<p class="au-headline">{an._txt(a.get("headline"))}</p>'
             f'<div class="au-overview">{an._para(a.get("overview"))}</div>'
@@ -487,7 +516,7 @@ def now_html(a: dict | None, snap: dict | None = None, te: dict | None = None,
 
 
 def sections_html(a: dict | None, cfg: dict, snap: dict | None = None, te: dict | None = None,
-                  wb: dict | None = None) -> str:
+                  wb: dict | None = None, hist: dict | None = None) -> str:
     if not a or not a.get("sections"):
         return ""
     labels = _group_label(cfg)
@@ -499,7 +528,7 @@ def sections_html(a: dict | None, cfg: dict, snap: dict | None = None, te: dict 
                      f'<div class="cc-head"><h3>{an._txt(m.get("title"))}</h3>{an._dir(m.get("direction"))}</div>'
                      f'{an._para(m.get("body"))}{an._cos_html(m.get("companies"))}'
                      f'<div class="au-foot">{badge}{an._sources_html(m.get("sources"), refs)}</div>'
-                     f'{export_section(m, a, snap or {}, te or {}, wb or {}, cfg)}</div>')
+                     f'{export_section(m, a, snap or {}, te or {}, wb or {}, cfg, hist)}</div>')
     return ('<h2 id="cm-groups">מה זז, לפי קבוצה</h2>'
             '<p class="cbs-sub">מחיר ושינוי, מה החוזים הרחוקים אומרים, פערים בין אזורים, היצע וביקוש, והחברות '
             'שמושפעות — לכל קבוצה שבה יש תנועה.</p>'
@@ -740,10 +769,7 @@ def board_html(cfg: dict, snaps: list[dict]) -> str:
         return ""
     te = snaps[-1].get("te") or {}
     labels = _group_label(cfg)
-    hist: dict[str, list] = {}
-    for s in snaps:
-        for sym, row in (s.get("te") or {}).items():
-            hist.setdefault(sym, []).append(row.get("Last"))
+    hist = _hist(snaps)
     out = []
     generic = _generic(cfg)
     for g in cfg.get("groups") or []:
@@ -765,7 +791,7 @@ def board_html(cfg: dict, snaps: list[dict]) -> str:
         if rows:
             out.append(f'<details class="cm-board" open><summary>{escape(labels.get(g["key"], g["key"]))} '
                        f'<span class="au-n">{len(rows)}</span></summary>'
-                       + export_board(g, pairs, snaps[-1], generic) +
+                       + export_board(g, pairs, snaps[-1], generic, hist) +
                        '<div class="tw"><table class="nadlan au-tbl"><thead><tr><th>סחורה</th><th>אזור</th><th>מחיר</th>'
                        '<th>יחידה</th><th>יום</th><th>חודש</th><th>שנה</th><th>מגמה</th><th>עדכון</th></tr></thead><tbody>'
                        + "".join(rows) + '</tbody></table></div></details>')
@@ -787,14 +813,15 @@ def page(data: dict) -> str:
         return '<h1>סחורות</h1><p class="lead">טרם נאספו נתונים. הם ייאספו בריצה הקרובה של צנרת הסחורות.</p>'
     snap = snaps[-1] if snaps else {}
     te = snap.get("te") or {}
+    hist = _hist(snaps)
     stamp = " · ".join(x for x in (f'מחירים {an._stamp(snap.get("fetched_at"))}' if snap else "",
                                    f'סקירה {an._stamp(a.get("analyzed_at"))}' if a else "") if x)
     fails = state.get("failures") or []
     fail_html = (f'<p class="msg warn">בריצה האחרונה חלק מהמקורות לא נקראו: {escape(" · ".join(fails[:3]))}.</p>'
                  if any(not f.startswith("Google News") for f in fails) else "")
     parts = [
-        ("cm-now", "תמונת מצב", now_html(a, snap, te, wb, cfg)),
-        ("cm-groups", "לפי קבוצה", sections_html(a, cfg, snap, te, wb)),
+        ("cm-now", "תמונת מצב", now_html(a, snap, te, wb, cfg, hist)),
+        ("cm-groups", "לפי קבוצה", sections_html(a, cfg, snap, te, wb, hist)),
         ("cm-regions", "אזורים", regional_html(cfg, te, snap)),
         ("cm-curves", "ספוט מול חוזים", curves_html(snap, cfg)),
         ("cm-fert", "דשנים", fertilizers_html(wb, cfg, snap)),

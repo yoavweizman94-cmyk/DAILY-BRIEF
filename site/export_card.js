@@ -58,6 +58,92 @@
   function F(w, s, fam) { return w + " " + s + "px " + (fam || SANS); }
   function sum(a) { return a.reduce(function (s, v) { return s + v; }, 0); }
 
+  // **סדרות קטגוריאליות — פלטה מאומתת, בסדר קבוע.** כחול, כתום, טורקיז, צהוב:
+  // עברו בדיקת בהירות, כרומה והפרדה לעיוורון צבעים (scripts של dataviz, על לבן).
+  // הצבע שייך לסדרה ולא לדירוג שלה — "מחוץ לבורסה" כחולה בכל כרטיס.
+  var CAT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"];
+  var SPARK = "#7d8ea3";          // קו מגמה: גוון מושתק; הנקודה האחרונה בכחול
+
+  function hexA(hex, a) {
+    var n = parseInt(String(hex).slice(1), 16);
+    return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+  }
+
+  // מספר מתוך טקסט של תא: "22.8 מ׳ ₪", "631 א׳ ₪", "1.02 מיליארד ₪", "+2.59%",
+  // "12,704". null כשאין מספר ("—"). היחידה הופכת לסדר גודל, כדי שפס יחסי
+  // ישווה בין "631 א׳" ל-"22.8 מ׳" נכון.
+  var MULT = [[/מיליארד/, 1e9], [/מ׳|מ'|מיליון/, 1e6], [/א׳|א'|אלף/, 1e3]];
+  function parseNum(t) {
+    if (typeof t === "number") { return isFinite(t) ? t : null; }
+    var s = String(t == null ? "" : t).replace(/,/g, "").replace(/−/g, "-");
+    var m = /([+\-]?\d+(?:\.\d+)?)/.exec(s);
+    if (!m) { return null; }
+    var v = parseFloat(m[1]);
+    for (var i = 0; i < MULT.length; i++) {
+      if (MULT[i][0].test(s)) { v *= MULT[i][1]; break; }
+    }
+    return v;
+  }
+
+  // פס: ריבוע בקו הבסיס, ופינות מעוגלות רק בקצה הנתון (dataviz: קצה 4px).
+  // side — באיזה צד הקצה: "left" (פס שגדל משמאל לבסיס בימין) או "right".
+  function barPath(x, l, t, w, h, r, side) {
+    r = Math.max(0, Math.min(r, w, h / 2));
+    x.beginPath();
+    if (side === "right") {
+      x.moveTo(l, t); x.lineTo(l + w - r, t); x.arcTo(l + w, t, l + w, t + r, r);
+      x.lineTo(l + w, t + h - r); x.arcTo(l + w, t + h, l + w - r, t + h, r); x.lineTo(l, t + h);
+    } else if (side === "top") {
+      x.moveTo(l, t + h); x.lineTo(l, t + r); x.arcTo(l, t, l + r, t, r);
+      x.lineTo(l + w - r, t); x.arcTo(l + w, t, l + w, t + r, r); x.lineTo(l + w, t + h);
+    } else {
+      x.moveTo(l + w, t); x.lineTo(l + r, t); x.arcTo(l, t, l, t + r, r);
+      x.lineTo(l, t + h - r); x.arcTo(l, t + h, l + r, t + h, r); x.lineTo(l + w, t + h);
+    }
+    x.closePath();
+  }
+
+  // קו מגמה קטן: קו 2px בגוון מושתק, שטיפה עדינה מתחתיו, ונקודת סיום כחולה
+  // עם טבעת לבנה — הערך האחרון הוא הדגש, השאר הקשר.
+  function sparkline(x, vals, l, t, w, h) {
+    var pts = (vals || []).filter(function (v) { return typeof v === "number" && isFinite(v); });
+    if (pts.length < 2) { return; }
+    var lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts);
+    // **טווח מינימלי של 4% מהרמה.** בלעדיו קו נמתח מקצה לקצה: DAP שנע בין 800
+    // ל-802.5 (0.3%) צויר כצניחה ועלייה חדות. כך תזוזה זעירה נשארת זעירה.
+    var mid = (lo + hi) / 2, floor = Math.abs(mid) * 0.04;
+    if (hi - lo < floor) { lo = mid - floor / 2; hi = mid + floor / 2; }
+    var span = (hi - lo) || 1;
+    function X(i) { return l + w * i / (pts.length - 1); }
+    function Y(v) { return t + h - 4 - (v - lo) / span * (h - 8); }
+    x.beginPath();
+    pts.forEach(function (v, i) { if (i) { x.lineTo(X(i), Y(v)); } else { x.moveTo(X(i), Y(v)); } });
+    x.lineTo(X(pts.length - 1), t + h); x.lineTo(X(0), t + h); x.closePath();
+    x.fillStyle = hexA(SPARK, 0.1); x.fill();
+    x.beginPath();
+    pts.forEach(function (v, i) { if (i) { x.lineTo(X(i), Y(v)); } else { x.moveTo(X(i), Y(v)); } });
+    x.strokeStyle = SPARK; x.lineWidth = 2; x.lineJoin = "round"; x.lineCap = "round"; x.stroke();
+    var ex = X(pts.length - 1), ey = Y(pts[pts.length - 1]);
+    x.fillStyle = C.card; x.beginPath(); x.arc(ex, ey, 6, 0, Math.PI * 2); x.fill();
+    x.fillStyle = CAT[0]; x.beginPath(); x.arc(ex, ey, 4, 0, Math.PI * 2); x.fill();
+  }
+
+  // מקרא: נקודה צבעונית ושם לכל סדרה, מימין לשמאל. מחזיר את הגובה.
+  function legendRow(x, names, right, y, draw) {
+    if (!names || !names.length) { return 0; }
+    if (draw) {
+      x.direction = "rtl"; x.textAlign = "right"; x.font = F(600, 16);
+      var cx = right;
+      names.forEach(function (n, i) {
+        x.fillStyle = CAT[i % CAT.length];
+        rr(x, cx - 14, y + 9, 14, 14, 4); x.fill();
+        x.fillStyle = C.muted; x.fillText(n, cx - 22, y + 21);
+        cx -= 22 + x.measureText(n).width + 26;
+      });
+    }
+    return 36;
+  }
+
   // ---------------------------------------------------------------- גופנים
 
   var fontsP = null;
@@ -168,7 +254,7 @@
   function unitFont(o) { return F(o.uw || 600, Math.round(o.s * (o.us || 0.78))); }
   function valWidth(x, v, o) {
     var p = numParts(v);
-    x.font = F(o.w, o.s, MONO);
+    x.font = F(o.w, o.s, o.fam || MONO);
     if (!p) { return x.measureText(String(v == null ? "" : v)).width; }
     var nw = x.measureText(p.n).width;
     x.font = unitFont(o);
@@ -177,7 +263,7 @@
   function drawVal(x, v, right, y, o) {
     var p = numParts(v), t = String(v == null ? "" : v);
     x.direction = "ltr"; x.textAlign = "right";
-    x.font = F(o.w, o.s, MONO); x.fillStyle = o.color;
+    x.font = F(o.w, o.s, o.fam || MONO); x.fillStyle = o.color;
     if (!p) { x.fillText(t, right, y); return; }
     x.fillText(p.n, right, y);
     var nw = x.measureText(p.n).width;
@@ -591,15 +677,18 @@
       // שורת הקשר יכולה להיות רשימה — כל פריט בשורה משלו ("מחוץ לבורסה X",
       // "מתואמות Y"), כמו באריח שבעמוד.
       var caps = (Array.isArray(it.cap) ? it.cap : [it.cap]).filter(function (c) { return c; });
+      var hasSpark = (it.spark || []).filter(function (v) { return typeof v === "number"; }).length >= 5;
       return { r: r, c: i - r * per, w: w, ls: ls, lab: wrap(x, bidi(it.label || ""), tw),
+        spark: hasSpark, chips: chipRows(x, it.deltas || [], w - P * 2),
         cap: [].concat.apply([], caps.map(function (c) {
           return richWrap(x, capPieces(c), w - P * 2, capF);
         })) };
     });
     var labL = Math.max.apply(null, lay.map(function (l) { return l.lab.length; }));
     var capL = Math.max.apply(null, lay.map(function (l) { return l.cap.length; }));
+    var chipL = Math.max.apply(null, lay.map(function (l) { return l.chips.length; }));
     var head = Math.max(IC, labL * 22);
-    var ch = P + head + 18 + 38 + (capL ? 12 + capL * 23 : 0) + P - 2;
+    var ch = P + head + 18 + 40 + (chipL ? 14 + chipL * 34 - 6 : 0) + (capL ? 12 + capL * 23 : 0) + P - 2;
     var h = rowsN * ch + (rowsN - 1) * gap;
     if (!draw) { return h; }
     items.forEach(function (it, i) {
@@ -613,18 +702,65 @@
       x.fillStyle = C.muted; x.font = F(600, L.ls);
       var ly = icy - (L.lab.length - 1) * 11 + 6;
       L.lab.forEach(function (ln, k) { x.fillText(ln, R - IC - 14, ly + k * 22); });
-      var v = String(it.value == null ? "—" : it.value), s = 38;
-      var o = { w: 600, s: s, us: 0.5, uw: 600 };
-      while (s > 18 && valWidth(x, v, o) > L.w - P * 2) { s -= 1; o.s = s; }
+      // **המספר באותו גופן כמו הטקסט, בספרות פרופורציונליות** — גופן המספרים
+      // רוחב קבוע שמור לעמודות שצריכות להתיישר; מספר גדול שעומד לבדו נראה בו מרווח.
+      var v = String(it.value == null ? "—" : it.value), s = 40;
+      var sw = L.spark ? Math.min(150, (L.w - P * 2) * 0.4) : 0;
+      var room = L.w - P * 2 - (sw ? sw + 16 : 0);
+      var o = { w: 700, s: s, us: 0.48, uw: 600, fam: SANS };
+      while (s > 18 && valWidth(x, v, o) > room) { s -= 1; o.s = s; }
       o.color = it.tone === "up" ? C.up : it.tone === "down" ? C.down : C.ink;
       o.ucolor = it.tone ? o.color : C.muted;
-      var vy = py + P + head + 18 + 32;
+      var vy = py + P + head + 18 + 34;
       drawVal(x, v, R, vy, o);
+      if (L.spark) { sparkline(x, it.spark, px + P, vy - 38, sw, 44); }
+      var cy = vy + 14;
+      L.chips.forEach(function (row) { drawChips(x, row, R, cy); cy += 34; });
+      if (L.chips.length) { cy += 4; }
       L.cap.forEach(function (ln, k) {
-        richDraw(x, ln, R, vy + 34 + k * 23, capF, { "": C.faint, up: C.up, down: C.down });
+        richDraw(x, ln, R, cy + 20 + k * 23, capF, { "": C.faint, up: C.up, down: C.down });
       });
     });
     return h;
+  }
+
+  // שבבי שינוי: "יום +1.2%" — תווית מושתקת ומספר בצבע הכיוון על רקע בגוון שלו.
+  // הסימן נכתב תמיד, כך שהכיוון אינו נישא בצבע לבדו.
+  var CHIP_L = F(500, 14), CHIP_V = F(700, 15);
+  function deltaChipW(x, d) {
+    x.font = CHIP_L;
+    var lw = d.label ? x.measureText(d.label).width + 6 : 0;
+    x.font = CHIP_V;
+    return lw + x.measureText(String(d.text)).width + 20;
+  }
+  function chipRows(x, ds, max) {
+    var rows = [], cur = [], w = 0;
+    (ds || []).filter(function (d) { return d && d.text != null && d.text !== ""; }).forEach(function (d) {
+      var cw = deltaChipW(x, d);
+      if (cur.length && w + 8 + cw > max) { rows.push(cur); cur = []; w = 0; }
+      cur.push({ d: d, w: cw });
+      w += (cur.length > 1 ? 8 : 0) + cw;
+    });
+    if (cur.length) { rows.push(cur); }
+    return rows;
+  }
+  function drawChips(x, row, right, top) {
+    var cx = right;
+    row.forEach(function (c) {
+      var v = parseNum(c.d.value != null ? c.d.value : c.d.text);
+      var fg = v > 0 ? C.up : v < 0 ? C.down : C.muted;
+      var bg = v > 0 ? C.upBg : v < 0 ? C.downBg : C.track;
+      x.fillStyle = bg; rr(x, cx - c.w, top, c.w, 28, 8); x.fill();
+      x.direction = "rtl"; x.textAlign = "right";
+      var tx = cx - 10;
+      if (c.d.label) {
+        x.font = CHIP_L; x.fillStyle = C.muted; x.fillText(c.d.label, tx, top + 19);
+        tx -= x.measureText(c.d.label).width + 6;
+      }
+      x.direction = "ltr"; x.font = CHIP_V; x.fillStyle = fg;
+      x.fillText(String(c.d.text), tx, top + 19);
+      cx -= c.w + 8;
+    });
   }
 
   // עיקרי התקופה: משפטים מחושבים, כל אחד בנקודה משלו, והמספרים בהם מודגשים.
@@ -695,7 +831,20 @@
   // **עמודת אחוזים מקבלת פס יחסי בתוך התא.** רק כשכל ערכיה אחוז לא חתום
   // ("12.3%"): שינוי חתום כבר צבוע לפי הכיוון, ופס לצידו היה סותר את הצבע.
   // הפס יחסי לערך הגבוה בעמודה — הוא משווה בין השורות, לא מול 100%.
-  var BARW = 104, TX = 12;
+  // **עמודה עם צורה משלה.** מפרט עמודה הוא [כותרת, מפתח, כיוון, אפשרויות], והאפשרות
+  // viz בוחרת את הצורה שמתאימה לתוכן — כי טבלה של מספרים בלבד מבקשת מהקורא
+  // להשוות בראש את מה שפס משווה בעין:
+  //   bar    — פס יחסי לגבוה בעמודה (היקף כספי, נתח)
+  //   meter  — פס מול תקרה קבועה, max (אחוז מתוך שלם: ממחזור היום, החזקה)
+  //   div    — פס סביב אפס, לפי הסימן (פרמיה מול שער הבסיס, שינוי נטו)
+  //   chip   — שבב צבעוני מאחורי מספר חתום (שינוי ביום/חודש/שנה)
+  //   stack  — פס מוערם מעמודות אחרות, parts (מחוץ לבורסה + מתואמות)
+  //   spark  — קו מגמה מתוך מערך מספרים בשורה
+  // swatch — ריבוע צבעוני בכותרת, שמזהה עמודה כחלק בפס מוערם.
+  // בלי viz בכל הטבלה, עמודת אחוזים לא חתומים מקבלת פס כמו קודם.
+  var BARW = 104, TX = 12, SPW = 112;
+  var BARRED = { bar: 1, meter: 1, div: 1, stack: 1 };
+
   function isPctCol(c, rows) {
     if (c[2] !== "ltr") { return false; }
     var vals = rows.map(function (r) { return r[c[1]] == null ? "" : String(r[c[1]]); })
@@ -703,31 +852,40 @@
     return vals.length >= 2 && vals.every(function (v) { return /^\d[\d.,]*%$/.test(v); });
   }
 
+  function colOpt(c) { return (c[3] && typeof c[3] === "object") ? c[3] : {}; }
+
   function tableNat(x, b) {
     if (b._nat) { return b._nat; }
     var cols = b.cols, rows = b.rows || [];
     var all = b.totalRow ? rows.concat([b.totalRow]) : rows;
     var last = b.totalRow ? all.length - 1 : -1, GAPC = 30;
-    var nat = [], min = [], loose = [], pct = [], pv = [];
+    var explicit = cols.some(function (c) { return colOpt(c).viz; });
+    var nat = [], min = [], loose = [], vz = [], pv = [], nums = [];
     cols.forEach(function (c, i) {
+      var o = colOpt(c);
+      var kind = o.viz || (!explicit && isPctCol(c, rows) ? "bar" : "");
+      vz.push(kind);
       x.font = F(600, 15);
-      var head = x.measureText(c[0]).width, full = head, word = head, vals = 0;
-      all.forEach(function (r, n) {
-        var v = r[c[1]] == null ? "" : String(r[c[1]]);
-        if (c[2] === "ltr") {
-          var vw = valWidth(x, v, cellVal(c, v, n === last));
-          full = Math.max(full, vw);
-          vals = Math.max(vals, vw);
-          return;
-        }
-        x.font = cellFont(c, i, v, n === last);
-        full = Math.max(full, x.measureText(v).width);
-        v.split(" ").forEach(function (w) { word = Math.max(word, x.measureText(w).width); });
-      });
-      var isP = isPctCol(c, rows);
-      pct.push(isP);
+      var head = x.measureText(c[0]).width + (o.swatch != null ? 20 : 0), full = head, word = head, vals = 0;
+      if (kind !== "spark") {
+        all.forEach(function (r, n) {
+          var v = r[c[1]] == null ? "" : String(r[c[1]]);
+          if (c[2] === "ltr") {
+            var vw = valWidth(x, v, cellVal(c, v, n === last));
+            full = Math.max(full, vw);
+            vals = Math.max(vals, vw);
+            return;
+          }
+          x.font = cellFont(c, i, v, n === last);
+          full = Math.max(full, x.measureText(v).width);
+          v.split(" ").forEach(function (w) { word = Math.max(word, x.measureText(w).width); });
+        });
+      }
       pv.push(vals);
-      if (isP) { full = Math.max(head, vals + BARW); }
+      if (BARRED[kind]) { full = Math.max(head, vals + BARW); }
+      else if (kind === "chip") { full = Math.max(head, vals + 20); }
+      else if (kind === "spark") { full = Math.max(head, SPW); }
+      nums.push(BARRED[kind] && kind !== "stack" ? rows.map(function (r) { return parseNum(r[c[1]]); }) : null);
       nat.push(Math.ceil(full) + GAPC);
       // עמודת מספרים לעולם אינה נשברת. עמודת טקסט נשברת עד המילה הרחבה בה,
       // ומעבר ל-340 פיקסלים גם מילה נשברת — לפי תווים, בלי לאבד תו.
@@ -739,16 +897,81 @@
     });
     // טבלה שגם במינימום הקשיח רחבה מהקנבס — חוזרים לשבירה לפי מילים גם בעמודה קצרה.
     if (sum(min) > WMAX - PAD * 2 - TX * 2) { min = loose; }
-    b._nat = { all: all, last: last, nat: nat, min: min, pct: pct, pv: pv,
+    b._nat = { all: all, last: last, nat: nat, min: min, vz: vz, pv: pv, nums: nums,
       sumNat: sum(nat), sumMin: sum(min) };
     return b._nat;
   }
 
-  // הטבלה ממלאת את הכרטיס שלה עד הקצוות: שורת כותרת כהה למעלה, שורות
+  // הסקאלה של כל עמודה מצוירת: הגבוה בעמודה, התקרה, או הגבוה בערך מוחלט.
+  function tableScales(b, T) {
+    var rows = b.rows || [];
+    var sc = b.cols.map(function (c, i) {
+      var o = colOpt(c), kind = T.vz[i], vals = (T.nums[i] || []).filter(function (v) { return v != null; });
+      if (kind === "meter") { return o.max || 100; }
+      if (kind === "div") { return Math.max.apply(null, [0].concat(vals.map(Math.abs))) || 1; }
+      if (kind === "stack") {
+        return Math.max.apply(null, [0].concat(rows.map(function (r) {
+          return sum((o.parts || []).map(function (k) { return Math.max(0, parseNum(r[k]) || 0); }));
+        }))) || 1;
+      }
+      if (kind === "bar") { return Math.max.apply(null, [0].concat(vals)) || 1; }
+      return 0;
+    });
+    // **שתי עמודות אחוז באותו סדר גודל — סקאלה אחת.** "חלק מהליסינג" מול
+    // "אשתקד" הם אותו מדד בשתי שנים, ובסקאלה נפרדת 13.3% ו-14.4% קיבלו פס
+    // מלא שניהם. אחוז ממחזור (עד 100) ואחוז מההון (שברירי אחוז) נשארים נפרדים.
+    var pctBars = b.cols.map(function (c, i) { return T.vz[i] === "bar" && isPctCol(c, rows) ? sc[i] : 0; })
+      .filter(function (v) { return v > 0; });
+    if (pctBars.length > 1 && Math.max.apply(null, pctBars) <= 3 * Math.min.apply(null, pctBars)) {
+      var top = Math.max.apply(null, pctBars);
+      sc = sc.map(function (v, i) { return T.vz[i] === "bar" && isPctCol(b.cols[i], rows) ? top : v; });
+    }
+    return sc;
+  }
+
+  // הצורה שבתוך התא, משמאל למספר. bx — הקצה הימני של אזור הפס, bl — אורכו.
+  function cellViz(x, kind, o, raw, row, bx, bl, top, scale) {
+    var v = parseNum(raw);
+    if (kind === "stack") {
+      var parts = (o.parts || []).map(function (k) { return Math.max(0, parseNum(row[k]) || 0); });
+      x.fillStyle = C.track; rr(x, bx - bl, top, bl, 10, 5); x.fill();
+      var k2 = bl / (scale || 1), cur = bx;
+      var lastOn = -1;
+      parts.forEach(function (p, k) { if (p * k2 >= 1) { lastOn = k; } });
+      parts.forEach(function (p, k) {
+        var w = p * k2;
+        if (w < 1) { return; }
+        x.fillStyle = CAT[k % CAT.length];
+        if (k === lastOn) { barPath(x, cur - w, top, w, 10, 4, "left"); }
+        else { x.beginPath(); x.rect(cur - w + 2, top, Math.max(0, w - 2), 10); }
+        x.fill();
+        cur -= w;
+      });
+      return;
+    }
+    if (v == null) { return; }
+    x.fillStyle = C.track; rr(x, bx - bl, top, bl, 10, 5); x.fill();
+    if (kind === "div") {
+      var mid = bx - bl / 2, half = bl / 2 - 2, w2 = Math.max(3, half * Math.min(1, Math.abs(v) / (scale || 1)));
+      if (Math.abs(v) > 1e-9) {
+        x.fillStyle = v > 0 ? C.up : C.down;
+        if (v > 0) { barPath(x, mid, top, w2, 10, 4, "right"); } else { barPath(x, mid - w2, top, w2, 10, 4, "left"); }
+        x.fill();
+      }
+      x.fillStyle = C.line; x.fillRect(mid - 0.5, top - 5, 1, 20);
+      return;
+    }
+    if (v <= 0) { return; }
+    var w = Math.max(4, bl * Math.min(1, v / (scale || 1)));
+    x.fillStyle = CAT[0]; barPath(x, bx - w, top, w, 10, 4, "left"); x.fill();
+  }
+
+  // הטבלה ממלאת את הכרטיס שלה עד הקצוות: מקרא (אם יש), שורת כותרת כהה, שורות
   // מתחלפות, ושורת הסך כפס כהה בתחתית.
   function tableBlock(x, b, g, draw) {
     if (!b.cols || !(b.rows || []).length) { return 0; }
     var T = tableNat(x, b), inner = g.inner - TX * 2, R = g.right - TX, LINE = 30, HB = 52;
+    var LEG = (b.legend || []).length ? 48 : 0;
     var wid;
     if (T.sumNat <= inner) {
       // **המרווח מתחלק בין העמודות**, כפול לעמודה הראשונה. כשכולו הלך לעמודה
@@ -766,44 +989,38 @@
     var rows = T.all.map(function (r, n) {
       var bold = n === T.last;
       var cells = b.cols.map(function (c, i) {
-        var v = r[c[1]] == null ? "" : String(r[c[1]]);
+        var raw = r[c[1]];
+        var v = raw == null || Array.isArray(raw) ? "" : String(raw);
         x.font = cellFont(c, i, v, bold);
-        return { v: v, lines: c[2] === "rtl" ? wrap(x, bidi(v), wid[i] - 30) : [v] };
+        return { v: v, raw: raw, lines: c[2] === "rtl" ? wrap(x, bidi(v), wid[i] - 30) : [v] };
       });
       var tall = cells.reduce(function (m, c) { return Math.max(m, c.lines.length); }, 1);
-      return { cells: cells, bold: bold, h: 24 + LINE * tall };
+      return { cells: cells, bold: bold, src: r, h: 24 + LINE * tall };
     });
     x.font = F(400, 17);
     var more = b.moreText ? wrap(x, b.moreText, inner - 28) : [];
     var MH = more.length ? 20 + more.length * 26 : 0;
-    var h = HB + sum(rows.map(function (r) { return r.h; })) + MH + (b.totalRow ? 6 : 8);
+    var h = LEG + HB + sum(rows.map(function (r) { return r.h; })) + MH + (b.totalRow ? 6 : 8);
     if (!draw) { return h; }
 
     var y = g.top;
+    if (LEG) { legendRow(x, b.legend, R - 14, y + 6, true); y += LEG; }
     x.fillStyle = C.navy; x.fillRect(g.left, y, g.inner, HB);
     var cx = R;
     x.direction = "rtl"; x.textAlign = "right";
-    x.font = F(600, 15); x.fillStyle = C.onNavy2;
+    x.font = F(600, 15);
     b.cols.forEach(function (c, i) {
       // כותרת עמודה היא טקסט עברי גם כשהערכים בה LTR.
-      x.fillText(c[0], cx - 14, y + 32);
+      var o = colOpt(c), tx = cx - 14;
+      if (o.swatch != null) {
+        x.fillStyle = CAT[o.swatch % CAT.length]; rr(x, tx - 12, y + 20, 12, 12, 3); x.fill();
+        tx -= 20;
+      }
+      x.fillStyle = C.onNavy2; x.fillText(c[0], tx, y + 32);
       cx -= wid[i];
     });
     y += HB;
-    var pmax = b.cols.map(function (c, i) {
-      if (!T.pct[i]) { return 0; }
-      return Math.max.apply(null, (b.rows || []).map(function (r) {
-        return parseFloat(String(r[c[1]] == null ? "" : r[c[1]]).replace(/,/g, "")) || 0;
-      })) || 1;
-    });
-    // **שתי עמודות אחוז באותו סדר גודל — סקאלה אחת.** "חלק מהליסינג" מול
-    // "אשתקד" הם אותו מדד בשתי שנים, ובסקאלה נפרדת 13.3% ו-14.4% קיבלו פס
-    // מלא שניהם. אחוז ממחזור (עד 100) ואחוז מההון (שברירי אחוז) נשארים נפרדים.
-    var pOn = pmax.filter(function (v) { return v > 0; });
-    if (pOn.length > 1 && Math.max.apply(null, pOn) <= 3 * Math.min.apply(null, pOn)) {
-      var pAll = Math.max.apply(null, pOn);
-      pmax = pmax.map(function (v) { return v > 0 ? pAll : 0; });
-    }
+    var scales = tableScales(b, T);
 
     // שורות; אחריהן שורת ה"ועוד", ורק אז שורת הסך — הסדר שבעמוד.
     var moreDone = false;
@@ -825,19 +1042,22 @@
       }
       var vx = R;
       row.cells.forEach(function (cell, i) {
-        var c = b.cols[i];
-        if (c[2] === "ltr") {
-          drawVal(x, cell.v, vx - 14, y + 35, cellVal(c, cell.v, row.bold));
-          if (T.pct[i] && !row.bold && /^\d/.test(cell.v)) {
+        var c = b.cols[i], kind = T.vz[i], o = colOpt(c);
+        if (kind === "spark") {
+          if (!row.bold && Array.isArray(cell.raw)) {
+            sparkline(x, cell.raw, vx - wid[i] + 12, y + 12, wid[i] - 30, 34);
+          }
+        } else if (c[2] === "ltr") {
+          var ov = cellVal(c, cell.v, row.bold);
+          if (kind === "chip" && !row.bold && cell.v && cell.v !== "—") {
+            var sv = parseNum(cell.v), tw = valWidth(x, cell.v, ov);
+            x.fillStyle = sv > 0 ? C.upBg : sv < 0 ? C.downBg : C.track;
+            rr(x, vx - 14 - tw - 9, y + 13, tw + 18, 30, 8); x.fill();
+          }
+          drawVal(x, cell.v, vx - 14, y + 35, ov);
+          if (BARRED[kind] && !row.bold) {
             var bx = vx - 14 - T.pv[i] - 14, bl = Math.min(92, bx - (vx - wid[i] + 10));
-            if (bl > 20) {
-              var pv = parseFloat(cell.v.replace(/,/g, "")) || 0;
-              x.fillStyle = C.track; rr(x, bx - bl, y + 24, bl, 10, 5); x.fill();
-              if (pv > 0) {
-                var fw = Math.max(6, bl * Math.min(1, pv / pmax[i]));
-                x.fillStyle = C.accent; rr(x, bx - fw, y + 24, fw, 10, 5); x.fill();
-              }
-            }
+            if (bl > 20) { cellViz(x, kind, o, cell.raw, row.src, bx, bl, y + 24, scales[i]); }
           }
         } else {
           x.direction = c[2]; x.textAlign = "right";
@@ -853,11 +1073,12 @@
     return h;
   }
 
-  // פסים אופקיים: שם, פס יחסי, ושני מספרים.
+  // פסים אופקיים: שם, פס יחסי, ושני מספרים. הפס בצבע אחד — זו סדרה אחת, והאורך
+  // הוא שמשווה; המספרים בדיו ולא בצבע הפס.
   function barsBlock(x, b, g, draw) {
     var rows = b.rows || [];
     if (!rows.length) { return 0; }
-    var PV = { w: 600, s: 20, color: C.accent }, MV = { w: 400, s: 16, color: C.faint, uw: 500 };
+    var PV = { w: 700, s: 20, color: C.ink, fam: SANS }, MV = { w: 400, s: 16, color: C.faint, uw: 500 };
     var pvW = Math.max.apply(null, rows.map(function (r) { return valWidth(x, r.pctText, PV); })) + 30;
     var mvW = Math.max.apply(null, rows.map(function (r) { return valWidth(x, r.volText || "", MV); })) + 26;
     var labMax = Math.min(measureMax(x, F(600, 19), rows.map(function (r) { return r.label; })) + 26,
@@ -878,11 +1099,9 @@
       x.fillStyle = C.ink; x.font = F(600, 19);
       var ly = cy - (L.lines.length - 1) * 13 + 7;
       L.lines.forEach(function (ln, k) { x.fillText(ln, g.right, ly + k * 26); });
-      x.fillStyle = C.track; rr(x, barR - barW, cy - 7, barW, 14, 7); x.fill();
-      var fw = Math.max(8, barW * (r.pct || 0) / mx);
-      var gr = x.createLinearGradient(barR, 0, barR - barW, 0);
-      gr.addColorStop(0, C.accent); gr.addColorStop(1, C.accent2);
-      x.fillStyle = gr; rr(x, barR - fw, cy - 7, fw, 14, 7); x.fill();
+      x.fillStyle = C.track; rr(x, barR - barW, cy - 8, barW, 16, 5); x.fill();
+      var fw = Math.max(6, barW * (r.pct || 0) / mx);
+      x.fillStyle = CAT[0]; barPath(x, barR - fw, cy - 8, fw, 16, 4, "left"); x.fill();
       drawVal(x, r.pctText, g.left + mvW + pvW - 12, cy + 7, PV);
       drawVal(x, r.volText || "", g.left + mvW - 12, cy + 6, MV);
       y += L.h;
@@ -891,55 +1110,74 @@
     return h;
   }
 
-  // עמודות לאורך זמן: הזמן זורם משמאל לימין, והיום האחרון מודגש.
+  // עמודות לאורך זמן: הזמן זורם משמאל לימין, והיום האחרון מודגש. פריט עם parts הוא
+  // עמודה מוערמת — חלק לכל סדרה, עם מקרא — והימים שלפני האחרון שקופים למחצה, כדי
+  // שהעין תיפול על היום ועדיין תראה ממה הוא בנוי.
   function columnsBlock(x, b, g, draw) {
     var items = b.items || [];
     if (items.length < 2) { return 0; }
+    var stacked = items.some(function (it) { return Array.isArray(it.parts); });
+    var LEG = stacked && (b.series || []).length ? 42 : 0;
     var CH = 230, XL = 34;
-    var h = CH + XL;
+    var h = LEG + CH + XL;
     if (!draw) { return h; }
     var y = g.top;
-    var vals = items.map(function (it) { return it.value || 0; });
+    if (LEG) { legendRow(x, b.series, g.right, y, true); y += LEG; }
+    var vals = items.map(function (it) {
+      return stacked ? sum((it.parts || []).map(function (p) { return Math.max(0, p || 0); })) : (it.value || 0);
+    });
     var mx = Math.max.apply(null, vals.concat([b.median || 0])) || 1;
     var axisW = 96, left = g.left + axisW, right = g.right, plotW = right - left;
     var top = y + 16, bot = y + CH, ph = bot - top;
     function Y(v) { return bot - v / mx * ph; }
     x.fillStyle = C.hair;
-    [0, 0.5, 1].forEach(function (f) { x.fillRect(left, Y(mx * f), plotW, 1); });
+    [0.5, 1].forEach(function (f) { x.fillRect(left, Y(mx * f), plotW, 1); });
+    x.fillStyle = C.line; x.fillRect(left, bot, plotW, 1);
     var AX = { w: 400, s: 13, color: C.faint, uw: 500, us: 0.9 };
     drawVal(x, b.maxText || "", left - 12, Y(mx) + 5, AX);
     drawVal(x, "0", left - 12, bot + 4, AX);
-    var n = items.length, slot = plotW / n, bw = Math.min(34, slot * 0.64);
+    var n = items.length, slot = plotW / n, bw = Math.min(24, slot * 0.62);
     items.forEach(function (it, i) {
       var cx = left + slot * (i + 0.5), v = vals[i], last = i === n - 1;
-      var yv = Y(v), hh = Math.max(2, bot - yv);
-      if (last) {
-        var gr = x.createLinearGradient(0, bot - hh, 0, bot);
-        gr.addColorStop(0, C.accent2); gr.addColorStop(1, C.accent);
-        x.fillStyle = gr;
+      var yv = Y(v);
+      if (stacked) {
+        x.globalAlpha = last ? 1 : 0.42;
+        var base = bot, parts = (it.parts || []).map(function (p) { return Math.max(0, p || 0); });
+        var lastOn = -1;
+        parts.forEach(function (p, k) { if (p / mx * ph >= 1) { lastOn = k; } });
+        parts.forEach(function (p, k) {
+          var hh = p / mx * ph;
+          if (hh < 1) { return; }
+          x.fillStyle = CAT[k % CAT.length];
+          if (k === lastOn) { barPath(x, cx - bw / 2, base - hh, bw, hh, 4, "top"); }
+          else { x.beginPath(); x.rect(cx - bw / 2, base - hh + 2, bw, Math.max(0, hh - 2)); }
+          x.fill();
+          base -= hh;
+        });
+        x.globalAlpha = 1;
       } else {
-        x.fillStyle = C.pale;
+        var hh2 = Math.max(2, bot - yv);
+        x.fillStyle = last ? CAT[0] : "#c4d8f3";
+        barPath(x, cx - bw / 2, bot - hh2, bw, hh2, 4, "top"); x.fill();
       }
-      rr(x, cx - bw / 2, bot - hh, bw, hh, Math.min(5, bw / 2)); x.fill();
       if (i % 3 === (n - 1) % 3) {
         x.direction = "ltr"; x.textAlign = "center"; x.fillStyle = last ? C.ink : C.faint;
         x.font = F(last ? 600 : 400, 13, MONO);
         x.fillText(it.label, cx, bot + 24);
       }
       if (last && it.text) {
-        // התווית יושבת על רקע לבן: כשהיום האחרון קרוב לחציון, הקו המקווקו עובר דרכה.
-        var LV = { w: 600, s: 15, color: C.ink, ucolor: C.muted, us: 0.85 };
+        // התווית יושבת על רקע לבן: כשהיום האחרון קרוב לחציון, הקו עובר דרכה.
+        var LV = { w: 700, s: 15, color: C.ink, ucolor: C.muted, us: 0.85, fam: SANS };
         var tw = valWidth(x, it.text, LV), tr = Math.min(right, cx + tw / 2);
         x.fillStyle = C.card; rr(x, tr - tw - 8, yv - 30, tw + 16, 26, 7); x.fill();
-        x.strokeStyle = C.pale; x.lineWidth = 1; rr(x, tr - tw - 7.5, yv - 29.5, tw + 15, 25, 7); x.stroke();
+        x.strokeStyle = C.line; x.lineWidth = 1; rr(x, tr - tw - 7.5, yv - 29.5, tw + 15, 25, 7); x.stroke();
         drawVal(x, it.text, tr, yv - 12, LV);
       }
     });
     if (b.median) {
+      // קו ייחוס רציף ולא מקווקו (dataviz): מקווקו נקרא כתחזית.
       var my = Y(b.median);
-      x.strokeStyle = C.muted; x.lineWidth = 1.2; x.setLineDash([6, 5]);
-      x.beginPath(); x.moveTo(left, my); x.lineTo(right, my); x.stroke();
-      x.setLineDash([]);
+      x.fillStyle = C.muted; x.fillRect(left, my - 0.75, plotW, 1.5);
       x.direction = "rtl"; x.textAlign = "left";
       x.font = F(600, 14);
       var mw = x.measureText(b.medianText || "").width;
@@ -951,9 +1189,255 @@
     return h;
   }
 
+  // ---- דירוג: הגדולות, כפסים עם הערך בקצה. חלקים (parts) — פס מוערם עם מקרא.
+  function rankBlock(x, b, g, draw) {
+    var rows = (b.rows || []).filter(function (r) { return r && r.value != null; });
+    if (!rows.length) { return 0; }
+    var LEG = (b.legend || []).length ? 42 : 0;
+    var VAL = { w: 700, s: 19, color: C.ink, ucolor: C.muted, us: 0.74, uw: 600, fam: SANS };
+    // עמודת השם רחבה מספיק גם לשורת המשנה, כדי ש"4 עסקאות · 0.85% מההון" לא
+    // יישבר באמצע — עד שליש מהרוחב, ומעבר לו נשבר.
+    var labW = Math.min(Math.max(measureMax(x, F(700, 19), rows.map(function (r) { return r.label; })),
+      measureMax(x, F(400, 15), rows.map(function (r) { return bidi(r.meta || ""); }))) + 28,
+      g.inner * 0.34);
+    var valW = Math.max.apply(null, rows.map(function (r) { return valWidth(x, r.text || "", VAL); })) + 18;
+    var lays = rows.map(function (r) {
+      x.font = F(700, 19);
+      var lines = wrap(x, r.label, labW - 28);
+      x.font = F(400, 15);
+      var meta = r.meta ? wrap(x, bidi(r.meta), labW - 28) : [];
+      return { lines: lines, meta: meta, h: Math.max(60, 22 + lines.length * 25 + meta.length * 21 + 12) };
+    });
+    var h = LEG + sum(lays.map(function (l) { return l.h; }));
+    if (!draw) { return h; }
+    var y = g.top;
+    if (LEG) { legendRow(x, b.legend, g.right, y, true); y += LEG; }
+    var mx = Math.max.apply(null, rows.map(function (r) { return r.value || 0; })) || 1;
+    var barR = g.right - labW, barMax = g.inner - labW - valW - 6;
+    rows.forEach(function (r, i) {
+      var L = lays[i], cy = y + L.h / 2;
+      var ty = y + (L.h - (L.lines.length * 25 + L.meta.length * 21)) / 2 + 19;
+      x.direction = "rtl"; x.textAlign = "right";
+      x.fillStyle = C.ink; x.font = F(700, 19);
+      L.lines.forEach(function (ln, k) { x.fillText(ln, g.right, ty + k * 25); });
+      x.fillStyle = C.muted; x.font = F(400, 15);
+      L.meta.forEach(function (ln, k) { x.fillText(ln, g.right, ty + L.lines.length * 25 + k * 21 - 2); });
+      var len = Math.max(4, barMax * (r.value || 0) / mx);
+      if (Array.isArray(r.parts)) {
+        var cur = barR, parts = r.parts.map(function (p) { return Math.max(0, p || 0); });
+        var tot = sum(parts) || 1, lastOn = -1;
+        parts.forEach(function (p, k) { if (len * p / tot >= 1) { lastOn = k; } });
+        parts.forEach(function (p, k) {
+          var w = len * p / tot;
+          if (w < 1) { return; }
+          x.fillStyle = CAT[k % CAT.length];
+          if (k === lastOn) { barPath(x, cur - w, cy - 10, w, 20, 4, "left"); }
+          else { x.beginPath(); x.rect(cur - w + 2, cy - 10, Math.max(0, w - 2), 20); }
+          x.fill();
+          cur -= w;
+        });
+      } else {
+        x.fillStyle = CAT[0]; barPath(x, barR - len, cy - 10, len, 20, 4, "left"); x.fill();
+      }
+      drawVal(x, r.text || "", barR - len - 10, cy + 7, VAL);
+      y += L.h;
+      if (i < rows.length - 1) { x.fillStyle = C.hair; x.fillRect(g.left, y, g.inner, 1); }
+    });
+    return h;
+  }
+
+  // ---- לפני ואחרי לכל שורה (dumbbell): נקודה אפורה לתקופה הקודמת, נקודה כחולה
+  // לעכשיו, וקו ביניהן בצבע הכיוון. ציר משותף, כדי שהשוואה בין שורות תהיה אמיתית.
+  function dumbbellBlock(x, b, g, draw) {
+    var rows = (b.rows || []).filter(function (r) { return r && r.b != null; });
+    if (!rows.length) { return 0; }
+    var LEG = 42, AXH = 30;
+    var labW = Math.min(measureMax(x, F(700, 19), rows.map(function (r) { return r.label; })) + 28,
+      g.inner * 0.3);
+    var DV = { w: 700, s: 16, fam: SANS, color: C.ink };
+    var dW = Math.max(74, Math.max.apply(null, rows.map(function (r) { return valWidth(x, r.delta_text || "", DV); })) + 28);
+    var RH = 58;
+    var h = LEG + AXH + rows.length * RH;
+    if (!draw) { return h; }
+    var y = g.top;
+    // מקרא: אפור לקודם, כחול לעכשיו
+    var lg = b.legend || ["קודם", "עכשיו"];
+    x.direction = "rtl"; x.textAlign = "right"; x.font = F(600, 16);
+    var lx = g.right;
+    [["#a9b4c2", lg[0]], [CAT[0], lg[1]]].forEach(function (p) {
+      x.fillStyle = p[0]; x.beginPath(); x.arc(lx - 7, y + 16, 7, 0, Math.PI * 2); x.fill();
+      x.fillStyle = C.muted; x.fillText(p[1], lx - 22, y + 22);
+      lx -= 22 + x.measureText(p[1]).width + 28;
+    });
+    y += LEG;
+    var mxv = Math.max.apply(null, rows.map(function (r) { return Math.max(r.a || 0, r.b || 0); })) || 1;
+    var step = niceStep(mxv, 4), top = Math.ceil(mxv / step) * step;
+    var pl = g.left + dW + 14, pr = g.right - labW - 20, pw = pr - pl;
+    function X(v) { return pl + pw * v / top; }
+    x.direction = "ltr"; x.textAlign = "center"; x.font = F(400, 13, MONO); x.fillStyle = C.faint;
+    for (var t = 0; t <= top + step / 2; t += step) {
+      x.fillStyle = C.faint;
+      x.fillText(fmtNum(t, step < 1 ? 1 : 0) + (b.suffix || ""), X(t), y + 18);
+      x.fillStyle = t === 0 ? C.line : C.hair;
+      x.fillRect(X(t) - 0.5, y + AXH, 1, rows.length * RH);
+    }
+    y += AXH;
+    rows.forEach(function (r, i) {
+      var cy = y + RH / 2;
+      if (i % 2 === 1) { x.fillStyle = C.zebra; x.fillRect(g.left, y, g.inner, RH); }
+      x.direction = "rtl"; x.textAlign = "right";
+      x.fillStyle = C.ink; x.font = F(700, 19);
+      x.fillText(r.label, g.right, r.sub ? cy - 2 : cy + 7);
+      if (r.sub) { x.fillStyle = C.muted; x.font = F(400, 14); x.fillText(r.sub, g.right, cy + 18); }
+      var xa = X(r.a || 0), xb = X(r.b || 0), up = (r.b || 0) >= (r.a || 0);
+      x.fillStyle = up ? C.up : C.down;
+      x.fillRect(Math.min(xa, xb), cy - 1.5, Math.abs(xb - xa), 3);
+      [[xa, "#a9b4c2", 6], [xb, CAT[0], 7]].forEach(function (d) {
+        x.fillStyle = C.card; x.beginPath(); x.arc(d[0], cy, d[2] + 2, 0, Math.PI * 2); x.fill();
+        x.fillStyle = d[1]; x.beginPath(); x.arc(d[0], cy, d[2], 0, Math.PI * 2); x.fill();
+      });
+      // הערך של עכשיו, בצד שאינו פונה לנקודה הקודמת
+      var BV = { w: 600, s: 15, fam: SANS, color: C.ink };
+      var bt = r.text || "", bw2 = valWidth(x, bt, BV);
+      var bxr = up ? xb + 14 + bw2 : xb - 14;
+      if (bxr > pr) { bxr = xb - 14; }
+      if (bxr - bw2 < pl) { bxr = xb + 14 + bw2; }
+      drawVal(x, bt, bxr, cy + 6, BV);
+      // השינוי — שבב בעמודה השמאלית
+      if (r.delta_text) {
+        var dv = parseNum(r.delta_text);
+        var tw = valWidth(x, r.delta_text, DV);
+        x.fillStyle = dv > 0 ? C.upBg : dv < 0 ? C.downBg : C.track;
+        rr(x, g.left + dW - tw - 22, cy - 15, tw + 18, 30, 8); x.fill();
+        DV.color = dv > 0 ? C.up : dv < 0 ? C.down : C.muted;
+        drawVal(x, r.delta_text, g.left + dW - 13, cy + 6, DV);
+      }
+      y += RH;
+    });
+    return h;
+  }
+
+  // ---- ריבוי קטן (small multiples) של עקומי חוזים: לכל סחורה גרף משלה, אבל ציר
+  // אחוזים משותף — כך שעקום תלול באמת נראה תלול גם ליד שכנו. הזמן משמאל לימין.
+  function curvesBlock(x, b, g, draw) {
+    var items = (b.items || []).filter(function (it) { return (it.points || []).length >= 2; });
+    if (!items.length) { return 0; }
+    var cols = g.inner >= 900 ? 2 : 1, gap = 18, cw = (g.inner - gap * (cols - 1)) / cols, CH = 206;
+    var rowsN = Math.ceil(items.length / cols);
+    var h = rowsN * CH + (rowsN - 1) * gap;
+    if (!draw) { return h; }
+    var all = [0];
+    items.forEach(function (it) { it.points.forEach(function (p) { all.push(p[1]); }); });
+    var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
+    var step = niceStep(hi - lo, 3);
+    lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+    if (hi === lo) { hi = lo + step; }
+    var hmax = Math.max.apply(null, items.map(function (it) {
+      return Math.max.apply(null, it.points.map(function (p) { return p[0]; }));
+    })) || 1;
+    var SH = { "בקוורדיישן": "↘", "קונטנגו": "↗", "שטוח": "→" };
+    items.forEach(function (it, i) {
+      var col = i % cols, row = Math.floor(i / cols);
+      var cr = g.right - col * (cw + gap), cl = cr - cw, ct = g.top + row * (CH + gap);
+      x.fillStyle = "#f7f9fc"; rr(x, cl, ct, cw, CH, 12); x.fill();
+      x.strokeStyle = C.hair; x.lineWidth = 1; rr(x, cl + 0.5, ct + 0.5, cw - 1, CH - 1, 12); x.stroke();
+      x.direction = "rtl"; x.textAlign = "right";
+      x.fillStyle = C.ink; x.font = F(700, 18);
+      x.fillText(it.name, cr - 16, ct + 30);
+      if (it.front) {
+        x.fillStyle = C.muted; x.font = F(400, 14);
+        x.fillText("חוזה קרוב: ", cr - 16, ct + 52);
+        var fw = x.measureText("חוזה קרוב: ").width;
+        drawVal(x, it.front, cr - 16 - fw, ct + 52, { w: 600, s: 14, fam: SANS, color: C.ink, ucolor: C.muted, us: 0.9 });
+      }
+      if (it.shape) {
+        x.font = F(700, 14);
+        var st = (SH[it.shape] ? SH[it.shape] + " " : "") + it.shape, sw = x.measureText(st).width + 20;
+        x.fillStyle = C.card; rr(x, cl + 14, ct + 14, sw, 28, 14); x.fill();
+        x.strokeStyle = C.line; rr(x, cl + 14.5, ct + 14.5, sw - 1, 27, 14); x.stroke();
+        x.fillStyle = C.ink; x.textAlign = "center"; x.fillText(st, cl + 14 + sw / 2, ct + 33);
+      }
+      var pl = cl + 52, pr = cr - 66, pt = ct + 70, pb = ct + CH - 34;
+      function X(m) { return pl + (pr - pl) * m / hmax; }
+      function Y(v) { return pb - (v - lo) / (hi - lo) * (pb - pt); }
+      for (var t = lo; t <= hi + step / 2; t += step) {
+        x.fillStyle = Math.abs(t) < step / 1e6 ? C.line : C.hair;
+        x.fillRect(pl, Y(t) - 0.5, pr - pl, 1);
+        drawVal(x, fmtNum(t, step < 1 ? 1 : 0) + "%", pl - 8, Y(t) + 4, { w: 400, s: 12, color: C.faint });
+      }
+      x.direction = "ltr"; x.textAlign = "center"; x.font = F(400, 12, MONO); x.fillStyle = C.faint;
+      (b.ticks || [0, 6, 12, 24]).forEach(function (m) {
+        if (m <= hmax) { x.fillText(m ? m + "m" : "0", X(m), pb + 18); }
+      });
+      var pts = it.points;
+      x.beginPath();
+      pts.forEach(function (p, k) { if (k) { x.lineTo(X(p[0]), Y(p[1])); } else { x.moveTo(X(p[0]), Y(p[1])); } });
+      x.strokeStyle = CAT[0]; x.lineWidth = 2; x.lineJoin = "round"; x.lineCap = "round"; x.stroke();
+      var e = pts[pts.length - 1], ex = X(e[0]), ey = Y(e[1]);
+      x.fillStyle = C.card; x.beginPath(); x.arc(ex, ey, 6, 0, Math.PI * 2); x.fill();
+      x.fillStyle = CAT[0]; x.beginPath(); x.arc(ex, ey, 4, 0, Math.PI * 2); x.fill();
+      var et = (e[1] > 0 ? "+" : "") + fmtNum(e[1], 1) + "%";
+      var EV = { w: 700, s: 14, fam: SANS, color: e[1] > 0 ? C.up : e[1] < 0 ? C.down : C.muted };
+      drawVal(x, et, ex + 10 + valWidth(x, et, EV), ey + 5, EV);
+    });
+    return h;
+  }
+
+  // ---- כרטיסים: פריט לכל חברה — שם, שבב כיוון (סמל ומילה, לא צבע לבדו) והסבר.
+  // שתי עמודות כשהרוחב מאפשר.
+  var TONE = {
+    up: ["▲ חיובי", "#e1f3e9", "#12804d"], down: ["▼ שלילי", "#fbe6e3", "#c4392f"],
+    mixed: ["◆ מעורב", "#fbefd6", "#a86f0c"], flat: ["● ניטרלי", "#e8eef6", "#55667c"]
+  };
+  function toneOf(t) {
+    var s = String(t || "");
+    if (TONE[s]) { return s; }
+    return s.indexOf("חיובי") >= 0 ? "up" : s.indexOf("שלילי") >= 0 ? "down" : s.indexOf("מעורב") >= 0 ? "mixed" : "flat";
+  }
+  function cardsBlock(x, b, g, draw) {
+    var items = (b.items || []).filter(function (it) { return it && it.title; });
+    if (!items.length) { return 0; }
+    var cols = g.inner >= 1000 ? 2 : 1, gap = 16, cw = (g.inner - gap * (cols - 1)) / cols, P = 22, LH = 28;
+    var lays = items.map(function (it) {
+      x.font = F(400, 18);
+      var lines = it.text ? wrap(x, bidi(it.text), cw - P * 2) : [];
+      return { lines: lines, h: P + 34 + (lines.length ? 8 + lines.length * LH : 0) + P - 6 };
+    });
+    var rowH = [];
+    for (var r = 0; r < Math.ceil(items.length / cols); r++) {
+      rowH.push(Math.max.apply(null, lays.slice(r * cols, r * cols + cols).map(function (l) { return l.h; })));
+    }
+    var TH = b.title ? SECTION_H : 0;
+    var h = TH + sum(rowH) + gap * (rowH.length - 1);
+    if (!draw) { return h; }
+    if (b.title) { section(x, b.title, g, g.top); }
+    var top = g.top + TH;
+    rowH.forEach(function (rh, r) {
+      for (var c = 0; c < cols; c++) {
+        var i = r * cols + c;
+        if (i >= items.length) { break; }
+        var it = items[i], L = lays[i], cr = g.right - c * (cw + gap), cl = cr - cw;
+        card(x, cl, top, cw, rh, 14);
+        var t = TONE[toneOf(it.tone || it.pill)];
+        x.direction = "rtl"; x.textAlign = "right";
+        x.fillStyle = C.ink; x.font = F(700, 20);
+        x.fillText(it.title, cr - P, top + P + 22);
+        x.font = F(700, 14);
+        var pw = x.measureText(it.pill || t[0]).width + 22;
+        x.fillStyle = t[1]; rr(x, cl + P, top + P + 2, pw, 28, 14); x.fill();
+        x.fillStyle = t[2]; x.textAlign = "center";
+        x.fillText(it.pill || t[0], cl + P + pw / 2, top + P + 21);
+        x.textAlign = "right"; x.fillStyle = C.ink; x.font = F(400, 18);
+        L.lines.forEach(function (ln, k) { x.fillText(ln, cr - P, top + P + 34 + 8 + 20 + k * LH); });
+      }
+      top += rh + gap;
+    });
+    return h;
+  }
+
   // ---- עמודי הסחורות והרכב: קווים לאורך זמן, ופסים סביב אפס.
 
-  var SERIES = ["#1f5fc4", "#e08a1e", "#16955f", "#d1433a", "#7a5ad6"];
+  var SERIES = CAT.concat(["#e87ba4"]);
 
   // צעד "עגול" לציר: 1, 2, 2.5 או 5 כפול חזקה של 10.
   function niceStep(span, n) {
@@ -1001,10 +1485,10 @@
     var sdg = step >= 1 ? 0 : step >= 0.1 ? 1 : 2;
     var AX = { w: 400, s: 14, color: C.faint };
     var axisW = Math.max(valWidth(x, fmtNum(hi, sdg) + suf, AX), valWidth(x, fmtNum(lo, sdg) + suf, AX)) + 18;
-    var endW = 18 + Math.max.apply(null, series.map(function (s) {
+    var endW = 34 + Math.max.apply(null, series.map(function (s) {
       var last = null;
       s.values.forEach(function (v) { if (v != null) { last = v; } });
-      return valWidth(x, fmtNum(last, dg) + suf, { w: 600, s: 17 });
+      return valWidth(x, fmtNum(last, dg) + suf, { w: 700, s: 17, fam: SANS });
     }));
     var left = g.left + axisW, right = g.right - endW, plotW = right - left;
     var top = y + 10, bot = y + CH, ph = bot - top, n = labels.length;
@@ -1027,7 +1511,7 @@
       var col = s.color || SERIES[si % SERIES.length], pts = [];
       s.values.forEach(function (v, i) { if (v != null) { pts.push([X(i), Y(v), v]); } });
       if (pts.length < 2) { return; }
-      x.strokeStyle = col; x.lineWidth = 3; x.lineJoin = "round"; x.lineCap = "round";
+      x.strokeStyle = col; x.lineWidth = 2.5; x.lineJoin = "round"; x.lineCap = "round";
       x.beginPath();
       pts.forEach(function (p, k) { if (k) { x.lineTo(p[0], p[1]); } else { x.moveTo(p[0], p[1]); } });
       x.stroke();
@@ -1047,9 +1531,15 @@
     for (var k = ends.length - 2; k >= 0; k--) {
       if (ly[k + 1] - ly[k] < 24) { ly[k] = ly[k + 1] - 24; }
     }
+    // הערך בדיו ולא בצבע הסדרה (צהוב על לבן אינו קריא). תווית שהוזזה מסוף הקו
+    // כדי לא לעלות על שכנתה מקבלת ריבוע בצבע הקו — בלעדיו לא ברור של מי היא.
     ends.forEach(function (e, k) {
-      var o = { w: 600, s: 17, color: e.col };
-      drawVal(x, fmtNum(e.v, dg) + suf, e.x + 14 + valWidth(x, fmtNum(e.v, dg) + suf, o), ly[k], o);
+      var o = { w: 700, s: 17, color: C.ink, fam: SANS }, tx = e.x + 14;
+      if (Math.abs(ly[k] - (e.y + 6)) > 3) {
+        x.fillStyle = e.col; rr(x, tx, ly[k] - 11, 10, 10, 3); x.fill();
+        tx += 16;
+      }
+      drawVal(x, fmtNum(e.v, dg) + suf, tx + valWidth(x, fmtNum(e.v, dg) + suf, o), ly[k], o);
     });
     return h;
   }
@@ -1088,8 +1578,10 @@
       drawVal(x, r.note || "", g.right - labMax - 12, cy + 6, NV);
       x.fillStyle = C.track; rr(x, trL, cy - 7, trW, 14, 4); x.fill();
       var bw = Math.max(3, (trW / 2 - 4) * Math.abs(r.value) / mx);
-      x.fillStyle = r.value >= 0 ? C.accent : "#a5b3c5";
-      if (r.value >= 0) { rr(x, mid, cy - 7, bw, 14, 4); } else { rr(x, mid - bw, cy - 7, bw, 14, 4); }
+      // חיובי בירוק ושלילי באדום, כמו המספר שבקצה: הצבע חוזר על הסימן ואינו
+      // נושא אותו לבד — הכיוון קריא גם מצד הציר וגם מהמינוס.
+      x.fillStyle = r.value >= 0 ? C.up : C.down;
+      if (r.value >= 0) { barPath(x, mid, cy - 7, bw, 14, 4, "right"); } else { barPath(x, mid - bw, cy - 7, bw, 14, 4, "left"); }
       x.fill();
       x.fillStyle = C.line; x.fillRect(mid - 0.5, cy - 12, 1, 24);
       var o = { w: 600, s: 20, color: signColor(r.text || "", C.ink) };
@@ -1253,13 +1745,15 @@
   }
 
   var BLOCKS = { stats: statsBlock, notes: notesBlock, table: tableBlock, bars: barsBlock,
-    columns: columnsBlock, reports: reportsBlock, lines: linesBlock, dbars: dbarsBlock };
+    columns: columnsBlock, reports: reportsBlock, lines: linesBlock, dbars: dbarsBlock,
+    rank: rankBlock, dumbbell: dumbbellBlock, curves: curvesBlock, cards: cardsBlock };
 
   // **כל גוש מלבד האריחים והעיקרים — בכרטיס לבן, וכותרתו מעליו.** הריפוד
   // הפנימי לפי הסוג: טבלה ודיווחים ממלאים את הכרטיס עד הקצה (שורת הכותרת
   // הכהה נחתכת בפינות המעוגלות), וגרף יושב בתוכו עם שוליים. הגוש עצמו מצויר
   // בגיאומטריה הפנימית ואינו יודע על הכרטיס.
-  var FRAME = { table: 0, reports: 0, bars: 26, columns: 26, lines: 26, dbars: 26 };
+  var FRAME = { table: 0, reports: 0, bars: 26, columns: 26, lines: 26, dbars: 26,
+    rank: 26, dumbbell: 26, curves: 22 };
   var RADIUS = 16;
   function runBlock(x, b, g, draw) {
     var fn = BLOCKS[b.type];

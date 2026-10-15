@@ -276,9 +276,14 @@ def tiles(a: dict, year: str) -> str:
     # שמופצת לבד, בלי העמוד שסביבה, הוא מה שנותן למספר קנה מידה.
     recent = a["daily"][-22:]
     top_day = aggregate(day_rows)[:6] if day_rows else []
+    # היום מול החציון: אחוז חתום, כדי שהשבב יאמר מעל או מתחת לשגרה ולא רק כמה.
+    vs_med = (f"{(day / a['median_day'] - 1) * 100:+.0f}%"
+              if a["median_day"] and day else "")
     blocks = [
         {"type": "stats", "items": [
             {"label": f"{day_word} · {hebdate(ref or '')}", "value": money(day),
+             "spark": [v for _, v in recent] if len(recent) >= 5 else None,
+             "deltas": [{"label": "מול החציון", "text": vs_med}] if vs_med else None,
              "cap": f"{len(day_rows)} עסקאות במניות"},
             {"label": "מתחילת החודש", "value": money(mtd), "cap": f"{len(mtd_rows)} עסקאות"},
             {"label": f"מתחילת {year}", "value": money(ytd), "cap": f"{len(a['ytd'])} עסקאות"}]},
@@ -287,11 +292,13 @@ def tiles(a: dict, year: str) -> str:
          "maxText": money(max((v for _, v in recent), default=0)),
          "median": a["median_day"], "medianText": f"חציון 30 יום: {money(a['median_day'])}"}
         if len(recent) >= 2 else None,
-        {"type": "table", "title": f"הגדולות · {day_word}",
-         "cols": [["נייר", "name", "rtl"], ["עסקאות", "n", "ltr"], ["היקף", "value", "ltr"],
-                  ["% מהון החברה", "cap", "ltr"]],
-         "rows": [{"name": " ".join(e["name"].split()), "n": str(e["n"]), "value": money(e["value"]),
-                   "cap": (num(e["pct_capital"], 2) + "%" if e["pct_capital"] is not None else "—")}
+        # **הגדולות כדירוג ולא כטבלה**: השאלה היא מי גדול ממי ובכמה, ופס עונה
+        # עליה בעין. מספר העסקאות והחלק מההון — בשורת משנה מתחת לשם.
+        {"type": "rank", "title": f"הגדולות · {day_word}",
+         "rows": [{"label": " ".join(e["name"].split()), "value": e["value"], "text": money(e["value"]),
+                   "meta": " · ".join(t for t in [
+                       f'{e["n"]} עסקאות' if e["n"] > 1 else "עסקה אחת",
+                       (num(e["pct_capital"], 2) + "% מההון") if e["pct_capital"] is not None else ""] if t)}
                   for e in top_day]} if top_day else None,
     ]
     payload = card(f"תמונת מצב · {hebdate(ref or '')}",
@@ -560,9 +567,11 @@ def period_table(title: str, sub: str, rows: list[dict],
     cols = [["נייר", "name", "rtl"], ["עסקאות", "n", "ltr"]]
     if show_days:
         cols.append(["ימים", "days", "ltr"])
-    cols += [["היקף", "value", "ltr"], ["% מהון החברה", "cap", "ltr"],
+    # בתמונה: פס יחסי להיקף, ופס סביב אפס לסטייה משער הבסיס — פרמיה ימינה
+    # בירוק, הנחה שמאלה באדום. ב-HTML האפשרויות מתעלמות (c[0], c[1] בלבד).
+    cols += [["היקף", "value", "ltr", {"viz": "bar"}], ["% מהון החברה", "cap", "ltr"],
              [("ממוצע" if stat == "mean" else "חציון") + " מול הבסיס",
-              "prem", "ltr"]]
+              "prem", "ltr", {"viz": "div"}]]
 
     shown = agg[:limit]
     cells = [{
