@@ -98,6 +98,11 @@ def _spark(vals: list[float]) -> str:
         return ""
     w, h = 70.0, 18.0
     lo, hi = min(pts), max(pts)
+    # טווח מינימלי של 4% מהרמה, כמו בתמונות (export_card.js): DAP שנע בין 800
+    # ל-802.5 צויר כצניחה ועלייה חדות.
+    mid = (lo + hi) / 2
+    if hi - lo < abs(mid) * 0.04:
+        lo, hi = mid - abs(mid) * 0.02, mid + abs(mid) * 0.02
     span = (hi - lo) or 1.0
     xy = [(i * w / (len(pts) - 1), h - 1.5 - (v - lo) / span * (h - 3)) for i, v in enumerate(pts)]
     path = " ".join(f"{x:.1f},{y:.1f}" for x, y in xy)
