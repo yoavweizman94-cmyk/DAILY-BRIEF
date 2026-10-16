@@ -89,5 +89,13 @@
   "certain": false,
   "known": [],
   "others": []
+ },
+ "1776443": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_Wjc2Ji_9QKm8MbWwWEzWzg",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_Wjc2Ji_9QKm8MbWwWEzWzg"
+  ],
+  "others": []
  }
 }
