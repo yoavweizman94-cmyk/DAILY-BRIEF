@@ -81,8 +81,13 @@
 
   function jget(url) {
     return fetch(url).then(function (r) {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.json();
+      if (r.ok) return r.json();
+      // מאוקטובר 2026 Govmap דורש אסימון reCAPTCHA לשליפת עסקאות. האסימון קשור
+      // לאתר של Govmap, ולכן לעמוד הזה אין דרך לקבל אותו — וזה מה שצריך לומר,
+      // לא "ייתכן ש-Govmap אינו זמין".
+      return r.text().then(function (t) {
+        throw new Error(/recaptcha/i.test(t) ? "recaptcha" : "HTTP " + r.status);
+      });
     });
   }
 
@@ -365,6 +370,9 @@
     }).catch(function (err) {
       say(err && err.message === "no-address"
         ? "לא נמצאה כתובת כזו. נסה ניסוח אחר, למשל 'הרצל 50 רמת גן'."
+        : err && err.message === "recaptcha"
+        ? "Govmap דורש מאז אוקטובר 2026 אימות reCAPTCHA לכל שליפת עסקאות, ולכן החיפוש " +
+          "מכאן אינו פועל. אפשר לחפש באתר של רשות המסים, nadlan.gov.il."
         : "השליפה נכשלה: " + (err && err.message || err) +
           ". ייתכן ש-Govmap אינו זמין כרגע.", "err");
     }).then(function () { $("go").disabled = false; });

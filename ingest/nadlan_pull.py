@@ -46,6 +46,12 @@ API = "https://www.govmap.gov.il/api"
 # 403 על כל בקשה, כולל דף הבית, וגם ב-HTTP client רגיל. זו חסימה לפי
 # כתובת ולא לפי טביעת TLS, ולכן העקיפה היא ברשת אחרת ולא בקוד. כשמוגדר
 # ממסר, כל הקריאות עוברות דרך Cloudflare Functions של האתר.
+#
+# **מאוקטובר 2026 החסימה אחרת: reCAPTCHA.** ממשקי העסקאות (deals,
+# neighborhood-deals, street-deals) מחזירים 403 עם "reCAPTCHA token is
+# required" מכל רשת — גם מתחנת עבודה, גם דרך הממסר. השלמת האסימון נעשית
+# בדפדפן של אדם, וזה מנגנון נגד אוטומציה שהסריקה אינה עוקפת. ה-autocomplete
+# עדיין פתוח. nadlan.gov.il של רשות המסים מגן על שליפת העסקאות באותו אופן.
 PROXY = (os.environ.get("GOVMAP_PROXY") or "").rstrip("/")
 SCAN_KEY = os.environ.get("SCAN_KEY") or ""
 GOV = "https://data.gov.il/api/3/action/datastore_search"
@@ -71,6 +77,12 @@ def code_of(e: Exception) -> int | None:
         return int(code)
     m = re.match(r"HTTP (\d{3})", str(e))
     return int(m.group(1)) if m else None
+
+
+def captcha(e: Exception) -> bool:
+    """403 שגופו מבקש אסימון reCAPTCHA — לא חסימת כתובת ולא פוליגון שבור."""
+    body = getattr(getattr(e, "response", None), "text", "") or ""
+    return "recaptcha" in body.lower()
 
 
 def why(e: Exception) -> str:
@@ -157,6 +169,13 @@ class Govmap:
             if m:
                 return float(m.group(1)), float(m.group(2))
         return None
+
+    def probe(self) -> tuple[int, str]:
+        """בקשת עסקאות אחת, בלי ניסיונות חוזרים: (קוד, תחילת הגוף)."""
+        url, params = self._route(f"{API}/real-estate/deals/3874000,3671000/1000", None)
+        self._wait()
+        r = self.s.get(url, params=params, timeout=45) if params else self.s.get(url, timeout=45)
+        return r.status_code, (r.text or "")[:300]
 
     def polygons(self, x: float, y: float, radius: int = 3000):
         data = self._get(f"{API}/real-estate/deals/{x},{y}/{radius}")
@@ -407,10 +426,33 @@ def main() -> int:
         print("::error::GOVMAP_PROXY מוגדר בלי SCAN_KEY — הממסר ידחה הכל",
               file=sys.stderr)
         return 1
+    state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {}
+
+    # **בקשה אחת לפני הכל.** כשממשק העסקאות דורש reCAPTCHA כל עיר נכשלת מאותה
+    # סיבה, ושלוש ערים עם ניסיונות חוזרים הניבו הודעה שגויה על "חסימה של
+    # הממסר". המצב נרשם (since נשמר מהפעם הראשונה), ומשם הוא מגיע לברייף
+    # ולעמוד שוק הדיור כ"נתונים קפואים מאז". סריקה שמצליחה מוחקת אותו.
+    try:
+        code, body = g.probe()
+    except Exception as e:  # noqa: BLE001 — רשת שנפלה: הסריקה עצמה תאבחן לפי עיר
+        code, body = None, f"{type(e).__name__}"
+    if code == 403 and "recaptcha" in body.lower():
+        prev = state.get("blocked") or {}
+        now = datetime.now().isoformat(timespec="seconds")
+        since = prev.get("since") if prev.get("reason") == "recaptcha" else None
+        state["blocked"] = {"at": now, "since": since or now, "status": 403, "reason": "recaptcha"}
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        STATE.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+        last = (state.get("updated") or "")[:10] or "לא ידוע"
+        print("::error title=Govmap דורש reCAPTCHA::ממשק העסקאות מחזיר 403 עם "
+              "'reCAPTCHA token is required' — מנגנון נגד אוטומציה, לא חסימת כתובת או ממסר. "
+              "הסריקה אינה עוקפת אותו ולכן לא רצה; העסקאות שבקבצים הן מהסריקה המוצלחת "
+              f"האחרונה ({last}), והחסימה נרשמה לראשונה ב-{state['blocked']['since'][:10]}.")
+        return 1
+
     devs = developer_index()
     print(f"מדד יזמים: {len(devs)} מפתחות")
 
-    state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {}
     coords = state.get("coords", {})
     # החלקות הפוריות נשמרות, כי איתורן דורש עשרות בדיקות ותוצאתן יציבה.
     # בלי המטמון מהדורת הבוקר מבזבזת עליהן רבע שעה בכל יום.
@@ -424,7 +466,7 @@ def main() -> int:
     # עסקאות מהסריקה הקודמת. האזהרה הציגה רק עשר ראשונות — כל גוש דן — וזה
     # נראה כמו תקלה של גוש דן. 403 בשלוש הערים הראשונות, לפני שעיר כלשהי
     # הצליחה, עוצר את הסריקה ומשאיר את מצב הריצה הקודמת כמות שהוא.
-    blocked, ok_cities, aborted = [], 0, False
+    blocked, ok_cities, aborted, cap = [], 0, False, False
 
     def fetch(pids: list, name: str) -> tuple[int, set]:
         """עסקאות מהפוליגונים. פוליגון שמחזיר שגיאה אינו מפיל את העיר —
@@ -513,6 +555,7 @@ def main() -> int:
                 failed.append(name)
                 if code_of(e) == 403 and not ok_cities:
                     blocked.append(name)
+                    cap = cap or captcha(e)
                     if len(blocked) >= 3:
                         aborted = True
                         break
@@ -523,12 +566,19 @@ def main() -> int:
         # בלי סריקה אינו משנה תמונה רבעונית.
         if STATE.exists():
             prev = json.loads(STATE.read_text(encoding="utf-8"))
-            prev["blocked"] = {"at": datetime.now().isoformat(timespec="seconds"),
-                               "status": 403, "cities": blocked}
+            now = datetime.now().isoformat(timespec="seconds")
+            old = prev.get("blocked") or {}
+            prev["blocked"] = {"at": now, "status": 403, "cities": blocked,
+                               "reason": "recaptcha" if cap else "403"}
+            if cap:
+                prev["blocked"]["since"] = (old.get("since") if old.get("reason") == "recaptcha"
+                                            else None) or now
             STATE.write_text(json.dumps(prev, ensure_ascii=False), encoding="utf-8")
+        why_txt = ("Govmap דורש אסימון reCAPTCHA — מנגנון נגד אוטומציה שהסריקה אינה עוקפת"
+                   if cap else f"חסימה של {'הממסר' if PROXY else 'הגישה'}, לא של ערים")
         print(f"::error title=Govmap חסם את הסריקה (403)::{len(blocked)} הערים הראשונות "
-              f"({', '.join(blocked)}) החזירו 403 — חסימה של {'הממסר' if PROXY else 'הגישה'}, "
-              "לא של ערים. הסריקה נעצרה; מצב הסריקה הקודמת והעסקאות שכבר נאספו נשארו כמות שהם.")
+              f"({', '.join(blocked)}) החזירו 403 — {why_txt}. הסריקה נעצרה; מצב הסריקה "
+              "הקודמת והעסקאות שכבר נאספו נשארו כמות שהם.")
         return 1
 
     OUT.mkdir(parents=True, exist_ok=True)

@@ -51,6 +51,34 @@ def load() -> list[dict]:
     return rows
 
 
+def frozen_note() -> str:
+    """הודעה כשהסריקה מושבתת: מאיזה תאריך הנתונים ולמה אינם מתעדכנים.
+
+    מאוקטובר 2026 Govmap דורש reCAPTCHA לשליפת עסקאות. העמוד ממשיך להיבנות
+    מהקבצים — התמונה הרבעונית תקפה — אבל "נבנה היום" בכותרת בלי ההודעה הזו
+    היה נקרא כנתונים מהיום.
+    """
+    try:
+        st = json.loads((ROOT / "data" / "nadlan_state.json").read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return ""
+    blk = st.get("blocked") or {}
+    if blk.get("reason") != "recaptcha":
+        return ""
+    last = str(st.get("updated") or "")[:10]
+    since = str(blk.get("since") or blk.get("at") or "")[:10]
+
+    def dmy(s: str) -> str:
+        return f"{s[8:10]}/{s[5:7]}/{s[:4]}" if len(s) == 10 else s
+
+    return ('<p class="msg warn"><strong>הנתונים אינם מתעדכנים.</strong> Govmap דורש '
+            'אימות reCAPTCHA לכל שליפת עסקאות'
+            f'{" (זוהה ב-" + dmy(since) + ")" if since else ""}, והסריקה האוטומטית נעצרה. '
+            'המספרים כאן הם מהסריקה המוצלחת האחרונה'
+            f'{" (" + dmy(last) + ")" if last else ""}, ועליהם חל גם פיגור הדיווח '
+            'הרגיל של רשות המסים.</p>')
+
+
 def missing_cities(present: set) -> list[str]:
     """ערים שהוגדרו לסריקה ולא הוחזרה בהן ולו עסקה אחת.
 
@@ -123,6 +151,7 @@ def head(m: dict, drop: dict) -> str:
         '<div class="dash-head"><h1>שוק הדיור</h1>',
         f'<span class="stamp">{hebmonth(lo[:7])} – {hebmonth(hi[:7])} · '
         f'נבנה {datetime.now():%d/%m %H:%M}</span></div>',
+        frozen_note(),
         f'<p class="lead">מחירי דירות והיקפי עסקאות ב-{m["cities"]} ערים בגוש '
         'דן, בדרום ובצפון, לפי דיווחי רשות המסים דרך Govmap. ההבחנה בין '
         'רכישה <strong>מקבלן</strong> ליד שנייה מגיעה מהמקור עצמו.</p>',
