@@ -116,5 +116,40 @@
    "https://us02web.zoom.us/webinar/register/WN_11X310cISayPkosVBls0Dw"
   ],
   "others": []
+ },
+ "1777047": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": [
+   "http://www.audiocodes.com/investors-lobby",
+   "http://blog.audiocodes.com/",
+   "http://www.linkedin.com/companies/audiocodes",
+   "https://x.com/audiocodes",
+   "http://www.facebook.com/audiocodes"
+  ]
+ },
+ "1777036": {
+  "link": "https://www.veidan-conferencing.com/opc",
+  "certain": true,
+  "known": [
+   "https://www.veidan-conferencing.com/opc",
+   "https://www.veidan-conferencing.com/opcen"
+  ],
+  "others": [
+   "https://www.opc-energy.com/",
+   "http://www.opc-energy.com/en"
+  ]
+ },
+ "1777103": {
+  "link": "https://matrix-globalservices.zoom.us/webinar/register/WN_ZdKd7jBxQWmKP9rJaJBFTg",
+  "certain": true,
+  "known": [
+   "https://matrix-globalservices.zoom.us/webinar/register/WN_ZdKd7jBxQWmKP9rJaJBFTg"
+  ],
+  "others": [
+   "https://www.matrix-globalservices.com/",
+   "https://link.accessidoc.com/lNvyv4gYo5TkrlKXc5ISNaaQ91VhDCZqirVADWeXAjHtPxmJ59HNmehaTwWJfqJgCr0rGdm8YO-8J8d1RsVH8kBGt1"
+  ]
  }
 }
