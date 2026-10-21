@@ -282,6 +282,10 @@ def holders_summary(rows: list[dict], year: str) -> str:
         "cap": signed(e["pct"], "%"),
         "after": f'{e["after"]:.2f}%' if e["after"] is not None else "—",
         "_cls": "up" if e["pct"] > 0 else "down" if e["pct"] < 0 else "",
+        # שורת המשנה בתמונה: החברה, הכיוון, העסקאות וההיקף נטו
+        "meta": " · ".join([e["company"], side(e),
+                            f'{e["n"]} עסקאות' if e["n"] > 1 else "עסקה אחת"]
+                           + ([f"היקף נטו {signed(e['net']).replace(' ', chr(160))}"] if e["net"] else [])),
     } for e in top]
     rest = len(agg) - len(top)
     more = f"ועוד {rest} מדווחים עם שינוי נטו קטן יותר." if rest > 0 else ""
@@ -311,7 +315,8 @@ def holders_summary(rows: list[dict], year: str) -> str:
             {"label": "עסקאות", "value": f'{sum(e["n"] for e in agg.values()):,}'},
             {"label": "היקף", "value": money(sum(e["buy"] + e["sell"] for e in agg.values())),
              "cap": "רכישות ומכירות יחד"}]},
-         {"type": "table", "title": "20 השינויים הגדולים בחלק מההון", "cols": cols,
+         {"type": "table", "title": "20 השינויים הגדולים בחלק מההון",
+          "cols": [["מדווח", "name", "rtl", {"sub": "meta"}], cols[-2], cols[-1]],
           "rows": [{k: v for k, v in r.items() if not k.startswith("_")} for r in cells],
           "moreText": more}],
         # הטבלה הזו ממאיה ולא מסקירת הבורסה.

@@ -270,7 +270,8 @@ def _cell(key: str, v, trend: str = "", bold: bool = False) -> str:
 
 def _section(title: str, sub: str, key: str, cols: list, cells: list[dict], total_row: dict,
              stats: list[dict], bits: list[str], more: str, file: str, kicker: str,
-             source: str, tweet_text: str, notes: str = "", legend: list | None = None) -> str:
+             source: str, tweet_text: str, notes: str = "", legend: list | None = None,
+             img_cols: list | None = None) -> str:
     """אותה תבנית כמו otc.period_table: כותרת, סקירה, תקציר, ייצוא וטבלה.
 
     **הטבלה והתמונה נבנות מאותן שורות** — אותו כלל כמו בטבלאות מחוץ
@@ -279,7 +280,7 @@ def _section(title: str, sub: str, key: str, cols: list, cells: list[dict], tota
     payload = otc.card(title, sub, [
         {"type": "stats", "items": stats},
         {"type": "notes", "title": "עיקרי התקופה", "items": bits[1:]} if len(bits) > 1 else None,
-        {"type": "table", "title": "לפי נייר", "cols": cols, "legend": legend,
+        {"type": "table", "title": "לפי נייר", "cols": img_cols or cols, "legend": legend,
          "rows": [otc._public(c) for c in cells], "moreText": more, "totalRow": total_row},
     ], file=file, kicker=kicker, source=source)
     out = [f"<h2>{_esc(title, quote=False)}</h2>",
@@ -328,7 +329,11 @@ def table_j(title: str, sub: str, rows: list[dict], key: str, label: str,
     shown = agg[:limit]
     cells = [{"name": e["name"], "days": str(e["days"]), "value": otc.money(e["value"]),
               "pday": _pct(e["pct_day"]), "cap": _pct(e["pct_capital"], 2),
-              "chg": otc.signed(e["chg_mean"]), "_cls": otc.cls(e["chg_mean"])} for e in shown]
+              "chg": otc.signed(e["chg_mean"]), "_cls": otc.cls(e["chg_mean"]),
+              "meta": " · ".join(t for t in [
+                  (f'{e["days"]} ימים' if not day_mode and e["days"] > 1 else ""),
+                  (f'{_pct(e["pct_capital"], 2)} מההון (משוער)' if e["pct_capital"] else "")] if t)}
+             for e in shown]
     rest = len(agg) - len(shown)
     more = (f"ועוד {rest} ניירות בהיקף {otc.money(sum(e['value'] for e in agg[limit:]))}."
             if rest > 0 else "")
@@ -340,9 +345,13 @@ def table_j(title: str, sub: str, rows: list[dict], key: str, label: str,
              {"label": "ניירות", "value": str(len(agg))},
              ({"label": "רוב המחזור", "value": f"{maj} ניירות", "cap": "מעל מחצית מהמסחר בנייר"}
               if day_mode else {"label": "ימי מסחר", "value": str(days)})]
+    img = [["נייר", "name", "rtl", {"sub": "meta"}], ["היקף", "value", "ltr", {"viz": "bar"}],
+           ["% ממחזור היום" if day_mode else "% מהמחזור", "pday", "ltr", {"viz": "meter", "max": 100}]]
+    if day_mode:
+        img.append(["שינוי", "chg", "ltr", {"viz": "chip"}])
     return _section(title, sub, key, cols, cells, total_row, stats, review_bits_j(agg, label),
                     more, f"tlv-jumbo-{key}-{max(r['date'] for r in rows)}", KICKER_J, SRC_GTO,
-                    tweet_j(agg, label))
+                    tweet_j(agg, label), img_cols=img)
 
 
 def table_a(title: str, sub: str, otc_rows: list[dict], j_rows: list[dict], key: str,
@@ -365,7 +374,13 @@ def table_a(title: str, sub: str, otc_rows: list[dict], j_rows: list[dict], key:
     cells = [{"name": e["name"], "days": str(e["days"]),
               "otc": otc.money(e["otc"]) if e["otc"] else "—",
               "jumbo": otc.money(e["jumbo"]) if e["jumbo"] else "—",
-              "value": otc.money(e["value"]), "cap": _pct(e["pct_capital"], 2)} for e in shown]
+              "value": otc.money(e["value"]), "cap": _pct(e["pct_capital"], 2),
+              "meta": " · ".join(t for t in [
+                  (f'מחוץ לבורסה {otc.nb(otc.money(e["otc"]))}' if e["otc"] else ""),
+                  (f'מתואמות {otc.nb(otc.money(e["jumbo"]))}' if e["jumbo"] else ""),
+                  (f'{e["days"]} ימים' if not day_mode and e["days"] > 1 else ""),
+                  (f'{_pct(e["pct_capital"], 2)} מההון' if e["pct_capital"] else "")] if t)}
+             for e in shown]
     rest = len(agg) - len(shown)
     more = (f"ועוד {rest} ניירות בהיקף {otc.money(sum(e['value'] for e in agg[limit:]))}."
             if rest > 0 else "")
@@ -375,9 +390,12 @@ def table_a(title: str, sub: str, otc_rows: list[dict], j_rows: list[dict], key:
              {"label": "מחוץ לבורסה", "value": otc.money(o)},
              {"label": "מתואמות", "value": otc.money(j)}]
     last = max([r["date"] for r in otc_rows] + [r["date"] for r in j_rows])
+    # בתמונה: השם עם הפירוק לשני המנגנונים בשורת המשנה, והסך כפס מוערם.
+    img = [["נייר", "name", "rtl", {"sub": "meta"}],
+           ["סה\"כ", "value", "ltr", {"viz": "stack", "parts": ["otc", "jumbo"]}]]
     return _section(title, sub, key, cols, cells, total_row, stats, review_bits_a(agg, label),
                     more, f"tlv-blocks-{key}-{last}", KICKER_A, SRC_ALL,
-                    tweet_a(agg, label), notes)
+                    tweet_a(agg, label), notes, legend=["מחוץ לבורסה", "מתואמות"], img_cols=img)
 
 
 # --- שלוש תקופות, לכל לשונית ------------------------------------------------------------
@@ -586,14 +604,18 @@ def tiles_a(a: dict, j_rows: list[dict], year: str) -> str:
          "maxText": otc.money(max(v for _, v in per_day)), "median": med,
          "medianText": f"חציון: {otc.money(med)}"} if len(per_day) >= 2 else None,
         {"type": "table", "title": f"הגדולות · {hd(ref)}",
-         "cols": [["נייר", "name", "rtl"], ["מחוץ לבורסה", "otc", "ltr", {"swatch": 0}],
-                  ["מתואמות", "jumbo", "ltr", {"swatch": 1}],
+         "legend": ["מחוץ לבורסה", "מתואמות"],
+         "cols": [["נייר", "name", "rtl", {"sub": "meta"}],
                   ["סה\"כ", "value", "ltr", {"viz": "stack", "parts": ["otc", "jumbo"]}],
                   ["נתח מהיום", "share", "ltr"]],
          "rows": [{"name": e["name"], "otc": otc.money(e["otc"]) if e["otc"] else "—",
                    "jumbo": otc.money(e["jumbo"]) if e["jumbo"] else "—",
                    "value": otc.money(e["value"]),
-                   "share": _pct(e["value"] / day_tot * 100) if day_tot else "—"} for e in top],
+                   "share": _pct(e["value"] / day_tot * 100) if day_tot else "—",
+                   "meta": " · ".join(t for t in [
+                       (f'מחוץ לבורסה {otc.nb(otc.money(e["otc"]))}' if e["otc"] else ""),
+                       (f'מתואמות {otc.nb(otc.money(e["jumbo"]))}' if e["jumbo"] else "")] if t)}
+                  for e in top],
          "moreText": (f"ועוד {len(rest)} ניירות · {otc.money(sum(e['value'] for e in rest))}"
                       if rest else ""),
          "totalRow": {"name": "סך הכל", "otc": otc.money(o_tot) if o_tot else "—",

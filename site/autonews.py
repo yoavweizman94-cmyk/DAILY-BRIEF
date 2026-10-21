@@ -202,7 +202,8 @@ def reg_links_html(registry: dict) -> str:
     return ('<p class="au-srclinks"><span>הטבלאות עצמן ב-data.gov.il:</span> '
             + " · ".join(out) + "</p>")
 SRC_REG_SHORT = "משרד התחבורה (data.gov.il)"
-SRC_AI = "ניתוח — TLV TASE View"
+# בתמונות שמופצות ברשת החתימה היחידה היא של יואב (21/10/2026), לא שם האתר.
+SRC_AI = "ניתוח — @Cigarbutthunte7"
 
 
 def _day(a: dict | None) -> str:
@@ -612,6 +613,8 @@ def _lease_exports(data: dict, a: dict | None, months: dict, keys: list[str], fu
                      "lp": f"{lz.get(name, 0) / t * 100:.0f}%", "d": _n(dl.get(name, 0)),
                      # השאר — פרטי, חברות ואחר — רק לפס המוערם, לא עמודה בטבלה.
                      "o": max(0, t - lz.get(name, 0) - dl.get(name, 0)),
+                     "meta": f"לליסינג {_n(lz.get(name, 0))} ({lz.get(name, 0) / t * 100:.0f}%) · "
+                             f"לסוחרים {_n(dl.get(name, 0))}",
                      "y": share.signed(yoy, 0) if yoy is not None else "—"})
     for name in order[:4] + [x for x in imap if x in tot and x not in order[:4]]:
         yoy = _p(tot[name] - before.get(name, 0), before.get(name, 0), 0) if before.get(name, 0) >= 300 else None
@@ -622,10 +625,8 @@ def _lease_exports(data: dict, a: dict | None, months: dict, keys: list[str], fu
                          # **הרכב החדש כפס מוערם**: כמה הלך לליסינג, כמה לסוחרים ומה נשאר —
                          # היבואנית שמוכרת בעיקר לציים נראית כך במבט, בלי לחשב אחוזים.
                          [{"type": "table", "legend": ["לליסינג", "לסוחרים", "פרטי ואחר"],
-                           "cols": [["יבואנית", "name", "rtl"],
+                           "cols": [["יבואנית", "name", "rtl", {"sub": "meta"}],
                                     ["רכב חדש", "t", "ltr", {"viz": "stack", "parts": ["l", "d", "o"]}],
-                                    ["לליסינג", "l", "ltr", {"swatch": 0}], ["% לליסינג", "lp", "ltr"],
-                                    ["לסוחרים", "d", "ltr", {"swatch": 1}],
                                     ["מול אשתקד", "y", "ltr", {"viz": "chip"}]],
                            "rows": rows},
                           {"type": "notes", "items": [

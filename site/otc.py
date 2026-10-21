@@ -140,6 +140,12 @@ def money(v) -> str:
     return f"{v:,.0f} ₪"
 
 
+def nb(s) -> str:
+    """רווחים לא שבירים בתוך סכום ("22.8 מ׳ ₪"): בשורת משנה בתמונה המנוע שובר
+    שורות ברווחים, ו-"₪" נשאר לבד בשורה הבאה."""
+    return str(s).replace(" ", chr(160))
+
+
 def num(v, digits: int = 0) -> str:
     return "—" if v is None else f"{float(v):,.{digits}f}"
 
@@ -582,6 +588,11 @@ def period_table(title: str, sub: str, rows: list[dict],
                 if e["pct_capital"] is not None else "—"),
         "prem": signed(e[fld]),
         "_cls": cls(e[fld]),
+        # שורת המשנה בתמונה: מה שבעמוד הוא עמודות צדדיות.
+        "meta": " · ".join(t for t in [
+            f'{e["n"]} עסקאות' if e["n"] > 1 else "עסקה אחת",
+            (f'{e["days"]} ימים' if show_days and e["days"] > 1 else ""),
+            (num(e["pct_capital"], 2) + "% מההון") if e["pct_capital"] is not None else ""] if t),
     } for e in shown]
     rest = len(agg) - len(shown)
     more = (f'ועוד {rest} ניירות בהיקף '
@@ -601,7 +612,10 @@ def period_table(title: str, sub: str, rows: list[dict],
             {"label": "ניירות", "value": str(len(agg))}]},
         # המשפט הראשון בסקירה חוזר על שלושת המספרים שמעליו, ולכן אינו בתמונה.
         {"type": "notes", "title": "עיקרי התקופה", "items": bits[1:]} if len(bits) > 1 else None,
-        {"type": "table", "title": "לפי נייר", "cols": cols,
+        # **בתמונה שלוש עמודות.** העסקאות, הימים והחלק מההון עוברים לשורה מתחת
+        # לשם — ברוחב הקריא שש עמודות היו נדחסות לטקסט של חמישה פיקסלים בטלפון.
+        {"type": "table", "title": "לפי נייר",
+         "cols": [["נייר", "name", "rtl", {"sub": "meta"}], cols[-3], cols[-1]],
          "rows": [_public(r) for r in cells], "moreText": more, "totalRow": total_row},
     ], file=f"tlv-otc-{key}-{max(r['date'] for r in rows)}")
     out = [f'<h2>{title}</h2>',

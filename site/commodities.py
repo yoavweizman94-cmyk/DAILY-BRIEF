@@ -125,7 +125,8 @@ def _group_label(cfg: dict) -> dict:
 SRC_TE = "Trading Economics"
 SRC_WB = "הבנק העולמי — Commodity Price Data (Pink Sheet)"
 SRC_FUT = "חוזים עתידיים ב-NYMEX, COMEX, CBOT ו-ICE, דרך Yahoo Finance"
-SRC_AI = "ניתוח — TLV TASE View"
+# בתמונות שמופצות ברשת החתימה היחידה היא של יואב (21/10/2026), לא שם האתר.
+SRC_AI = "ניתוח — @Cigarbutthunte7"
 SRC_WB_SHORT = "הבנק העולמי"
 
 UNIT_HE = {
@@ -396,7 +397,9 @@ def export_fertilizers(wb: dict, cfg: dict, snap: dict) -> str:
         pm = pts[-2] if len(pts) >= 2 else None
         y, m = _pct_of(last["value"], (ya or {}).get("value")), _pct_of(last["value"], (pm or {}).get("value"))
         rows.append({"name": s["label"], "region": s.get("region") or "", "price": f'{_num(last["value"])} $ לטון',
-                     "month": f'{last["month"][5:7]}/{last["month"][:4]}', "m": share.signed(m), "y": share.signed(y)})
+                     "month": f'{last["month"][5:7]}/{last["month"][:4]}', "m": share.signed(m), "y": share.signed(y),
+                     "meta": " · ".join(t for t in [s.get("region") or "",
+                                                    f'{last["month"][5:7]}/{last["month"][:4]}'] if t)})
         lines.append(f'{s["label"]} · {s.get("region") or ""} {_num(last["value"])} $ לטון'
                      + (f" · {share.arrow(y)} בשנה" if y is not None else ""))
     last_m = max(series[k]["points"][-1]["month"] for k in keys)
@@ -404,9 +407,9 @@ def export_fertilizers(wb: dict, cfg: dict, snap: dict) -> str:
                "labels": [f"{m[5:7]}/{m[2:4]}" for m in months],
                "series": [{"name": f'{series[k]["label"]} · {series[k].get("region") or ""}',
                            "values": [vals[k].get(m) for m in months]} for k in keys]},
-              {"type": "table", "cols": [["סדרה", "name", "rtl"], ["אזור", "region", "rtl"], ["מחיר", "price", "ltr"],
-                                         ["חודש", "month", "ltr"], ["מול חודש קודם", "m", "ltr", {"viz": "chip"}],
-                                         ["שנתי", "y", "ltr", {"viz": "chip"}]],
+              {"type": "table", "cols": [["סדרה", "name", "rtl", {"sub": "meta"}], ["מחיר", "price", "ltr"],
+                                         ["חודש", "m", "ltr", {"viz": "chip"}],
+                                         ["שנה", "y", "ltr", {"viz": "chip"}]],
                "rows": rows}]
     updated = (wb.get("updated") or "").replace("Updated on", "").strip()
     try:
@@ -479,7 +482,12 @@ def export_board(group: dict, rows: list[tuple], snap: dict, generic: set,
                     "d": share.signed(row.get("DailyPercentualChange")),
                     "m": share.signed(row.get("MonthlyPercentualChange")),
                     "y": share.signed(row.get("YearlyPercentualChange"), 0),
-                    "t": line if len(line) >= 3 else ""})
+                    "t": line if len(line) >= 3 else "",
+                    # האזור והשינוי החודשי בשורת המשנה — ברוחב הקריא אין מקום לשבע עמודות
+                    "meta": " · ".join(t for t in [
+                        _region(i, row),
+                        (f'חודש {share.signed(row.get("MonthlyPercentualChange"))}'
+                         if row.get("MonthlyPercentualChange") is not None else "")] if t)})
     movers = sorted((r for r in rows if abs(r[1].get("DailyPercentualChange") or 0) >= 0.05),
                     key=lambda r: -abs(r[1]["DailyPercentualChange"]))[:4]
     lines = [f'{_qname({"label": i["label"], "region": _region(i, row), "src": "te"}, generic)} '
@@ -487,9 +495,8 @@ def export_board(group: dict, rows: list[tuple], snap: dict, generic: set,
     day, date = _when(snap)
     return _export(f'cm-b-{group["key"]}', snap, "סחורות · מחירים", group["label"],
                    f"מחירים ושינויים, {date}. אזור מוצג כשהוא ידוע, או לפי מטבע המחיר.",
-                   [{"type": "table", "cols": [["סחורה", "name", "rtl"], ["אזור", "region", "rtl"],
+                   [{"type": "table", "cols": [["סחורה", "name", "rtl", {"sub": "meta"}],
                                                ["מחיר", "price", "ltr"], ["יום", "d", "ltr", {"viz": "chip"}],
-                                               ["חודש", "m", "ltr", {"viz": "chip"}],
                                                ["שנה", "y", "ltr", {"viz": "chip"}],
                                                ["מגמה", "t", "ltr", {"viz": "spark"}]], "rows": out}],
                    share.source_line([SRC_TE]), f'{group["label"]} · מה זז היום · {day}', lines)

@@ -28,11 +28,20 @@
  * ושורת סך כהות, שורות מתחלפות, ופס יחסי בעמודת אחוזים. הסימן בכרזה הוא של
  * TLV TASE View ולא סמל הבורסה: התמונה מופצת ברשתות, וסמל הבורסה היה מציג
  * אותה כפרסום רשמי שלה.
+ *
+ * **קריאה בטלפון (21/10/2026).** התמונות נקראות ברשת, כלומר ברוחב של כ-390
+ * פיקסלים. כרטיס ברוחב 1200–1680 עם טקסט של 15–19 פיקסלים הגיע למסך בגודל
+ * 5–7 פיקסלים — יואב: "לא בפונטים קטנים". מכאן רוחב לוגי קבוע של 760 (פלט
+ * 2160 פיקסלים), גופן מינימלי FMIN, וטבלאות של שלוש עד ארבע עמודות: מה
+ * שהיה עמודה צדדית עובר לשורת משנה מתחת לשם. בלי כתובת האתר ובלי סימן
+ * האתר — רק © @Cigarbutthunte7 — ומוטיב של סיגר דולק, בשקיפות, בכרזה.
  */
 (function () {
   "use strict";
 
-  var W0 = 1200, WMAX = 1680, PAD = 56, GAP = 32, FOOT_GAP = 24;
+  var W0 = 760, WMAX = 760, PAD = 32, GAP = 26, FOOT_GAP = 22;
+  var OUT = 2160;      // רוחב הפלט בפיקסלים — הקנבס מצויר בקנה מידה OUT / רוחב
+  var FMIN = 16;       // אף טקסט אינו קטן מזה (פיקסלים לוגיים)
   var C = {
     page: "#edf1f7", page2: "#e2e8f1",
     navy: "#0b2545", navy2: "#15396a",
@@ -43,7 +52,9 @@
     up: "#12804d", down: "#c4392f", warn: "#a86f0c",
     upBg: "#e1f3e9", downBg: "#fbe6e3", warnBg: "#fbefd6",
     onNavy: "#ffffff", onNavy2: "#c5d4ea", onNavy3: "#8ea6c6", brand: "#a3c5ff",
-    upOn: "#8fe3b5", downOn: "#ffab9f"
+    upOn: "#8fe3b5", downOn: "#ffab9f",
+    // זהב של טבעת הסיגר — צבע המותג בכרזה ובתחתית בלבד, לא בנתונים.
+    gold: "#d9ab4a", gold2: "#f0d595"
   };
   var SERIF = "'Frank Ruhl Libre', 'David Libre', Georgia, serif";
   var SANS = "Assistant, 'Segoe UI', Arial, sans-serif";
@@ -55,7 +66,7 @@
   var WEEKDAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
   var MONTH_TOP = 25;
 
-  function F(w, s, fam) { return w + " " + s + "px " + (fam || SANS); }
+  function F(w, s, fam) { return w + " " + Math.max(s, FMIN) + "px " + (fam || SANS); }
   function sum(a) { return a.reduce(function (s, v) { return s + v; }, 0); }
 
   // **סדרות קטגוריאליות — פלטה מאומתת, בסדר קבוע.** כחול, כתום, טורקיז, צהוב:
@@ -541,122 +552,196 @@
   // כותרת גוש: סימן קטן, תווית, וקו דק עד הקצה השני.
   var SECTION_H = 50;
   function section(x, title, g, y) {
-    var t = bidi(title);
-    x.fillStyle = C.accent; rr(x, g.right - 5, y + 8, 5, 22, 2.5); x.fill();
+    var t = bidi(title), s = 23;
+    x.font = F(700, s);
+    while (s > 18 && x.measureText(t).width > g.inner - 40) { s -= 1; x.font = F(700, s); }
+    x.fillStyle = C.gold; rr(x, g.right - 5, y + 7, 5, 26, 2.5); x.fill();
     x.direction = "rtl"; x.textAlign = "right";
-    x.font = F(700, 21); x.fillStyle = C.ink;
-    x.fillText(t, g.right - 15, y + 26);
+    x.fillStyle = C.ink;
+    x.fillText(t, g.right - 15, y + 28);
     var w = x.measureText(t).width;
     x.fillStyle = C.line;
-    x.fillRect(g.left, y + 19, Math.max(0, g.inner - w - 15 - 20), 1);
+    x.fillRect(g.left, y + 20, Math.max(0, g.inner - w - 15 - 18), 1);
   }
 
   // ---------------------------------------------------------------- כרזה
 
-  // קו רקיע מופשט בתחתית הכרזה, גבוה בשוליים ונמוך מתחת לכותרת. מחולל מזרע
-  // קבוע: אותו נוף בכל ייצוא, לא רעש שמשתנה מתמונה לתמונה.
-  function skyline(x, W, base) {
-    var seed = 20261013;
-    function rnd() { seed = (seed * 48271) % 2147483647; return seed / 2147483647; }
-    [[0.06, 0.72, -46], [0.12, 1, -12]].forEach(function (L, li) {
-      var px = L[2];
-      while (px < W + 20) {
-        var bw = 24 + rnd() * 44;
-        var t = Math.min(1, Math.abs((px + bw / 2) / W - 0.5) * 2);
-        var bh = (30 + 130 * Math.pow(t, 1.6)) * L[1] * (0.5 + rnd() * 0.5), top = base - bh;
-        x.fillStyle = "rgba(146,186,244," + L[0] + ")";
-        x.fillRect(px, top, bw - 4, bh);
-        var r = rnd();
-        if (r < 0.2 && bh > 50) {
-          x.fillRect(px + (bw - 4) / 2 - 1.5, top - 16, 3, 16);
-        } else if (r < 0.34) {
-          x.beginPath(); x.moveTo(px, top); x.lineTo(px + bw - 4, top); x.lineTo(px, top - 14);
-          x.closePath(); x.fill();
-        }
-        if (li && bh > 60) {
-          x.fillStyle = "rgba(255,214,150,0.22)";
-          for (var wy = top + 10; wy < base - 12; wy += 11) {
-            for (var wx = px + 6; wx < px + bw - 12; wx += 8) {
-              if (rnd() < 0.16) { x.fillRect(wx, wy, 3, 5); }
-            }
-          }
-        }
-        px += bw;
-      }
+  // **סיגר דולק, בשקיפות** — מוטיב המותג (@Cigarbutthunte7, "cigar butt").
+  // איור וקטורי ולא תמונה: עטיפת טבק, טבעת זהב, אפר, גחלת ועשן שעולה. מצויר
+  // מתחת לטקסט של הכרזה, כך שהכותרת נשארת קריאה גם כשהוא עובר מאחוריה.
+  // cx, cy — מרכז הסיגר; L — אורכו; ang — זווית ברדיאנים (שלילית = עולה ימינה).
+  function cigar(x, cx, cy, L, ang, alpha) {
+    var r = L * 0.047, ash = L * 0.12, head = L / 2, foot = -L / 2;
+    x.save();
+    x.globalAlpha = alpha;
+    x.translate(cx, cy);
+    x.rotate(ang);
+
+    // גוף: עטיפה חומה עם הדגשה למעלה וצל למטה
+    var body = x.createLinearGradient(0, -r, 0, r);
+    body.addColorStop(0, "#b98457"); body.addColorStop(0.35, "#8a5530");
+    body.addColorStop(0.75, "#5e3519"); body.addColorStop(1, "#3f220f");
+    x.fillStyle = body;
+    x.beginPath();
+    x.moveTo(foot + ash, -r);
+    x.lineTo(head - r, -r);
+    x.arc(head - r, 0, r, -Math.PI / 2, Math.PI / 2);
+    x.lineTo(foot + ash, r);
+    x.closePath();
+    x.fill();
+
+    // עורקי העלה: קווים אלכסוניים דקים
+    x.save();
+    x.clip();
+    x.strokeStyle = "rgba(40,20,8,0.35)"; x.lineWidth = 1.2;
+    for (var vx = foot + ash + 14; vx < head; vx += L * 0.085) {
+      x.beginPath(); x.moveTo(vx, -r); x.bezierCurveTo(vx + 8, -r * 0.3, vx + 4, r * 0.4, vx + 14, r); x.stroke();
+    }
+    x.strokeStyle = "rgba(255,225,190,0.18)"; x.lineWidth = 1;
+    for (var hx = foot + ash + 30; hx < head; hx += L * 0.13) {
+      x.beginPath(); x.moveTo(hx, -r * 0.55); x.lineTo(hx + L * 0.05, -r * 0.7); x.stroke();
+    }
+    x.restore();
+
+    // טבעת: זהב עם שוליים כהים וסמל באמצע
+    var b0 = head - L * 0.27, bw = L * 0.085;
+    var band = x.createLinearGradient(0, -r, 0, r);
+    band.addColorStop(0, "#f6dc97"); band.addColorStop(0.45, "#d4a13e"); band.addColorStop(1, "#8f6418");
+    x.fillStyle = band; x.fillRect(b0, -r - 0.6, bw, 2 * r + 1.2);
+    x.fillStyle = "#6b1e1e";
+    x.fillRect(b0 + 2, -r - 0.6, 2.2, 2 * r + 1.2); x.fillRect(b0 + bw - 4.2, -r - 0.6, 2.2, 2 * r + 1.2);
+    x.beginPath(); x.ellipse(b0 + bw / 2, 0, bw * 0.22, r * 0.55, 0, 0, Math.PI * 2);
+    x.fillStyle = "#7d2323"; x.fill();
+    x.strokeStyle = "#f6dc97"; x.lineWidth = 1.2; x.stroke();
+
+    // אפר: אפור עם שוליים לא אחידים
+    var ag = x.createLinearGradient(0, -r, 0, r);
+    ag.addColorStop(0, "#e2ddd6"); ag.addColorStop(0.5, "#b9b2a9"); ag.addColorStop(1, "#86807a");
+    x.fillStyle = ag;
+    x.beginPath();
+    x.moveTo(foot + ash, -r);
+    x.lineTo(foot + 3, -r * 0.92);
+    x.quadraticCurveTo(foot - 2, 0, foot + 3, r * 0.92);
+    x.lineTo(foot + ash, r);
+    x.closePath();
+    x.fill();
+    x.strokeStyle = "rgba(90,85,80,0.45)"; x.lineWidth = 1;
+    [0.3, 0.55, 0.8].forEach(function (f) {
+      var ax = foot + ash * f;
+      x.beginPath(); x.moveTo(ax, -r * 0.95); x.quadraticCurveTo(ax - 3, 0, ax, r * 0.95); x.stroke();
     });
+
+    // גחלת: טבעת כתומה בין האפר לעלה, וזוהר סביבה
+    var ex = foot + ash;
+    var glow = x.createRadialGradient(ex, 0, 0, ex, 0, r * 2.4);
+    glow.addColorStop(0, "rgba(255,170,80,0.9)"); glow.addColorStop(0.35, "rgba(255,110,40,0.45)");
+    glow.addColorStop(1, "rgba(255,90,30,0)");
+    x.fillStyle = glow; x.fillRect(ex - r * 2.4, -r * 2.4, r * 4.8, r * 4.8);
+    x.fillStyle = "#ff8a3d"; x.fillRect(ex - 1.5, -r, 4, 2 * r);
+    x.restore();
+
+    // עשן: עולה אנכית מקצה האפר, בקואורדינטות המסך (לא מסובב עם הסיגר)
+    var tx = cx + Math.cos(ang) * foot, ty = cy + Math.sin(ang) * foot - r;
+    x.save();
+    x.globalAlpha = alpha;
+    x.lineCap = "round";
+    x.shadowColor = "rgba(255,255,255,0.5)"; x.shadowBlur = 10 * SC;
+    // שלושה סלילים שמתפצלים ונמוגים כלפי מעלה — לא שלושה קווים מקבילים
+    [[10, 0.22, 0, 1, 190], [6, 0.28, 10, -1, 160], [3, 0.34, -6, 1, 130]].forEach(function (s) {
+      var fade = x.createLinearGradient(0, ty, 0, ty - s[4]);
+      fade.addColorStop(0, "rgba(255,255,255," + s[1] + ")");
+      fade.addColorStop(0.6, "rgba(255,255,255," + (s[1] * 0.55) + ")");
+      fade.addColorStop(1, "rgba(255,255,255,0)");
+      x.strokeStyle = fade; x.lineWidth = s[0];
+      var k = s[3], h = s[4];
+      x.beginPath();
+      x.moveTo(tx, ty);
+      x.bezierCurveTo(tx - 18 * k + s[2], ty - h * 0.2, tx + 24 * k + s[2], ty - h * 0.38, tx + 6 * k + s[2], ty - h * 0.55);
+      x.bezierCurveTo(tx - 14 * k + s[2], ty - h * 0.7, tx + 30 * k + s[2], ty - h * 0.85, tx + 18 * k + s[2] * 2, ty - h);
+      x.stroke();
+    });
+    x.restore();
   }
 
-  // סימן TLV TASE View: ריבוע מעוגל ובו שלוש עמודות עולות.
-  function brandMark(x, right, top, s) {
-    var gr = x.createLinearGradient(right - s, top, right, top + s);
-    gr.addColorStop(0, "#3d84f2"); gr.addColorStop(1, "#1b4ea6");
-    x.fillStyle = gr; rr(x, right - s, top, s, s, s * 0.27); x.fill();
-    x.fillStyle = "#ffffff";
-    var k = s / 48;
-    [[0, 11], [1, 18], [2, 26]].forEach(function (p) {
-      rr(x, right - 37 * k + p[0] * 9.5 * k, top + (37 - p[1]) * k, 6.5 * k, p[1] * k, 2 * k); x.fill();
-    });
+  // סמל סיגר קטן ליד החתימה — אותו ציור, בלי שקיפות ובלי עשן גבוה.
+  function cigarIcon(x, right, cy, len) {
+    x.save();
+    x.translate(right - len / 2, cy);
+    var r = len * 0.11;
+    var body = x.createLinearGradient(0, -r, 0, r);
+    body.addColorStop(0, "#b98457"); body.addColorStop(1, "#4a2913");
+    x.fillStyle = body; rr(x, -len / 2 + len * 0.16, -r, len * 0.84, 2 * r, r); x.fill();
+    x.fillStyle = "#cfc8bf"; rr(x, -len / 2, -r, len * 0.18, 2 * r, 2); x.fill();
+    x.fillStyle = "#ff8a3d"; x.fillRect(-len / 2 + len * 0.16, -r, 2, 2 * r);
+    x.fillStyle = C.gold; x.fillRect(len * 0.12, -r, len * 0.12, 2 * r);
+    x.restore();
   }
 
-  // הכרזה: סימן ושם בשורה העליונה, ובמרכז תווית, כותרת ותת-כותרת. כשהגוש
-  // הראשון הוא אריחי סיכום, הכרזה ארוכה ב-OVER והאריחים עולים עליה.
-  // מחזירה את ה-y שבו מתחיל הגוש הראשון.
-  var OVER = 48;
+  // הכרזה: חתימה בשורה העליונה, ובמרכז תווית, כותרת ותת-כותרת, ומאחוריהם
+  // הסיגר. כשהגוש הראשון הוא אריחי סיכום, הכרזה ארוכה ב-OVER והאריחים עולים
+  // עליה. מחזירה את ה-y שבו מתחיל הגוש הראשון.
+  var OVER = 44;
+  var HANDLE = "© @Cigarbutthunte7";
   function header(x, d, g, draw, over) {
-    var W = g.W, cw = Math.min(g.inner, 1000), ts = 54, lines;
+    var W = g.W, cw = g.inner - 16, ts = 44, lines;
     for (;;) {
       x.font = F(700, ts, SERIF);
       lines = wrap(x, bidi(d.title || ""), cw);
-      if (lines.length === 1 || ts <= 36) { break; }
+      if (lines.length <= 2 || ts <= 30) { break; }
       ts -= 2;
     }
-    var lh = Math.round(ts * 1.18);
-    x.font = F(400, 21);
-    var sub = d.sub ? wrap(x, bidi(d.sub), Math.min(cw, 860)) : [];
-    var top = 30, kickY = top + 48 + 36, y = kickY;
-    if (d.kicker) { y += 34 + 24; }
-    var t0 = y + Math.round(ts * 0.9);
+    var lh = Math.round(ts * 1.2);
+    x.font = F(400, 20);
+    var sub = d.sub ? wrap(x, bidi(d.sub), cw) : [];
+    var top = 24, line = top + 40, kickY = line + 26, y = kickY;
+    if (d.kicker) { y += 32 + 20; }
+    var t0 = y + Math.round(ts * 0.86);
     y = t0 + (lines.length - 1) * lh;
-    var s0 = y + 42;
-    if (sub.length) { y = s0 + (sub.length - 1) * 31; }
-    var bh = y + 66 + (over ? OVER : 0);
+    var s0 = y + 38;
+    if (sub.length) { y = s0 + (sub.length - 1) * 29; }
+    // **רצועה לסיגר**, מתחת לטקסט ומעל האריחים שעולים על הכרזה: כשצויר מאחורי
+    // הכותרת, הטבעת ישבה על המילים והאריחים הסתירו את הגחלת.
+    var ART = 78, artY = y + 30 + ART / 2;
+    var bh = y + 30 + ART + 14 + (over ? OVER : 0);
     if (draw) {
       var gr = x.createLinearGradient(W, 0, 0, bh);
-      gr.addColorStop(0, C.navy); gr.addColorStop(1, C.navy2);
+      gr.addColorStop(0, "#0a1f38"); gr.addColorStop(1, "#13355f");
       x.fillStyle = gr; x.fillRect(0, 0, W, bh);
-      var glow = x.createRadialGradient(W * 0.14, bh, 0, W * 0.14, bh, W * 0.55);
-      glow.addColorStop(0, "rgba(86,150,240,0.30)"); glow.addColorStop(1, "rgba(86,150,240,0)");
+      // זוהר חם סביב הגחלת, והסיגר ברצועה שלו
+      var gx = W * 0.13, gy = artY;
+      var glow = x.createRadialGradient(gx, gy, 0, gx, gy, W * 0.5);
+      glow.addColorStop(0, "rgba(217,171,74,0.22)"); glow.addColorStop(1, "rgba(217,171,74,0)");
       x.fillStyle = glow; x.fillRect(0, 0, W, bh);
-      skyline(x, W, bh);
+      cigar(x, W * 0.39, artY + 4, W * 0.54, -0.05, 0.62);
 
-      brandMark(x, g.right, top, 48);
+      // חתימה: LTR, מיושרת לימין, עם סמל סיגר קטן
       x.direction = "ltr"; x.textAlign = "right";
-      x.fillStyle = C.onNavy; x.font = F(900, 28, SERIF);
-      x.fillText("TLV TASE View", g.right - 48 - 16, top + 34);
-      x.textAlign = "left"; x.fillStyle = C.onNavy3; x.font = F(500, 15, MONO);
-      x.fillText("tlvtaseview.com", g.left, top + 30);
-      x.fillStyle = "rgba(255,255,255,0.12)"; x.fillRect(g.left, top + 48 + 16, g.inner, 1);
+      x.fillStyle = C.gold2; x.font = F(700, 19);
+      x.fillText(HANDLE, g.right, top + 22);
+      var hw = x.measureText(HANDLE).width;
+      cigarIcon(x, g.right - hw - 12, top + 15, 34);
+      x.fillStyle = "rgba(217,171,74,0.28)"; x.fillRect(g.left, line, g.inner, 1);
 
       x.direction = "rtl"; x.textAlign = "center";
       if (d.kicker) {
         x.font = F(700, 16);
-        var kw = x.measureText(d.kicker).width + 40;
-        x.fillStyle = "rgba(255,255,255,0.08)"; rr(x, W / 2 - kw / 2, kickY, kw, 34, 17); x.fill();
-        x.strokeStyle = "rgba(163,197,255,0.38)"; x.lineWidth = 1;
-        rr(x, W / 2 - kw / 2 + 0.5, kickY + 0.5, kw - 1, 33, 16.5); x.stroke();
-        x.fillStyle = C.brand; x.fillText(d.kicker, W / 2, kickY + 23);
+        var kw = x.measureText(d.kicker).width + 36;
+        x.fillStyle = "rgba(217,171,74,0.12)"; rr(x, W / 2 - kw / 2, kickY, kw, 32, 16); x.fill();
+        x.strokeStyle = "rgba(217,171,74,0.6)"; x.lineWidth = 1;
+        rr(x, W / 2 - kw / 2 + 0.5, kickY + 0.5, kw - 1, 31, 15.5); x.stroke();
+        x.fillStyle = C.gold2; x.fillText(d.kicker, W / 2, kickY + 22);
       }
       x.fillStyle = C.onNavy; x.font = F(700, ts, SERIF);
       lines.forEach(function (ln, k) { x.fillText(ln, W / 2, t0 + k * lh); });
-      x.fillStyle = C.onNavy2; x.font = F(400, 21);
-      sub.forEach(function (ln, k) { x.fillText(ln, W / 2, s0 + k * 31); });
+      x.fillStyle = C.onNavy2; x.font = F(400, 20);
+      sub.forEach(function (ln, k) { x.fillText(ln, W / 2, s0 + k * 29); });
 
       var al = x.createLinearGradient(0, 0, W, 0);
-      al.addColorStop(0, "rgba(91,147,230,0)"); al.addColorStop(0.5, C.accent2);
-      al.addColorStop(1, "rgba(91,147,230,0)");
+      al.addColorStop(0, "rgba(217,171,74,0)"); al.addColorStop(0.5, C.gold);
+      al.addColorStop(1, "rgba(217,171,74,0)");
       x.fillStyle = al; x.fillRect(0, bh - 3, W, 3);
     }
-    return over ? bh - OVER : bh + 38;
+    return over ? bh - OVER : bh + 30;
   }
 
   // ---------------------------------------------------------------- גושים
@@ -666,19 +751,19 @@
   function statsBlock(x, b, g, draw) {
     var items = b.items || [];
     if (!items.length) { return 0; }
-    var n = items.length, per = n <= 4 ? n : Math.ceil(n / 2), rowsN = Math.ceil(n / per);
-    var gap = 18, P = 24, IC = 52;
-    var capF = { "": F(500, 15), up: F(700, 15), down: F(700, 15) };
+    // ברוחב הצר: עד שלושה בשורה; ארבעה — שניים ושניים, כדי שהמספר לא יתכווץ.
+    var n = items.length, per = n <= 3 ? n : n === 4 ? 2 : Math.ceil(n / 2), rowsN = Math.ceil(n / per);
+    var gap = 14, P = 18, IC = 40;
+    var capF = { "": F(500, 16), up: F(700, 16), down: F(700, 16) };
     var lay = items.map(function (it, i) {
       var r = Math.floor(i / per), inRow = Math.min(per, n - r * per);
-      var w = (g.inner - gap * (inRow - 1)) / inRow, tw = w - P * 2 - IC - 14, ls = 17;
-      x.font = F(600, ls);
-      while (ls > 14 && x.measureText(it.label || "").width > tw) { ls -= 1; x.font = F(600, ls); }
+      var w = (g.inner - gap * (inRow - 1)) / inRow, tw = w - P * 2 - IC - 10;
+      x.font = F(600, 17);
       // שורת הקשר יכולה להיות רשימה — כל פריט בשורה משלו ("מחוץ לבורסה X",
       // "מתואמות Y"), כמו באריח שבעמוד.
       var caps = (Array.isArray(it.cap) ? it.cap : [it.cap]).filter(function (c) { return c; });
       var hasSpark = (it.spark || []).filter(function (v) { return typeof v === "number"; }).length >= 5;
-      return { r: r, c: i - r * per, w: w, ls: ls, lab: wrap(x, bidi(it.label || ""), tw),
+      return { r: r, c: i - r * per, w: w, lab: wrap(x, bidi(it.label || ""), tw),
         spark: hasSpark, chips: chipRows(x, it.deltas || [], w - P * 2),
         cap: [].concat.apply([], caps.map(function (c) {
           return richWrap(x, capPieces(c), w - P * 2, capF);
@@ -687,38 +772,45 @@
     var labL = Math.max.apply(null, lay.map(function (l) { return l.lab.length; }));
     var capL = Math.max.apply(null, lay.map(function (l) { return l.cap.length; }));
     var chipL = Math.max.apply(null, lay.map(function (l) { return l.chips.length; }));
-    var head = Math.max(IC, labL * 22);
-    var ch = P + head + 18 + 40 + (chipL ? 14 + chipL * 34 - 6 : 0) + (capL ? 12 + capL * 23 : 0) + P - 2;
+    var sparkAny = lay.some(function (l) { return l.spark; });
+    var head = Math.max(IC, labL * 21);
+    var NUM = 44, SPH = 38;
+    var ch = P + head + 12 + NUM + (sparkAny ? 8 + SPH : 0) + (chipL ? 12 + chipL * 36 - 6 : 0) +
+      (capL ? 10 + capL * 23 : 0) + P - 2;
     var h = rowsN * ch + (rowsN - 1) * gap;
     if (!draw) { return h; }
     items.forEach(function (it, i) {
       var L = lay[i], px = g.right - L.w - L.c * (L.w + gap), py = g.top + L.r * (ch + gap);
       var R = px + L.w - P, tint = TINTS[i % TINTS.length];
-      card(x, px, py, L.w, ch, 18);
+      card(x, px, py, L.w, ch, 16);
       var icx = R - IC / 2, icy = py + P + head / 2;
       x.fillStyle = tint[0]; x.beginPath(); x.arc(icx, icy, IC / 2, 0, Math.PI * 2); x.fill();
-      icon(x, iconFor(it.label || ""), icx, icy, tint[1], tint[0], 1.15);
+      icon(x, iconFor(it.label || ""), icx, icy, tint[1], tint[0], 0.95);
       x.direction = "rtl"; x.textAlign = "right";
-      x.fillStyle = C.muted; x.font = F(600, L.ls);
-      var ly = icy - (L.lab.length - 1) * 11 + 6;
-      L.lab.forEach(function (ln, k) { x.fillText(ln, R - IC - 14, ly + k * 22); });
+      x.fillStyle = C.muted; x.font = F(600, 17);
+      var ly = icy - (L.lab.length - 1) * 10.5 + 6;
+      L.lab.forEach(function (ln, k) { x.fillText(ln, R - IC - 10, ly + k * 21); });
       // **המספר באותו גופן כמו הטקסט, בספרות פרופורציונליות** — גופן המספרים
       // רוחב קבוע שמור לעמודות שצריכות להתיישר; מספר גדול שעומד לבדו נראה בו מרווח.
-      var v = String(it.value == null ? "—" : it.value), s = 40;
-      var sw = L.spark ? Math.min(150, (L.w - P * 2) * 0.4) : 0;
-      var room = L.w - P * 2 - (sw ? sw + 16 : 0);
-      var o = { w: 700, s: s, us: 0.48, uw: 600, fam: SANS };
-      while (s > 18 && valWidth(x, v, o) > room) { s -= 1; o.s = s; }
+      var v = String(it.value == null ? "—" : it.value), s = 38;
+      var room = L.w - P * 2;
+      var o = { w: 700, s: s, us: 0.5, uw: 600, fam: SANS };
+      while (s > 22 && valWidth(x, v, o) > room) { s -= 1; o.s = s; }
       o.color = it.tone === "up" ? C.up : it.tone === "down" ? C.down : C.ink;
       o.ucolor = it.tone ? o.color : C.muted;
-      var vy = py + P + head + 18 + 34;
+      var vy = py + P + head + 12 + 36;
       drawVal(x, v, R, vy, o);
-      if (L.spark) { sparkline(x, it.spark, px + P, vy - 38, sw, 44); }
-      var cy = vy + 14;
-      L.chips.forEach(function (row) { drawChips(x, row, R, cy); cy += 34; });
-      if (L.chips.length) { cy += 4; }
+      var cy = vy + 8;
+      // קו המגמה מתחת למספר ולרוחב האריח — לצידו הוא כיווץ את המספר עד שלא נקרא.
+      if (sparkAny) {
+        if (L.spark) { sparkline(x, it.spark, px + P, cy + 6, L.w - P * 2, SPH); }
+        cy += 8 + SPH;
+      }
+      cy += 6;
+      L.chips.forEach(function (row) { drawChips(x, row, R, cy); cy += 36; });
+      if (L.chips.length) { cy += 2; }
       L.cap.forEach(function (ln, k) {
-        richDraw(x, ln, R, cy + 20 + k * 23, capF, { "": C.faint, up: C.up, down: C.down });
+        richDraw(x, ln, R, cy + 18 + k * 23, capF, { "": C.faint, up: C.up, down: C.down });
       });
     });
     return h;
@@ -726,7 +818,7 @@
 
   // שבבי שינוי: "יום +1.2%" — תווית מושתקת ומספר בצבע הכיוון על רקע בגוון שלו.
   // הסימן נכתב תמיד, כך שהכיוון אינו נישא בצבע לבדו.
-  var CHIP_L = F(500, 14), CHIP_V = F(700, 15);
+  var CHIP_L = F(500, 16), CHIP_V = F(700, 17);
   function deltaChipW(x, d) {
     x.font = CHIP_L;
     var lw = d.label ? x.measureText(d.label).width + 6 : 0;
@@ -750,15 +842,15 @@
       var v = parseNum(c.d.value != null ? c.d.value : c.d.text);
       var fg = v > 0 ? C.up : v < 0 ? C.down : C.muted;
       var bg = v > 0 ? C.upBg : v < 0 ? C.downBg : C.track;
-      x.fillStyle = bg; rr(x, cx - c.w, top, c.w, 28, 8); x.fill();
+      x.fillStyle = bg; rr(x, cx - c.w, top, c.w, 32, 9); x.fill();
       x.direction = "rtl"; x.textAlign = "right";
       var tx = cx - 10;
       if (c.d.label) {
-        x.font = CHIP_L; x.fillStyle = C.muted; x.fillText(c.d.label, tx, top + 19);
+        x.font = CHIP_L; x.fillStyle = C.muted; x.fillText(c.d.label, tx, top + 22);
         tx -= x.measureText(c.d.label).width + 6;
       }
       x.direction = "ltr"; x.font = CHIP_V; x.fillStyle = fg;
-      x.fillText(String(c.d.text), tx, top + 19);
+      x.fillText(String(c.d.text), tx, top + 22);
       cx -= c.w + 8;
     });
   }
@@ -767,7 +859,7 @@
   function notesBlock(x, b, g, draw) {
     var items = (b.items || []).filter(function (t) { return t; });
     if (!items.length) { return 0; }
-    var P = 30, PT = 26, LH = 33, BUL = 24;
+    var P = 22, PT = 22, LH = 32, BUL = 22;
     var fonts = { "": F(400, 20), hi: F(700, 20) };
     var paras = items.map(function (t) { return richWrap(x, hiPieces(t), g.inner - P * 2 - BUL, fonts); });
     var TH = b.title ? 56 : 0;
@@ -780,8 +872,8 @@
       x.fillStyle = C.soft; x.beginPath(); x.arc(R - 17, y + 17, 17, 0, Math.PI * 2); x.fill();
       icon(x, "list", R - 17, y + 17, C.accent, C.soft, 0.8);
       x.direction = "rtl"; x.textAlign = "right";
-      x.fillStyle = C.ink; x.font = F(700, 21);
-      x.fillText(bidi(b.title), R - 34 - 12, y + 24);
+      x.fillStyle = C.ink; x.font = F(700, 22);
+      x.fillText(bidi(b.title), R - 34 - 12, y + 25);
       x.fillStyle = C.hair; x.fillRect(g.left + P, y + 44, g.inner - P * 2, 1);
       y += TH;
     }
@@ -842,7 +934,7 @@
   //   spark  — קו מגמה מתוך מערך מספרים בשורה
   // swatch — ריבוע צבעוני בכותרת, שמזהה עמודה כחלק בפס מוערם.
   // בלי viz בכל הטבלה, עמודת אחוזים לא חתומים מקבלת פס כמו קודם.
-  var BARW = 104, TX = 12, SPW = 112;
+  var BARW = 78, TX = 10, SPW = 96, SUBL = 22;
   var BARRED = { bar: 1, meter: 1, div: 1, stack: 1 };
 
   function isPctCol(c, rows) {
@@ -858,14 +950,14 @@
     if (b._nat) { return b._nat; }
     var cols = b.cols, rows = b.rows || [];
     var all = b.totalRow ? rows.concat([b.totalRow]) : rows;
-    var last = b.totalRow ? all.length - 1 : -1, GAPC = 30;
+    var last = b.totalRow ? all.length - 1 : -1, GAPC = 22;
     var explicit = cols.some(function (c) { return colOpt(c).viz; });
     var nat = [], min = [], loose = [], vz = [], pv = [], nums = [];
     cols.forEach(function (c, i) {
       var o = colOpt(c);
       var kind = o.viz || (!explicit && isPctCol(c, rows) ? "bar" : "");
       vz.push(kind);
-      x.font = F(600, 15);
+      x.font = F(600, 16);
       var head = x.measureText(c[0]).width + (o.swatch != null ? 20 : 0), full = head, word = head, vals = 0;
       if (kind !== "spark") {
         all.forEach(function (r, n) {
@@ -879,6 +971,13 @@
           x.font = cellFont(c, i, v, n === last);
           full = Math.max(full, x.measureText(v).width);
           v.split(" ").forEach(function (w) { word = Math.max(word, x.measureText(w).width); });
+          // שורת משנה (sub): עמודה צדדית שקופלה מתחת לשם — נמדדת בגופן שלה.
+          if (o.sub && r[o.sub] && n !== last) {
+            x.font = F(400, 16);
+            var sv = String(r[o.sub]);
+            full = Math.max(full, x.measureText(sv).width);
+            sv.split(" ").forEach(function (w) { word = Math.max(word, x.measureText(w).width); });
+          }
         });
       }
       pv.push(vals);
@@ -970,7 +1069,7 @@
   // מתחלפות, ושורת הסך כפס כהה בתחתית.
   function tableBlock(x, b, g, draw) {
     if (!b.cols || !(b.rows || []).length) { return 0; }
-    var T = tableNat(x, b), inner = g.inner - TX * 2, R = g.right - TX, LINE = 30, HB = 52;
+    var T = tableNat(x, b), inner = g.inner - TX * 2, R = g.right - TX, LINE = 30, HB = 48;
     var LEG = (b.legend || []).length ? 48 : 0;
     var wid;
     if (T.sumNat <= inner) {
@@ -989,13 +1088,19 @@
     var rows = T.all.map(function (r, n) {
       var bold = n === T.last;
       var cells = b.cols.map(function (c, i) {
-        var raw = r[c[1]];
+        var raw = r[c[1]], o = colOpt(c), sub = [];
         var v = raw == null || Array.isArray(raw) ? "" : String(raw);
+        if (c[2] === "rtl" && o.sub && !bold && r[o.sub]) {
+          x.font = F(400, 16);
+          sub = wrap(x, bidi(String(r[o.sub])), wid[i] - 22);
+        }
         x.font = cellFont(c, i, v, bold);
-        return { v: v, raw: raw, lines: c[2] === "rtl" ? wrap(x, bidi(v), wid[i] - 30) : [v] };
+        return { v: v, raw: raw, sub: sub, lines: c[2] === "rtl" ? wrap(x, bidi(v), wid[i] - 22) : [v] };
       });
-      var tall = cells.reduce(function (m, c) { return Math.max(m, c.lines.length); }, 1);
-      return { cells: cells, bold: bold, src: r, h: 24 + LINE * tall };
+      var tall = cells.reduce(function (m, c) {
+        return Math.max(m, c.lines.length * LINE + c.sub.length * SUBL);
+      }, LINE);
+      return { cells: cells, bold: bold, src: r, h: 24 + tall };
     });
     x.font = F(400, 17);
     var more = b.moreText ? wrap(x, b.moreText, inner - 28) : [];
@@ -1008,15 +1113,15 @@
     x.fillStyle = C.navy; x.fillRect(g.left, y, g.inner, HB);
     var cx = R;
     x.direction = "rtl"; x.textAlign = "right";
-    x.font = F(600, 15);
+    x.font = F(600, 16);
     b.cols.forEach(function (c, i) {
       // כותרת עמודה היא טקסט עברי גם כשהערכים בה LTR.
       var o = colOpt(c), tx = cx - 14;
       if (o.swatch != null) {
-        x.fillStyle = CAT[o.swatch % CAT.length]; rr(x, tx - 12, y + 20, 12, 12, 3); x.fill();
+        x.fillStyle = CAT[o.swatch % CAT.length]; rr(x, tx - 12, y + 18, 12, 12, 3); x.fill();
         tx -= 20;
       }
-      x.fillStyle = C.onNavy2; x.fillText(c[0], tx, y + 32);
+      x.fillStyle = C.onNavy2; x.fillText(c[0], tx, y + 30);
       cx -= wid[i];
     });
     y += HB;
@@ -1056,7 +1161,7 @@
           }
           drawVal(x, cell.v, vx - 14, y + 35, ov);
           if (BARRED[kind] && !row.bold) {
-            var bx = vx - 14 - T.pv[i] - 14, bl = Math.min(92, bx - (vx - wid[i] + 10));
+            var bx = vx - 14 - T.pv[i] - 12, bl = Math.min(70, bx - (vx - wid[i] + 8));
             if (bl > 20) { cellViz(x, kind, o, cell.raw, row.src, bx, bl, y + 24, scales[i]); }
           }
         } else {
@@ -1064,6 +1169,12 @@
           x.font = cellFont(c, i, cell.v, row.bold);
           x.fillStyle = cellColor(c, i, cell.v, row.bold);
           cell.lines.forEach(function (ln, k) { x.fillText(ln, vx - 14, y + 35 + k * LINE); });
+          if (cell.sub.length) {
+            x.font = F(400, 16); x.fillStyle = C.muted;
+            cell.sub.forEach(function (ln, k) {
+              x.fillText(ln, vx - 14, y + 35 + cell.lines.length * LINE - 7 + k * SUBL);
+            });
+          }
         }
         vx -= wid[i];
       });
@@ -1198,15 +1309,15 @@
     // עמודת השם רחבה מספיק גם לשורת המשנה, כדי ש"4 עסקאות · 0.85% מההון" לא
     // יישבר באמצע — עד שליש מהרוחב, ומעבר לו נשבר.
     var labW = Math.min(Math.max(measureMax(x, F(700, 19), rows.map(function (r) { return r.label; })),
-      measureMax(x, F(400, 15), rows.map(function (r) { return bidi(r.meta || ""); }))) + 28,
-      g.inner * 0.34);
+      measureMax(x, F(400, 16), rows.map(function (r) { return bidi(r.meta || ""); }))) + 28,
+      g.inner * 0.4);
     var valW = Math.max.apply(null, rows.map(function (r) { return valWidth(x, r.text || "", VAL); })) + 18;
     var lays = rows.map(function (r) {
       x.font = F(700, 19);
       var lines = wrap(x, r.label, labW - 28);
-      x.font = F(400, 15);
+      x.font = F(400, 16);
       var meta = r.meta ? wrap(x, bidi(r.meta), labW - 28) : [];
-      return { lines: lines, meta: meta, h: Math.max(60, 22 + lines.length * 25 + meta.length * 21 + 12) };
+      return { lines: lines, meta: meta, h: Math.max(62, 22 + lines.length * 25 + meta.length * 22 + 12) };
     });
     var h = LEG + sum(lays.map(function (l) { return l.h; }));
     if (!draw) { return h; }
@@ -1216,12 +1327,12 @@
     var barR = g.right - labW, barMax = g.inner - labW - valW - 6;
     rows.forEach(function (r, i) {
       var L = lays[i], cy = y + L.h / 2;
-      var ty = y + (L.h - (L.lines.length * 25 + L.meta.length * 21)) / 2 + 19;
+      var ty = y + (L.h - (L.lines.length * 25 + L.meta.length * 22)) / 2 + 19;
       x.direction = "rtl"; x.textAlign = "right";
       x.fillStyle = C.ink; x.font = F(700, 19);
       L.lines.forEach(function (ln, k) { x.fillText(ln, g.right, ty + k * 25); });
-      x.fillStyle = C.muted; x.font = F(400, 15);
-      L.meta.forEach(function (ln, k) { x.fillText(ln, g.right, ty + L.lines.length * 25 + k * 21 - 2); });
+      x.fillStyle = C.muted; x.font = F(400, 16);
+      L.meta.forEach(function (ln, k) { x.fillText(ln, g.right, ty + L.lines.length * 25 + k * 22 - 1); });
       var len = Math.max(4, barMax * (r.value || 0) / mx);
       if (Array.isArray(r.parts)) {
         var cur = barR, parts = r.parts.map(function (p) { return Math.max(0, p || 0); });
@@ -1252,11 +1363,11 @@
     var rows = (b.rows || []).filter(function (r) { return r && r.b != null; });
     if (!rows.length) { return 0; }
     var LEG = 42, AXH = 30;
-    var labW = Math.min(measureMax(x, F(700, 19), rows.map(function (r) { return r.label; })) + 28,
-      g.inner * 0.3);
+    var labW = Math.min(Math.max(measureMax(x, F(700, 19), rows.map(function (r) { return r.label; })),
+      measureMax(x, F(400, 16), rows.map(function (r) { return r.sub || ""; }))) + 24, g.inner * 0.36);
     var DV = { w: 700, s: 16, fam: SANS, color: C.ink };
     var dW = Math.max(74, Math.max.apply(null, rows.map(function (r) { return valWidth(x, r.delta_text || "", DV); })) + 28);
-    var RH = 58;
+    var RH = 64;
     var h = LEG + AXH + rows.length * RH;
     if (!draw) { return h; }
     var y = g.top;
@@ -1287,8 +1398,8 @@
       if (i % 2 === 1) { x.fillStyle = C.zebra; x.fillRect(g.left, y, g.inner, RH); }
       x.direction = "rtl"; x.textAlign = "right";
       x.fillStyle = C.ink; x.font = F(700, 19);
-      x.fillText(r.label, g.right, r.sub ? cy - 2 : cy + 7);
-      if (r.sub) { x.fillStyle = C.muted; x.font = F(400, 14); x.fillText(r.sub, g.right, cy + 18); }
+      x.fillText(r.label, g.right, r.sub ? cy - 3 : cy + 7);
+      if (r.sub) { x.fillStyle = C.muted; x.font = F(400, 16); x.fillText(r.sub, g.right, cy + 19); }
       var xa = X(r.a || 0), xb = X(r.b || 0), up = (r.b || 0) >= (r.a || 0);
       x.fillStyle = up ? C.up : C.down;
       x.fillRect(Math.min(xa, xb), cy - 1.5, Math.abs(xb - xa), 3);
@@ -1297,12 +1408,23 @@
         x.fillStyle = d[1]; x.beginPath(); x.arc(d[0], cy, d[2], 0, Math.PI * 2); x.fill();
       });
       // הערך של עכשיו, בצד שאינו פונה לנקודה הקודמת
-      var BV = { w: 600, s: 15, fam: SANS, color: C.ink };
+      var BV = { w: 700, s: 16, fam: SANS, color: C.ink };
       var bt = r.text || "", bw2 = valWidth(x, bt, BV);
-      var bxr = up ? xb + 14 + bw2 : xb - 14;
-      if (bxr > pr) { bxr = xb - 14; }
-      if (bxr - bw2 < pl) { bxr = xb + 14 + bw2; }
-      drawVal(x, bt, bxr, cy + 6, BV);
+      var lo2 = Math.min(xa, xb), hi2 = Math.max(xa, xb);
+      var fits = function (right) { return right <= pr + 14 && right - bw2 >= pl - 6; };
+      var clear = function (right) { return right - bw2 > hi2 + 2 || right < lo2 - 2; };
+      var away = up ? xb + 12 + bw2 : xb - 12, near = up ? xb - 12 : xb + 12 + bw2;
+      // **התווית לא יושבת על הקו.** בצד הרחוק מהנקודה הקודמת; אם אין שם מקום —
+      // בצד השני רק כשהוא מחוץ לקטע; ואחרת מעל הנקודה, על רקע לבן.
+      if (fits(away)) {
+        drawVal(x, bt, away, cy + 6, BV);
+      } else if (fits(near) && clear(near)) {
+        drawVal(x, bt, near, cy + 6, BV);
+      } else {
+        var ax = Math.min(pr + 14 - bw2 / 2, Math.max(pl + bw2 / 2, xb)), ay = cy - 13;
+        x.fillStyle = C.card; rr(x, ax - bw2 / 2 - 6, ay - 16, bw2 + 12, 21, 6); x.fill();
+        drawVal(x, bt, ax + bw2 / 2, ay, BV);
+      }
       // השינוי — שבב בעמודה השמאלית
       if (r.delta_text) {
         var dv = parseNum(r.delta_text);
@@ -1322,7 +1444,7 @@
   function curvesBlock(x, b, g, draw) {
     var items = (b.items || []).filter(function (it) { return (it.points || []).length >= 2; });
     if (!items.length) { return 0; }
-    var cols = g.inner >= 900 ? 2 : 1, gap = 18, cw = (g.inner - gap * (cols - 1)) / cols, CH = 206;
+    var cols = g.inner >= 600 ? 2 : 1, gap = 14, cw = (g.inner - gap * (cols - 1)) / cols, CH = 224;
     var rowsN = Math.ceil(items.length / cols);
     var h = rowsN * CH + (rowsN - 1) * gap;
     if (!draw) { return h; }
@@ -1366,8 +1488,12 @@
         drawVal(x, fmtNum(t, step < 1 ? 1 : 0) + "%", pl - 8, Y(t) + 4, { w: 400, s: 12, color: C.faint });
       }
       x.direction = "ltr"; x.textAlign = "center"; x.font = F(400, 12, MONO); x.fillStyle = C.faint;
+      // תווית שצמודה לקודמתה מדולגת: "0 3m 6m" נדחסו לרצף אחד ברוחב הצר.
+      var lastTx = -1e9;
       (b.ticks || [0, 6, 12, 24]).forEach(function (m) {
-        if (m <= hmax) { x.fillText(m ? m + "m" : "0", X(m), pb + 18); }
+        if (m > hmax || X(m) - lastTx < 38) { return; }
+        x.fillText(m ? m + "m" : "0", X(m), pb + 20);
+        lastTx = X(m);
       });
       var pts = it.points;
       x.beginPath();
@@ -1592,10 +1718,18 @@
     return h;
   }
 
-  // דיווחי בעלי עניין: שורה לדיווח — חברה, כיוון, טופס, מדווח — ומספרים.
-  var RCOLS = [["כמות", "q"], ["שער", "px"], ["היקף", "v"], ["מההון", "pct"], ["החזקה אחרי", "after"]];
-  function rcols(b) { return b.cols || RCOLS; }
-  function rval(c) { return { w: c[1] === "pct" ? 600 : 500, s: 18, uw: 500, us: 0.8 }; }
+  // דיווחי בעלי עניין: בלוק לדיווח — חברה ושבבים, מדווח, ושורת מספרים.
+  //
+  // **בלי עמודות.** חמש עמודות מספרים לצד אזור השמות דרשו כ-950 פיקסלים, וברוחב
+  // הקריא (760) המספרים נדחסו. כאן כל מספר נושא את התווית שלו ("היקף 54 מ׳ ₪"),
+  // והזוגות זורמים בשורה ונשברים לשורה הבאה כשאין מקום — קריא בכל רוחב.
+  var RCOLS = [["היקף", "v"], ["מההון", "pct"], ["החזקה אחרי", "after"], ["כמות", "q"], ["שער", "px"]];
+  function rcols(b) {
+    // הסדר: מה שמשנה קודם — היקף וחלק מההון — ואחריהם הכמות והשער.
+    var want = b.cols || RCOLS, order = ["v", "pct", "after", "q", "px"];
+    return want.slice().sort(function (a, c) { return order.indexOf(a[1]) - order.indexOf(c[1]); });
+  }
+  var MET_L = F(500, 16), MET_V = { w: 700, s: 18, uw: 500, us: 0.8, fam: SANS };
 
   function chipList(r, withDate) {
     var chips = [];
@@ -1610,127 +1744,120 @@
   }
 
   function chipW(x, c) {
-    x.font = c.mono ? F(500, 13, MONO) : F(c.bold ? 700 : 600, 14);
+    x.font = c.mono ? F(500, 16, MONO) : F(c.bold ? 700 : 600, 16);
     return Math.ceil(x.measureText(c.t).width) + 20;
   }
 
-  function reportsLayout(x, b, inner) {
-    var rows = [];
-    (b.groups || []).forEach(function (grp) { rows = rows.concat(grp.rows || []); });
-    var colW = rcols(b).map(function (c) {
-      var head = measureMax(x, F(600, 15), [c[0]]);
-      var vals = Math.max.apply(null, [0].concat(rows.map(function (r) {
-        return valWidth(x, (r[c[1]] || "—") + (c[1] === "pct" && r.inh ? "*" : ""), rval(c));
-      })));
-      return Math.ceil(Math.max(head, vals)) + 30;
+  // זוגות התווית-ערך של שורה, מחולקים לשורות לפי הרוחב.
+  function metricLines(x, b, r, width) {
+    var out = [], cur = [], used = 0;
+    rcols(b).forEach(function (c) {
+      var v = r[c[1]];
+      if (v == null || v === "" || String(v).charAt(0) === "—") { return; }
+      v = String(v) + (c[1] === "pct" && r.inh ? "*" : "");
+      x.font = MET_L;
+      var lw = x.measureText(c[0]).width, vw = valWidth(x, v, MET_V), w = lw + 7 + vw;
+      if (cur.length && used + 22 + w > width) { out.push(cur); cur = []; used = 0; }
+      cur.push({ c: c, v: v, lw: lw, vw: vw, w: w });
+      used += (cur.length > 1 ? 22 : 0) + w;
     });
-    var zone = inner - sum(colW) - 16;
-    return { colW: colW, zone: zone };
+    if (cur.length) { out.push(cur); }
+    return out;
   }
 
-  // הרוחב שהגוש צריך: עמודות המספרים, 470 לחברה ולמדווח, ושוליים פנימיים.
-  function reportsNeed(x, b) {
-    var L = reportsLayout(x, b, 0);
-    return sum(L.colW) + 16 + 470 + 14 + TX * 2;
-  }
-
-  function reportRow(x, r, zone, withDate) {
+  function reportRow(x, b, r, width, withDate) {
     x.font = F(700, 21);
     var coW = x.measureText(r.co || "—").width;
     var chips = chipList(r, withDate), cw = sum(chips.map(function (c) { return chipW(x, c) + 8; }));
-    var ownLine = coW + 14 + cw > zone;
+    var ownLine = coW + 14 + cw > width;
     x.font = F(400, 18);
-    var who = wrap(x, (r.who || "—") + (r.type ? " · " + r.type : ""), zone);
+    var who = wrap(x, (r.who || "—") + (r.type ? " · " + r.type : ""), width);
     x.font = F(400, 16);
-    var ctrl = r.ctrl ? wrap(x, "בעל השליטה בו: " + r.ctrl, zone) : [];
-    var h = 18 + 30 + (ownLine ? 34 : 0) + who.length * 27 + ctrl.length * 23 + 16;
-    return { chips: chips, ownLine: ownLine, who: who, ctrl: ctrl, h: h };
+    var ctrl = r.ctrl ? wrap(x, "בעל השליטה בו: " + r.ctrl, width) : [];
+    var mets = metricLines(x, b, r, width);
+    var h = 16 + 28 + (ownLine ? 38 : 0) + who.length * 26 + ctrl.length * 22 +
+      (mets.length ? 10 + mets.length * 30 : 0) + 14;
+    return { chips: chips, ownLine: ownLine, who: who, ctrl: ctrl, mets: mets, h: h };
   }
 
-  // הדיווחים ממלאים את הכרטיס כמו טבלה: שורת כותרת כהה ושורות מתחלפות.
+  // הדיווחים ממלאים כרטיס: כותרת קבוצה (אם יש), ושורות מתחלפות.
   function reportsBlock(x, b, g, draw) {
     var groups = (b.groups || []).filter(function (grp) { return (grp.rows || []).length; });
     if (!groups.length) { return 0; }
-    var left = g.left + TX, right = g.right - TX - 14, inner = g.inner - TX * 2 - 14;
-    var L = reportsLayout(x, b, inner), HB = 50, GH = 56;
+    var P = 20, left = g.left + P, right = g.right - P, width = g.inner - P * 2, GH = 52;
     var lays = groups.map(function (grp) {
-      return grp.rows.map(function (r) { return reportRow(x, r, L.zone, b.dates); });
+      return grp.rows.map(function (r) { return reportRow(x, b, r, width, b.dates); });
     });
     x.font = F(400, 17);
-    var more = b.moreText ? wrap(x, b.moreText, inner) : [];
-    var h = HB + sum(groups.map(function (grp, gi) {
+    var more = b.moreText ? wrap(x, b.moreText, width) : [];
+    var h = 6 + sum(groups.map(function (grp, gi) {
       return (grp.label ? GH : 0) + sum(lays[gi].map(function (l) { return l.h; }));
-    })) + (more.length ? 20 + more.length * 26 : 0) + 8;
+    })) + (more.length ? 18 + more.length * 25 : 0) + 6;
     if (!draw) { return h; }
 
-    var y = g.top;
-    x.fillStyle = C.navy; x.fillRect(g.left, y, g.inner, HB);
-    x.direction = "rtl"; x.textAlign = "right";
-    x.font = F(600, 15); x.fillStyle = C.onNavy2;
-    x.fillText("חברה · מדווח", right, y + 31);
-    var colRight = [], cx = left + sum(L.colW);
-    rcols(b).forEach(function (c, i) {
-      colRight.push(cx);
-      x.fillText(c[0], cx - 12, y + 31);
-      cx -= L.colW[i];
-    });
-    y += HB;
-
-    var zi = 0;
+    var y = g.top + 6, zi = 0;
     groups.forEach(function (grp, gi) {
       if (grp.label) {
         x.direction = "rtl"; x.textAlign = "right";
         x.fillStyle = C.accent; x.font = F(700, 19);
-        x.fillText(grp.label, right, y + 36);
+        x.fillText(grp.label, right, y + 34);
         var lw = x.measureText(grp.label).width;
         if (grp.count) {
           x.fillStyle = C.faint; x.font = F(400, 16);
-          x.fillText(grp.count, right - lw - 14, y + 36);
-          lw += 14 + x.measureText(grp.count).width;
+          x.fillText(grp.count, right - lw - 12, y + 34);
+          lw += 12 + x.measureText(grp.count).width;
         }
         x.fillStyle = C.line;
-        x.fillRect(left, y + 30, Math.max(0, right - left - lw - 20), 1);
+        x.fillRect(left, y + 28, Math.max(0, width - lw - 18), 1);
         y += GH;
       }
       grp.rows.forEach(function (r, ri) {
-        var R = lays[gi][ri], zr = right, base = y + 18 + 22;
+        var R = lays[gi][ri], base = y + 16 + 22, dim = r.cnt === false;
         if (zi % 2 === 1) { x.fillStyle = C.zebra; x.fillRect(g.left, y, g.inner, R.h); }
+        if (zi > 0) { x.fillStyle = C.hair; x.fillRect(g.left, y, g.inner, 1); }
         zi += 1;
         x.direction = "rtl"; x.textAlign = "right";
-        x.fillStyle = C.ink; x.font = F(700, 21);
-        x.fillText(r.co || "—", zr, base);
+        x.fillStyle = dim ? C.muted : C.ink; x.font = F(700, 21);
+        x.fillText(r.co || "—", right, base);
         var coW = x.measureText(r.co || "—").width;
-        var chipX = R.ownLine ? zr : zr - coW - 14;
-        var chipY = R.ownLine ? base + 12 : base - 20;
+        var chipX = R.ownLine ? right : right - coW - 14;
+        var chipY = R.ownLine ? base + 12 : base - 22;
         R.chips.forEach(function (c) {
           var w = chipW(x, c);
           if (c.bg) {
-            x.fillStyle = c.bg; rr(x, chipX - w, chipY, w, 26, 7); x.fill();
+            x.fillStyle = c.bg; rr(x, chipX - w, chipY, w, 30, 8); x.fill();
           } else {
             x.strokeStyle = C.line; x.lineWidth = 1;
-            rr(x, chipX - w + 0.5, chipY + 0.5, w - 1, 25, 7); x.stroke();
+            rr(x, chipX - w + 0.5, chipY + 0.5, w - 1, 29, 8); x.stroke();
           }
           x.fillStyle = c.fg; x.textAlign = "center";
-          x.font = c.mono ? F(500, 13, MONO) : F(c.bold ? 700 : 600, 14);
-          x.fillText(c.t, chipX - w / 2, chipY + 18);
+          x.font = c.mono ? F(500, 16, MONO) : F(c.bold ? 700 : 600, 16);
+          x.fillText(c.t, chipX - w / 2, chipY + 21);
           chipX -= w + 8;
         });
         x.textAlign = "right";
-        var ty = base + (R.ownLine ? 34 : 0) + 30;
+        var ty = base + (R.ownLine ? 38 : 0) + 28;
         x.fillStyle = C.muted; x.font = F(400, 18);
-        R.who.forEach(function (ln, k) { x.fillText(ln, zr, ty + k * 27); });
-        ty += R.who.length * 27;
+        R.who.forEach(function (ln, k) { x.fillText(ln, right, ty + k * 26); });
+        ty += R.who.length * 26;
         if (R.ctrl.length) {
           x.fillStyle = C.faint; x.font = F(400, 16);
-          R.ctrl.forEach(function (ln, k) { x.fillText(ln, zr, ty - 4 + k * 23); });
+          R.ctrl.forEach(function (ln, k) { x.fillText(ln, right, ty - 4 + k * 22); });
+          ty += R.ctrl.length * 22;
         }
-        var dim = r.cnt === false;
-        rcols(b).forEach(function (c, i) {
-          var v = (r[c[1]] || "—") + (c[1] === "pct" && r.inh ? "*" : "");
-          var o = rval(c);
-          o.color = dim || v.charAt(0) === "—" ? C.faint : c[1] === "pct" ? C.accent : c[1] === "v" ? C.ink : C.muted;
-          o.ucolor = dim ? C.faint : C.muted;
-          drawVal(x, v, colRight[i] - 12, base, o);
+        // שורת המספרים: תווית מושתקת ומספר מודגש, חלק מההון בכחול
+        ty += 10;
+        R.mets.forEach(function (line, li) {
+          var cx = right, yy = ty + li * 30;
+          line.forEach(function (m) {
+            x.direction = "rtl"; x.textAlign = "right";
+            x.font = MET_L; x.fillStyle = C.faint;
+            x.fillText(m.c[0], cx, yy);
+            var o = { w: MET_V.w, s: MET_V.s, uw: MET_V.uw, us: MET_V.us, fam: MET_V.fam,
+              color: dim ? C.faint : m.c[1] === "pct" ? C.accent : C.ink, ucolor: dim ? C.faint : C.muted };
+            drawVal(x, m.v, cx - m.lw - 7, yy, o);
+            cx -= m.w + 22;
+          });
         });
         y += R.h;
       });
@@ -1739,7 +1866,7 @@
       x.fillStyle = C.hair; x.fillRect(g.left, y, g.inner, 1);
       x.direction = "rtl"; x.textAlign = "right";
       x.fillStyle = C.muted; x.font = F(400, 17);
-      more.forEach(function (ln, k) { x.fillText(ln, right, y + 31 + k * 26); });
+      more.forEach(function (ln, k) { x.fillText(ln, right, y + 30 + k * 25); });
     }
     return h;
   }
@@ -1776,31 +1903,33 @@
 
   // ---------------------------------------------------------------- תחתית
 
-  // פס כהה לכל הרוחב: מקור והסתייגות מימין, קרדיט ותאריך משמאל.
+  // פס כהה לכל הרוחב: מקור והסתייגות מימין, החתימה והתאריך משמאל. בלי כתובת
+  // האתר — יואב, 21/10/2026: "רק זכויות יוצרים שלי".
   function footer(x, d, g, draw) {
-    x.font = F(400, 16);
-    var src = wrap(x, d.source || SRC_TASE, g.inner - 300);
-    var h = 74 + src.length * 25;
+    x.font = F(400, 17);
+    var src = wrap(x, d.source || SRC_TASE, g.inner - 220);
+    var h = 36 + src.length * 25 + 30 + 22;
     if (!draw) { return h; }
     var y = g.top, W = g.W;
-    x.fillStyle = C.navy; x.fillRect(0, y, W, h);
+    x.fillStyle = "#0a1f38"; x.fillRect(0, y, W, h);
     var al = x.createLinearGradient(0, 0, W, 0);
-    al.addColorStop(0, C.accent); al.addColorStop(1, C.accent2);
+    al.addColorStop(0, "rgba(217,171,74,0)"); al.addColorStop(0.5, C.gold);
+    al.addColorStop(1, "rgba(217,171,74,0)");
     x.fillStyle = al; x.fillRect(0, y, W, 3);
     x.direction = "rtl"; x.textAlign = "right";
-    x.fillStyle = C.onNavy2; x.font = F(400, 16);
-    src.forEach(function (ln, k) { x.fillText(ln, g.right, y + 38 + k * 25); });
-    x.fillStyle = C.onNavy3; x.font = F(400, 14);
-    x.fillText("מידע ונתונים בלבד — אינו המלצת השקעה.", g.right, y + 38 + src.length * 25 + 6);
+    x.fillStyle = C.onNavy2; x.font = F(400, 17);
+    src.forEach(function (ln, k) { x.fillText(ln, g.right, y + 36 + k * 25); });
+    x.fillStyle = C.onNavy3; x.font = F(400, 16);
+    x.fillText("מידע ונתונים בלבד — אינו המלצת השקעה.", g.right, y + 36 + src.length * 25 + 8);
     x.direction = "ltr"; x.textAlign = "left";
-    x.fillStyle = C.brand; x.font = F(700, 18);
-    x.fillText("© @Cigarbutthunte7", g.left, y + 40);
+    x.fillStyle = C.gold2; x.font = F(700, 19);
+    x.fillText(HANDLE, g.left, y + 38);
     var now = new Date();
     var stamp = "הופק " + ("0" + now.getDate()).slice(-2) + "/" + ("0" + (now.getMonth() + 1)).slice(-2) +
       "/" + now.getFullYear();
     x.direction = "rtl"; x.textAlign = "left";
-    x.fillStyle = C.onNavy3; x.font = F(400, 14);
-    x.fillText(stamp, g.left, y + 66);
+    x.fillStyle = C.onNavy3; x.font = F(400, 16);
+    x.fillText(stamp, g.left, y + 64);
     return h;
   }
 
@@ -1815,18 +1944,10 @@
   function render(d) {
     var probe = document.createElement("canvas").getContext("2d");
     var blocks = (d.blocks || []).filter(function (b) { return BLOCKS[b.type]; });
-    var inner = W0 - PAD * 2, minInner = 0, cap = WMAX - PAD * 2;
-    blocks.forEach(function (b) {
-      if (b.type === "table" && b.cols && (b.rows || []).length) {
-        var T = tableNat(probe, b);
-        inner = Math.max(inner, Math.min(T.sumNat + TX * 2, cap));
-        minInner = Math.max(minInner, T.sumMin + TX * 2);
-      }
-      if (b.type === "reports") {
-        inner = Math.max(inner, Math.min(reportsNeed(probe, b), cap));
-      }
-    });
-    inner = Math.max(inner, minInner);
+    // **רוחב קבוע.** הקנבס כבר אינו מתרחב לטבלה רחבה: טבלה של 1680 פיקסלים
+    // הגיעה לטלפון בטקסט של חמישה פיקסלים. טבלה רחבה נבנית צרה — עמודות
+    // צדדיות עוברות לשורת משנה (אפשרות sub) — ועמודות טקסט נשברות.
+    var inner = W0 - PAD * 2;
     var W = inner + PAD * 2;
     var g = { left: PAD, right: W - PAD, inner: inner, top: 0, W: W };
     var over = blocks.length > 0 && blocks[0].type === "stats" && (blocks[0].items || []).length > 0;
@@ -1841,7 +1962,7 @@
     // **קנבס גדול מדי יוצא ריק, בלי שגיאה.** iOS Safari מגביל את שטח הקנבס
     // לכ-16.7 מיליון פיקסלים, ומעבר לכך toBlob מחזיר null. הרזולוציה יורדת
     // במקום שהתמונה תיעלם.
-    var S = Math.min(2, Math.sqrt(16e6 / (W * H)), 16000 / W, 16000 / H);
+    var S = Math.min(OUT / W, Math.sqrt(16e6 / (W * H)), 16000 / W, 16000 / H);
     var cv = document.createElement("canvas");
     cv.width = Math.round(W * S); cv.height = Math.round(H * S);
     var x = cv.getContext("2d");
