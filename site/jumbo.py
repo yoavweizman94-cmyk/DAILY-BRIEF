@@ -125,7 +125,7 @@ def aggregate_all(otc_rows: list[dict], j_rows: list[dict]) -> list[dict]:
         e = out.setdefault(r["security_id"], {
             "sid": r["security_id"], "name": _name(r.get("name")), "covered": False,
             "otc": 0.0, "jumbo": 0.0, "units": 0.0, "n_otc": 0, "days": set(),
-            "issued": None})
+            "issued": None, "prem": []})
         e["covered"] = e["covered"] or bool(r.get("covered"))
         e["days"].add(r["date"])
         return e
@@ -135,6 +135,10 @@ def aggregate_all(otc_rows: list[dict], j_rows: list[dict]) -> list[dict]:
         e["otc"] += r["value"]
         e["units"] += r.get("units") or 0
         e["n_otc"] += 1
+        # **הסטייה משער הבסיס — רק מחוץ לבורסה.** לעסקה מתואמת אין מחיר
+        # (GTO מוסר תמורה בלבד), ולכן נייר שהיו בו רק מתואמות נשאר בלי ערך.
+        if r.get("premium_pct") is not None:
+            e["prem"].append(r["premium_pct"])
     for r in j_rows:
         e = ent(r)
         e["jumbo"] += r["value"]
@@ -143,6 +147,9 @@ def aggregate_all(otc_rows: list[dict], j_rows: list[dict]) -> list[dict]:
     for e in out.values():
         e["days"] = len(e["days"])
         e["value"] = e["otc"] + e["jumbo"]
+        # כמו בטבלאות מחוץ לבורסה: ממוצע ליום בודד, חציון לתקופה.
+        e["mean_prem"] = round(statistics.fmean(e["prem"]), 2) if e["prem"] else None
+        e["median_prem"] = round(statistics.median(e["prem"]), 2) if e["prem"] else None
         issued = (cap.get(e["sid"]) or {}).get("issued") or e["issued"]
         e["pct_capital"] = round(e["units"] / issued * 100, 3) if issued and e["units"] else None
     return sorted(out.values(), key=lambda e: -e["value"])
@@ -263,7 +270,7 @@ def _cell(key: str, v, trend: str = "", bold: bool = False) -> str:
         return "<td></td>"
     if key == "value":
         return f'<td class="key" dir="ltr">{"<b>" + t + "</b>" if bold else t}</td>'
-    if key == "chg":
+    if key in ("chg", "prem"):
         return f'<td class="trend {trend}" dir="ltr">{t}</td>'
     return f'<td dir="ltr">{"<b>" + t + "</b>" if bold else t}</td>'
 
@@ -367,7 +374,12 @@ def table_a(title: str, sub: str, otc_rows: list[dict], j_rows: list[dict], key:
         cols.append(["ימים", "days", "ltr"])
     # הסך כפס מוערם משני המנגנונים, וריבוע בצבע החלק בכותרת של כל אחד —
     # כך רואים לא רק כמה עבר בנייר אלא באיזה ערוץ.
-    cols += [["מחוץ לבורסה", "otc", "ltr", {"swatch": 0}], ["מתואמות", "jumbo", "ltr", {"swatch": 1}],
+    fld = "mean_prem" if day_mode else "median_prem"
+    prem_head = ("ממוצע" if day_mode else "חציון") + " מול הבסיס"
+    # הסטייה של מחיר העסקה מחוץ לבורסה משער הבסיס של אותו בוקר — ליד ההיקף מחוץ
+    # לבורסה, כי היא שייכת לו ולא למתואמות.
+    cols += [["מחוץ לבורסה", "otc", "ltr", {"swatch": 0}], [prem_head, "prem", "ltr"],
+             ["מתואמות", "jumbo", "ltr", {"swatch": 1}],
              ["סה\"כ", "value", "ltr", {"viz": "stack", "parts": ["otc", "jumbo"]}],
              ["% מההון (משוער)", "cap", "ltr"]]
     shown = agg[:limit]
@@ -375,9 +387,11 @@ def table_a(title: str, sub: str, otc_rows: list[dict], j_rows: list[dict], key:
               "otc": otc.money(e["otc"]) if e["otc"] else "—",
               "jumbo": otc.money(e["jumbo"]) if e["jumbo"] else "—",
               "value": otc.money(e["value"]), "cap": _pct(e["pct_capital"], 2),
+              "prem": otc.signed(e[fld]) if e[fld] is not None else "—",
+              "_cls": otc.cls(e[fld]),
               "meta": " · ".join(t for t in [
-                  (f'מחוץ לבורסה {otc.nb(otc.money(e["otc"]))}' if e["otc"] else ""),
-                  (f'מתואמות {otc.nb(otc.money(e["jumbo"]))}' if e["jumbo"] else ""),
+                  (otc.nb(f'מחוץ לבורסה {otc.money(e["otc"])}') if e["otc"] else ""),
+                  (otc.nb(f'מתואמות {otc.money(e["jumbo"])}') if e["jumbo"] else ""),
                   (f'{e["days"]} ימים' if not day_mode and e["days"] > 1 else ""),
                   (f'{_pct(e["pct_capital"], 2)} מההון' if e["pct_capital"] else "")] if t)}
              for e in shown]
@@ -385,14 +399,15 @@ def table_a(title: str, sub: str, otc_rows: list[dict], j_rows: list[dict], key:
     more = (f"ועוד {rest} ניירות בהיקף {otc.money(sum(e['value'] for e in agg[limit:]))}."
             if rest > 0 else "")
     total_row = {"name": "סך הכל", "days": "", "otc": otc.money(o), "jumbo": otc.money(j),
-                 "value": otc.money(total), "cap": ""}
+                 "value": otc.money(total), "cap": "", "prem": ""}
     stats = [{"label": "סה\"כ", "value": otc.money(total), "cap": f"{len(agg)} ניירות"},
              {"label": "מחוץ לבורסה", "value": otc.money(o)},
              {"label": "מתואמות", "value": otc.money(j)}]
     last = max([r["date"] for r in otc_rows] + [r["date"] for r in j_rows])
     # בתמונה: השם עם הפירוק לשני המנגנונים בשורת המשנה, והסך כפס מוערם.
     img = [["נייר", "name", "rtl", {"sub": "meta"}],
-           ["סה\"כ", "value", "ltr", {"viz": "stack", "parts": ["otc", "jumbo"]}]]
+           ["סה\"כ", "value", "ltr", {"viz": "stack", "parts": ["otc", "jumbo"]}],
+           [prem_head, "prem", "ltr", {"viz": "div"}]]
     return _section(title, sub, key, cols, cells, total_row, stats, review_bits_a(agg, label),
                     more, f"tlv-blocks-{key}-{last}", KICKER_A, SRC_ALL,
                     tweet_a(agg, label), notes, legend=["מחוץ לבורסה", "מתואמות"], img_cols=img)
@@ -607,14 +622,16 @@ def tiles_a(a: dict, j_rows: list[dict], year: str) -> str:
          "legend": ["מחוץ לבורסה", "מתואמות"],
          "cols": [["נייר", "name", "rtl", {"sub": "meta"}],
                   ["סה\"כ", "value", "ltr", {"viz": "stack", "parts": ["otc", "jumbo"]}],
-                  ["נתח מהיום", "share", "ltr"]],
+                  ["מול הבסיס", "prem", "ltr", {"viz": "div"}],
+                  ["נתח", "share", "ltr"]],
          "rows": [{"name": e["name"], "otc": otc.money(e["otc"]) if e["otc"] else "—",
                    "jumbo": otc.money(e["jumbo"]) if e["jumbo"] else "—",
                    "value": otc.money(e["value"]),
                    "share": _pct(e["value"] / day_tot * 100) if day_tot else "—",
+                   "prem": otc.signed(e["mean_prem"]) if e["mean_prem"] is not None else "—",
                    "meta": " · ".join(t for t in [
-                       (f'מחוץ לבורסה {otc.nb(otc.money(e["otc"]))}' if e["otc"] else ""),
-                       (f'מתואמות {otc.nb(otc.money(e["jumbo"]))}' if e["jumbo"] else "")] if t)}
+                       (otc.nb(f'מחוץ לבורסה {otc.money(e["otc"])}') if e["otc"] else ""),
+                       (otc.nb(f'מתואמות {otc.money(e["jumbo"])}') if e["jumbo"] else "")] if t)}
                   for e in top],
          "moreText": (f"ועוד {len(rest)} ניירות · {otc.money(sum(e['value'] for e in rest))}"
                       if rest else ""),
@@ -647,7 +664,11 @@ def method_a() -> str:
             'לבורסה מסקירת הבורסה וההיקף במתואמות מ-GTO, באותם ימים. "% מההון" מצרף את '
             'היחידות מחוץ לבורסה בפועל ואת היחידות המשוערות במתואמות, מול ההון המונפק. '
             'כל הטבלאות כאן מתחילות ביום הראשון שנאסף מ-GTO — גם לעסקאות מחוץ לבורסה — '
-            'כדי ששני הסוגים יימדדו על אותה תקופה.</p>')
+            'כדי ששני הסוגים יימדדו על אותה תקופה. "מול הבסיס" הוא הסטייה של מחיר העסקה '
+            'מחוץ לבורסה משער הבסיס של אותו בוקר — ממוצע ביום, חציון בחודש ובשנה. למתואמות '
+            'אין מחיר לעסקה, ולכן נייר שהיו בו רק מתואמות מסומן "—". סטייה משער הבסיס '
+            'נקראת יחד עם תנועת המניה באותו יום: עסקה ב-5% מתחת לבסיס במניה שירדה 5% '
+            'נעשתה במחיר הנעילה, ואין בה הנחה.</p>')
 
 
 # --- לשוניות --------------------------------------------------------------------------
