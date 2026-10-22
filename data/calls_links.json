@@ -151,5 +151,29 @@
    "https://www.matrix-globalservices.com/",
    "https://link.accessidoc.com/lNvyv4gYo5TkrlKXc5ISNaaQ91VhDCZqirVADWeXAjHtPxmJ59HNmehaTwWJfqJgCr0rGdm8YO-8J8d1RsVH8kBGt1"
   ]
+ },
+ "1777461": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_lVk-4fxIRLSIvbbSguLxNQ",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_lVk-4fxIRLSIvbbSguLxNQ"
+  ],
+  "others": []
+ },
+ "1777281": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_NgZCX7gTSKOJgqgjZBDCvw",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_NgZCX7gTSKOJgqgjZBDCvw"
+  ],
+  "others": []
+ },
+ "1777384": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_suyFmS6-RvCcTDnm0FgP_A",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_suyFmS6-RvCcTDnm0FgP_A"
+  ],
+  "others": []
  }
 }
