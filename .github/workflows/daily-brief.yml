@@ -317,9 +317,14 @@ jobs:
           # (offex_pull, otc_pull), ו-final-deploy בונה את העמוד. כשהופעלה גם היא,
           # שתיהן כתבו את otc/2026.jsonl באותן דקות, והקונפליקט זרק ברייף ששולם
           # (12/10/2026, 8.07 דולר).
+          # **ותמלולי שיחות המשקיעים** (globes-calls, מצב run) — מ-23/10/2026, כשיואב ביקש
+          # שהכפתור ירענן "את כל הנתונים הקיימים בכל האתר". רק תמליל חדש מסוכם בתשלום.
+          # מחוץ לרשימה בכוונה: filings-backfill (מילוי היסטוריה לאחור, לא רענון),
+          # nadlan-scan (Govmap דורש reCAPTCHA), והעסקאות המתואמות — הן נאספות במחשב
+          # המשרד מ-GTO כל חצי שעה, ואין להן ריצה בענן.
           for spec in 'maya-watch.yml|{}' 'auto-watch.yml|{"force":"true"}' \
                       'commodities-watch.yml|{"force":"true"}' 'cbs-watch.yml|{}' \
-                      'gov-watch.yml|{}' 'headlines.yml|{}'; do
+                      'gov-watch.yml|{}' 'headlines.yml|{}' 'globes-calls.yml|{"mode":"run"}'; do
             wf=${spec%%|*}
             inputs=${spec#*|}
             code=$(curl -sS -o resp.txt -w '%{http_code}' -X POST \

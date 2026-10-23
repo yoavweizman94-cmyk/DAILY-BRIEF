@@ -867,7 +867,7 @@ def _costs_notice() -> None:
 # ש-/api/brief אישר בעלות; בלי אישור אין כפתור, ובלי אסימון הפעלה הכפתור אומר
 # מה להגדיר. ההרשאה נאכפת בשרת, לא כאן — ההסתרה היא נוחות ולא הגנה.
 RUN_BRIEF = """<section class="runbrief" id="runbrief" hidden>
-  <label for="rb-ed">הפקת ברייף עכשיו</label>
+  <label for="rb-ed">ברייף ורענון כל האתר</label>
   <select id="rb-ed"></select>
   <button type="button" id="rb-go">הפק</button>
   <span class="msg" id="rb-msg"></span>
