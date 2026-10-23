@@ -47,6 +47,8 @@ SOURCES = ROOT / "config" / "sources.yaml"
 COMPANIES = ROOT / "config" / "companies.yaml"
 OUT = ROOT / "output" / "digest"
 REGIONS = ("ישראל", "עולם")
+DIRECTIONS = ("חיובי", "שלילי", "מעורב", "ניטרלי")
+MAX_IMPACTS = 4
 # Google News מוסיף לכל כותרת " - שם האתר"; זה מקור, לא חלק מהכותרת
 GN_TAIL = re.compile(r"\s+[-–—]\s+[^-–—]{2,40}$")
 
@@ -55,8 +57,8 @@ PROMPT = """אתה עורך הכותרות של TLV TASE View. הקהל: מנה�
 ובוחר מהם רק את מה שמהותי לו. הקלט מגיע ב-stdin: רשימת חברות הכיסוי לפי סקטור,
 הכותרות שכבר פורסמו ב-24 השעות האחרונות, והפריטים החדשים הממוספרים.
 
-מהותי = עשוי להזיז מחיר, מרווח, ביקוש, עלות מימון או רגולציה של חברות הכיסוי או של
-הסקטורים שלהן:
+מהותי = עשוי להזיז מחיר, מרווח, ביקוש, עלות מימון או רגולציה של חברות הכיסוי, של
+הסקטורים שלהן, או של ענף או שוק מרכזי בארץ ובעולם:
 - מאקרו: בנקים מרכזיים, אינפלציה, תשואות, מט"ח, צמיחה ותעסוקה, מדיניות פיסקלית.
 - ישראל: רגולציה, תקציב ומיסוי, החלטות ממשלה, דיווחים ועסקאות של חברות כיסוי,
   גיאופוליטיקה עם השלכה כלכלית.
@@ -64,18 +66,27 @@ PROMPT = """אתה עורך הכותרות של TLV TASE View. הקהל: מנה�
   מחזור השבבים וה-AI; שילוח ושרשרת אספקה; תזוזות שוק עם סיבה.
 לא מהותי: פלילים, ספורט, תרבות, צרכנות אישית, טורי דעה וכתבות מגמה בלי אירוע חדש,
 הצהרות של מנכ"לים בלי החלטה, תוכן שיווקי, שינוי מחיר יעד של אנליסט לחברה שאינה בכיסוי,
-סיכום מסחר בלי סיבה — וגם עסקה או אירוע בחו"ל שאין להם קשר לחברת כיסוי, למתחרה, ללקוח
-או לספק שלה, או לדרייבר שהיא תלויה בו.
+סיכום מסחר בלי סיבה — וגם אירוע בחו"ל שאינו מזיז ענף או שוק, ואין לו קשר לחברת כיסוי,
+למתחרה, ללקוח או לספק שלה, או לדרייבר שהיא תלויה בו.
 
 כללים:
 1. אל תמלא מכסה. בריצה שקטה בחר מעט; בריצה עמוסה — עד כ-20, החשובים ביותר.
 2. אותו סיפור מכמה מקורות = פריט אחד, וכל המקורות שלו ב-sources.
 3. סיפור שכבר מופיע ב"כבר פורסם" — דלג, אלא אם יש בו התפתחות מהותית חדשה; אז
    הכותרת אומרת מה חדש.
-4. זו תמצית, לא סקירה. headline: כותרת עברית עניינית, עד 12 מילים. summary: משפט
-   אחד, עד 30 מילים — מה קרה, עם המספרים שבפריט. why: עד 20 מילים — איזה דרייבר
-   זה מזיז, אילו חברות כיסוי או סקטורים תלויים בו ובאיזה כיוון; קשר עקיף נכתב
-   כעקיף.
+4. לכל כותרת ארבעה רבדים, מהעובדה אל ההשלכה:
+   - headline: כותרת עברית עניינית, עד 12 מילים.
+   - summary — מה קרה: משפט או שניים, עד 45 מילים, עם המספרים שבפריט. עברית פשוטה;
+     מונח מקצועי שאין בלעדיו — עם הסבר קצר בסוגריים.
+   - simple — בפשטות: משפט או שניים, עד 40 מילים, שמסבירים לקורא נבון שאינו מהתחום
+     מה זה אומר ולמה זה משנה — המנגנון ולא העובדה ("ריבית גבוהה מייקרת משכנתאות,
+     ולכן..."). בלי מספרים שאינם בפריט.
+   - impacts — ההשפעות: אחת עד ארבע, כל אחת על ענף, שוק או קבוצת חברות — בארץ או
+     בעולם, **גם כשאין בהם חברת כיסוי** (למשל "חברות תעופה", "יצואנים ישראלים",
+     "בנקים בארה"ב", "יצרני שבבים"). לכל אחת: sector — שם הענף, קצר; direction —
+     חיובי / שלילי / מעורב / ניטרלי; how — עד 25 מילים: דרך מה זה עובר (מחיר מכירה,
+     עלות, ביקוש, מימון, רגולציה, תחרות) ובאיזה טווח זמן. קשר עקיף נכתב כעקיף.
+     השפעה שאינה נובעת מהפריט — אל תכתוב; עדיף אחת אמיתית מארבע מנופחות.
 5. כל מספר — רק מתוך הפריטים שב-sources של אותה כותרת. אין מספרים מהזיכרון. פריט
    שיש בו רק כותרת — אל תסיק מעבר לה.
 6. companies: רק שמות מרשימת הכיסוי, בדיוק כפי שהם כתובים בה, ורק כשהקשר ממשי.
@@ -96,7 +107,7 @@ def schema(domains: list[str]) -> dict:
         "properties": {"items": {"type": "array", "items": {
             "type": "object", "additionalProperties": False,
             "required": ["sources", "domain", "region", "important", "headline", "summary",
-                         "why", "companies"],
+                         "simple", "impacts", "companies"],
             "properties": {
                 "sources": {"type": "array", "items": {"type": "integer"}},
                 "domain": {"type": "string", "enum": domains},
@@ -104,7 +115,15 @@ def schema(domains: list[str]) -> dict:
                 "important": {"type": "boolean"},
                 "headline": {"type": "string"},
                 "summary": {"type": "string"},
-                "why": {"type": "string"},
+                "simple": {"type": "string"},
+                "impacts": {"type": "array", "items": {
+                    "type": "object", "additionalProperties": False,
+                    "required": ["sector", "direction", "how"],
+                    "properties": {
+                        "sector": {"type": "string"},
+                        "direction": {"type": "string", "enum": list(DIRECTIONS)},
+                        "how": {"type": "string"},
+                    }}},
                 "companies": {"type": "array", "items": {"type": "string"}},
             }}}},
     }
@@ -227,7 +246,9 @@ def select(items: list[dict], cfg: dict, published: list[dict]) -> tuple[list[di
             + f"\n\n=== חברות הכיסוי לפי סקטור ===\n{cov}\n\n"
             f"=== כבר פורסם ב-24 השעות האחרונות ===\n{done}\n\n"
             f"=== פריטים חדשים ({len(items)}) ===\n{items_block(items)}")
-    res, err, usd = _api.ask_json(PROMPT, data, schema(domains), job="digest", max_tokens=12000,
+    # **פלט ארוך יותר בכוונה** (23/10/2026): הסבר בפשטות והשפעות לפי ענף לכל כותרת —
+    # בערך פי שלושה טקסט לפריט. 20,000 טוקנים הם ~$0.30 בריצה עמוסה במחירון Sonnet.
+    res, err, usd = _api.ask_json(PROMPT, data, schema(domains), job="digest", max_tokens=20000,
                                   max_usd=float(cfg["params"]["max_usd"]))
     stats = {"fixed": 0, "dropped": 0, "usd": round(usd, 3)}
     if err:
@@ -248,15 +269,27 @@ def select(items: list[dict], cfg: dict, published: list[dict]) -> tuple[list[di
             continue
         cited = [items[n - 1] for n in srcs]
         source = " ".join(f"{c['title']} {c['body']}" for c in cited)
-        f = {k: " ".join(str(r.get(k) or "").split()) for k in ("headline", "summary", "why")}
+        f = {k: " ".join(str(r.get(k) or "").split()) for k in ("headline", "summary", "simple")}
         orig = False
         if not f["headline"] or bad_numbers(f["headline"], source):
             f["headline"], orig = cited[0]["title"], True
             stats["fixed"] += 1
-        for k in ("summary", "why"):
+        for k in ("summary", "simple"):
             if bad_numbers(f[k], source):
                 f[k] = ""
                 stats["fixed"] += 1
+        # השפעה עם מספר שאינו בפריט — נזרקת לבדה; שאר ההשפעות נשארות
+        impacts = []
+        for im in r.get("impacts") or []:
+            sec = " ".join(str(im.get("sector") or "").split())
+            how = " ".join(str(im.get("how") or "").split())
+            if not sec or not how or im.get("direction") not in DIRECTIONS:
+                continue
+            if bad_numbers(sec + " " + how, source):
+                stats["fixed"] += 1
+                continue
+            impacts.append({"sector": sec, "direction": im["direction"], "how": how})
+        impacts = impacts[:MAX_IMPACTS]
         sid = "dg:" + hashlib.sha1("|".join(sorted(c["id"] for c in cited)).encode()).hexdigest()[:16]
         if sid in used:
             continue
@@ -265,7 +298,7 @@ def select(items: list[dict], cfg: dict, published: list[dict]) -> tuple[list[di
             "id": sid, "ts": max(c["ts"] for c in cited), "domain": r["domain"],
             "region": r["region"], "level": 3 if r.get("important") is True else 2,
             "headline": f["headline"], "orig_title": orig, "summary": f["summary"],
-            "why": f["why"],
+            "simple": f["simple"], "impacts": impacts,
             "companies": [c for c in r.get("companies") or [] if c in names],
             "sources": [{"name": c["source"], "url": c["url"], "title": c["title"]} for c in cited],
         })

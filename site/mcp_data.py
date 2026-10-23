@@ -53,7 +53,7 @@ COMPANY_KEYS = ("name_he", "name_en", "aliases", "listing", "tase_id", "sector",
                 "tase_sector", "maya_company_id", "generic_name", "drivers_extra")
 CALL_KEYS = ("company", "date", "time", "period", "link", "link_certain",
              "ambiguous", "other_links", "report_url", "coverage")
-HEADLINE_KEYS = ("id", "ts", "headline", "summary", "why", "level", "companies",
+HEADLINE_KEYS = ("id", "ts", "headline", "summary", "simple", "impacts", "why", "level", "companies",
                  "sources", "topics")
 CITY_KEYS = ("region", "n", "n_new", "n_used", "ppsm", "ppsm_new", "ppsm_used",
              "premium_new", "price", "area", "quarters", "level", "qoq", "yoy",

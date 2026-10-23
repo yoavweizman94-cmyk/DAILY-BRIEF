@@ -22,6 +22,8 @@ OUT = ROOT / "output" / "digest"
 CFG = ROOT / "config" / "digest.yaml"
 SOURCES = ROOT / "config" / "sources.yaml"
 REGIONS = ("ישראל", "עולם")
+DIR_CLASS = {"חיובי": "up", "שלילי": "down", "מעורב": "mixed"}
+DIR_MARK = {"חיובי": "▲", "שלילי": "▼", "מעורב": "◆", "ניטרלי": "●"}
 
 
 def _jsonl(p: Path) -> list[dict]:
@@ -97,10 +99,21 @@ def _item(r: dict, latest: str | None, today) -> str:
     srcs = " · ".join(links)
     cos = ("" if not r.get("companies") else
            '<div class="cc-cos">' + "".join(f'<span class="co">{escape(c)}</span>' for c in r["companies"]) + "</div>")
+    # **ההשפעות לפי ענף** (מ-23/10/2026): לכל ענף כיוון — סמל ומילה, לא צבע לבדו —
+    # והמנגנון. כותרות ישנות נושאות "למה זה חשוב" בלבד, והן מוצגות כפי שהיו.
+    fx = ""
+    if r.get("impacts"):
+        fx = ('<ul class="dg-fx">' + "".join(
+            f'<li><span class="cbs-dir {DIR_CLASS.get(i["direction"], "flat")}">'
+            f'{DIR_MARK.get(i["direction"], "")} {escape(i["direction"])}</span>'
+            f'<span><b>{_txt(i["sector"])}</b> — {_txt(i["how"])}</span></li>'
+            for i in r["impacts"]) + "</ul>")
     return (f'<article class="dg-item" id="{escape(r["id"])}">'
             f'<p class="dg-meta"><span class="dg-time">{_when(r.get("ts"), today)}</span>{tags}</p>'
             f'<h3 dir="auto">{_txt(r["headline"])}</h3>'
             + (f'<p class="dg-sum">{_txt(r["summary"])}</p>' if r.get("summary") else "")
+            + (f'<p class="dg-simple"><b>בפשטות:</b> {_txt(r["simple"])}</p>' if r.get("simple") else "")
+            + fx
             + (f'<p class="dg-why"><b>למה זה חשוב:</b> {_txt(r["why"])}</p>' if r.get("why") else "")
             + cos
             + (f'<p class="dg-src">{srcs}</p>' if srcs else "")
@@ -117,8 +130,9 @@ def page(data: dict) -> str:
         stamp += f' · <span class="stale">העדכון של {_stamp(last.get("at"))} נכשל</span>'
     head = (f'<div class="dash-head"><h1>כותרות</h1><span class="stamp">{stamp}</span></div>')
     names = _feed_names()
-    lead = (f'<p class="lead">מה שמהותי לחברות הכיסוי מהחדשות בארץ ובעולם, בתמצית ולפי תחום — '
-            f'נבחר כל שלוש שעות מתוך {len(names)} אתרי חדשות ותעשייה. '
+    lead = (f'<p class="lead">מה שמהותי לשוק ולחברות הכיסוי מהחדשות בארץ ובעולם, לפי תחום — '
+            f'נבחר כל שלוש שעות מתוך {len(names)} אתרי חדשות ותעשייה. לכל כותרת: מה קרה, '
+            'מה זה אומר בפשטות, ואילו ענפים זה מזיז ולאיזה כיוון — גם מחוץ לחברות הכיסוי. '
             f'{data["hours"]} השעות האחרונות; מה שנוסף בעדכון האחרון מסומן "חדש".</p>')
     if not items:
         return "\n".join([head, lead, '<p class="au-quiet">טרם נבחרו כותרות. העמוד מתעדכן כל שלוש שעות.</p>'])
