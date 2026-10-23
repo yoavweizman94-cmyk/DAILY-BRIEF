@@ -475,7 +475,7 @@ const TOOLS = [
   },
   {
     name: "headlines",
-    description: "הכותרות המהותיות מהחדשות בארץ ובעולם ביממה האחרונה, עם סיכום, 'למה זה חשוב', חברות כיסוי נוגעות ומקורות.",
+    description: "הכותרות המהותיות מהחדשות בארץ ובעולם ביממה האחרונה: מה קרה, הסבר בפשטות, השפעות לפי ענף (גם מחוץ לכיסוי) עם כיוון, חברות כיסוי נוגעות ומקורות.",
     inputSchema: {
       type: "object",
       properties: {
@@ -494,7 +494,10 @@ const TOOLS = [
       if (!sel.length) return "אין כותרות תואמות.";
       return `${sel.length} כותרות (${d.hours || 24} שעות אחרונות):\n\n` + sel.slice(0, limit).map((r) => [
         `### ${r.headline}${r.level === 3 ? " · חשוב" : ""} · ${(r.ts || "").replace("T", " ").slice(0, 16)}`,
-        r.summary || "", r.why ? `למה זה חשוב: ${r.why}` : "",
+        r.summary || "", r.simple ? `בפשטות: ${r.simple}` : "",
+        // השפעות לפי ענף (מ-23/10/2026); כותרות ישנות נושאות "למה זה חשוב" בלבד
+        (r.impacts || []).map((i) => `• ${i.sector} — ${i.direction}: ${i.how}`).join("\n"),
+        r.why ? `למה זה חשוב: ${r.why}` : "",
         (r.companies || []).length ? `חברות: ${r.companies.join(", ")}` : "",
         (r.sources || []).length ? "מקורות: " + r.sources.map((s) => `${s.name} ${s.url || ""}`).join(" · ") : "",
       ].filter(Boolean).join("\n")).join("\n\n");
