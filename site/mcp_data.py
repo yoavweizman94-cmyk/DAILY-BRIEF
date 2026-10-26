@@ -18,6 +18,7 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import commodities as cm
 import nadlan
 import nadlan_stats as ns
 
@@ -192,9 +193,16 @@ def export(out: Path, *, briefs: list[tuple[str, str, str, Path]], markets, te,
     # --- סחורות ------------------------------------------------------------------
     snaps = commod.get("snaps") or []
     analyses = commod.get("analyses") or []
+    # **"קודם" הוא המדידה שלפני המחירים המוצגים, לא הקובץ הקודם.** כש-Trading Economics
+    # נפל (26/10/2026, מכסה), התמונה האחרונה נושאת מחירים מיום קודם עם te_asof, והקובץ
+    # שלפניה הוא אותם מחירים בדיוק — "קודם בקובץ" היה מראה אפס שינוי.
+    latest = cm._price_snap(snaps) or None
+    asof = (latest or {}).get("te_asof") or (latest or {}).get("date") or ""
+    prev = next((s for s in reversed(snaps) if s.get("te") and not cm._stale(s)
+                 and (s.get("date") or "") < asof), None)
     _dump(d / "commodities.json", {
-        "latest": snaps[-1] if snaps else None,
-        "previous": snaps[-2] if len(snaps) > 1 else None,
+        "latest": latest,
+        "previous": prev,
         "items": (commod.get("items") or [])[:MAX_COMMODITY_ITEMS],
         "analysis": analyses[-1] if analyses else None,
     })

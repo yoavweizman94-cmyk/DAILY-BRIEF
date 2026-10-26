@@ -588,7 +588,11 @@ const TOOLS = [
       const te = L.te || {};
       const teKeys = Object.keys(te).filter((k) => !a.query || has(`${k} ${te[k].Name || ""} ${te[k].Group || ""}`, a.query));
       if (teKeys.length) {
-        out.push(`מחירי ספוט, Trading Economics (${L.date || "?"}, נמשך ${L.fetched_at || "?"}; קודם ${P.date || "—"})`);
+        // te_asof: Trading Economics נפל, והמחירים הם מהמשיכה המוצלחת האחרונה — לא של היום
+        const when = L.te_asof && L.te_asof !== L.date
+          ? `המחירים מ-${L.te_asof} ולא מ-${L.date}: ${L.te_error || "המשיכה נכשלה"}`
+          : `${L.date || "?"}, נמשך ${L.fetched_at || "?"}`;
+        out.push(`מחירי ספוט, Trading Economics (${when}; קודם ${P.date || "—"})`);
         out.push("| סחורה | קבוצה | מחיר | יחידה | יומי % | קודם בקובץ | תאריך |", "|---|---|---|---|---|---|---|");
         for (const k of teKeys) {
           const v = te[k], p = (P.te || {})[k];
