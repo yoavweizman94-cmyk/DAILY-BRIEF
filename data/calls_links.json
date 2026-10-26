@@ -180,5 +180,69 @@
   "certain": false,
   "known": [],
   "others": []
+ },
+ "1777861": {
+  "link": "https://protect.checkpoint.com/v2/r02/___https://us02web.zoom.us/webinar/register/WN_gnsWb__aRB6_l7kyjDRvJw___.Y3AxZTplbGFsY2hlY2twb2ludDpjOm86ODZlMWI3ZDRiNTdhMDQ3MWZkYTMyODA1ODMzOGQ0M2Y6NzozNTBiOmViZmUxODYxYjUyNDgzMjdmYzYyYmQ4NmY2NTUzNjI2ZWYyNTFiMzVmZWUzYTExMzZiM2Y2MGZkYTJlNmY0M2Q6aDpUOkY",
+  "certain": true,
+  "known": [
+   "https://protect.checkpoint.com/v2/r02/___https://us02web.zoom.us/webinar/register/WN_gnsWb__aRB6_l7kyjDRvJw___.Y3AxZTplbGFsY2hlY2twb2ludDpjOm86ODZlMWI3ZDRiNTdhMDQ3MWZkYTMyODA1ODMzOGQ0M2Y6NzozNTBiOmViZmUxODYxYjUyNDgzMjdmYzYyYmQ4NmY2NTUzNjI2ZWYyNTFiMzVmZWUzYTExMzZiM2Y2MGZkYTJlNmY0M2Q6aDpUOkY"
+  ],
+  "others": []
+ },
+ "1777898": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_ueYHunG8TWW5xIt3bwPn0w",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_ueYHunG8TWW5xIt3bwPn0w"
+  ],
+  "others": [
+   "http://www.partner.co.il/en/Investors-Relations/lobby",
+   "https://link.accessidoc.com/zcv98HVC-sFkF_GJHtYgMIrIcMbsvo8Ax0PZpJE-N3L8HGvW4-2zDoqHmhQVm5VD9woYa6OeAiSpMp4-0cs51XdJtf"
+  ]
+ },
+ "1777881": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_MwTMge7lQ_SKBG2R4YETWg#/",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_MwTMge7lQ_SKBG2R4YETWg#/"
+  ],
+  "others": [
+   "http://www.energix-group.com/"
+  ]
+ },
+ "1777906": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_03Ulzmx4R5m0OqBEVlS4GQ",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_03Ulzmx4R5m0OqBEVlS4GQ",
+   "https://us06web.zoom.us/webinar/register/WN_hUwaVL_HSualGHL8YeSN3Q"
+  ],
+  "others": []
+ },
+ "1777917": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_lVk-4fxIRLSIvbbSguLxNQ",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_lVk-4fxIRLSIvbbSguLxNQ"
+  ],
+  "others": []
+ },
+ "1777468": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_qyNRwdbvQ-6E5yOb-uBaLw",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_qyNRwdbvQ-6E5yOb-uBaLw"
+  ],
+  "others": []
+ },
+ "1777838": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_kwKRtafbTlKtFQ-6WlZHUw",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_kwKRtafbTlKtFQ-6WlZHUw"
+  ],
+  "others": [
+   "http://www.ackerstein.co.il/profile"
+  ]
  }
 }
