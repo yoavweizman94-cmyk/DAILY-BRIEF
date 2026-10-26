@@ -164,5 +164,21 @@
    "https://us06web.zoom.us/webinar/register/WN_suyFmS6-RvCcTDnm0FgP_A"
   ],
   "others": []
+ },
+ "1777681": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_xEY3DVFKQ0aez4-RFNesXA",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_xEY3DVFKQ0aez4-RFNesXA"
+  ],
+  "others": [
+   "https://www.5555.co.il/%D7%9E%D7%A9%D7%A7%D7%99%D7%A2%D7%99%D7%9D"
+  ]
+ },
+ "1777489": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": []
  }
 }
