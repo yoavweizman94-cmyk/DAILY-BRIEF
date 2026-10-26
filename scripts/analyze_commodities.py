@@ -197,13 +197,22 @@ def _pc(v) -> str:
 
 
 def load_snapshot() -> dict:
-    files = sorted((OUT / "prices").glob("*.json"))
-    if not files:
+    """התמונה האחרונה; אם אין בה מחירים — עם המחירים מהתמונה האחרונה שיש בה, ו-te_asof
+    (Trading Economics נכשל — מכסה, תקלה). הסקירה כותבת מאיזה יום המחירים."""
+    snaps = []
+    for p in sorted((OUT / "prices").glob("*.json"), reverse=True)[:10]:
+        try:
+            snaps.append(json.loads(p.read_text(encoding="utf-8")))
+        except ValueError:
+            continue
+    if not snaps:
         return {}
-    try:
-        return json.loads(files[-1].read_text(encoding="utf-8"))
-    except ValueError:
-        return {}
+    snap = snaps[0]
+    if not snap.get("te"):
+        prev = next((s for s in snaps if s.get("te")), None)
+        if prev:
+            snap = dict(snap, te=prev["te"], te_asof=prev.get("te_asof") or prev.get("date"))
+    return snap
 
 
 CURRENCY_REGION = {"CNY": "סין", "MYR": "מלזיה", "INR": "הודו", "EUR": "אירופה", "GBP": "בריטניה", "JPY": "יפן"}
@@ -232,6 +241,10 @@ def prices_text(cfg: dict, snap: dict) -> str:
                      f"יום {_pc(row.get('DailyPercentualChange'))} · שבוע {_pc(row.get('WeeklyPercentualChange'))} · "
                      f"חודש {_pc(row.get('MonthlyPercentualChange'))} · שנה {_pc(row.get('YearlyPercentualChange'))} · "
                      f"מתחילת השנה {_pc(row.get('YTDPercentualChange'))}")
+    if lines and snap.get("te_asof") and snap.get("te_asof") != snap.get("date"):
+        # המחירים מיום קודם — אסור לתאר אותם כתזוזה של היום
+        lines.insert(0, f"(המחירים מ-{snap['te_asof']}: המשיכה מ-Trading Economics נכשלה היום. "
+                        "אל תתאר אותם כתזוזה של היום; השינוי היומי שבהם הוא של אותו יום.)")
     return "\n".join(lines) or "— (אין מחירים בריצה הזו)"
 
 

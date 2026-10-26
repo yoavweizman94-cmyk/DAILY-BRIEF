@@ -186,10 +186,48 @@ def _qname(q: dict, generic: set, always: bool = False) -> str:
     return q["label"]
 
 
+def _stale(s: dict) -> bool:
+    """תמונה שהמחירים בה הועתקו מיום קודם (Trading Economics נכשל באותו יום)."""
+    return bool(s.get("te_asof")) and s.get("te_asof") != s.get("date")
+
+
+def _price_snap(snaps: list[dict]) -> dict:
+    """התמונה האחרונה, ואם אין בה מחירים — עם המחירים מהתמונה האחרונה שיש בה, ו-te_asof.
+
+    **"0 מחירים" אינו מצב שמוצג.** ב-26/10/2026 מוצתה המכסה החודשית של Trading
+    Economics והעמוד הציג לוח ריק. מחיר מלפני שלושה ימים, עם התאריך שלו, שימושי
+    יותר מכלום — כל עוד התאריך כתוב.
+    """
+    if not snaps:
+        return {}
+    snap = snaps[-1]
+    if snap.get("te"):
+        return snap
+    prev = next((s for s in reversed(snaps) if s.get("te")), None)
+    if not prev:
+        return snap
+    return dict(snap, te=prev["te"], te_asof=prev.get("te_asof") or prev.get("date"),
+                te_error=snap.get("te_error") or prev.get("te_error"))
+
+
+def _stale_html(snap: dict, fails: list[str]) -> str:
+    if not _stale(snap):
+        return ""
+    why = " ".join([str(snap.get("te_error") or "")] + [f for f in fails if "Trading" in f])
+    reason = ("מכסת ה-API החודשית של Trading Economics מוצתה, והמחירים יתעדכנו כשתתחדש"
+              if ("מכסת" in why or "subscription" in why.lower()) else "המשיכה מ-Trading Economics נכשלה")
+    d = str(snap.get("te_asof"))
+    return (f'<p class="msg warn"><strong>המחירים מ-{d[8:10]}/{d[5:7]}/{d[:4]}.</strong> {reason}. '
+            'העקומים, הדשנים והכותרות עדכניים.</p>')
+
+
 def _hist(snaps: list[dict]) -> dict[str, list]:
-    """המחיר האחרון בכל תמונה יומית, לפי סימול — לקו המגמה."""
+    """המחיר האחרון בכל תמונה יומית, לפי סימול — לקו המגמה. תמונה שהמחירים בה
+    הועתקו מיום קודם אינה נקודה בקו."""
     hist: dict[str, list] = {}
     for s in snaps or []:
+        if _stale(s):
+            continue
         for sym, row in (s.get("te") or {}).items():
             hist.setdefault(sym, []).append(row.get("Last"))
     return hist
@@ -231,14 +269,17 @@ def _qline(q: dict, generic: set) -> str:
     return head + (" · " + " · ".join(ch) if ch else "")
 
 
-def _when(snap: dict) -> tuple[str, str]:
-    """"22/09" ו-"22/09/2026" לפי יום המחירים."""
-    d = str(snap.get("date") or "")
+def _when(snap: dict, prices: bool = True) -> tuple[str, str]:
+    """"22/09" ו-"22/09/2026" לפי יום המחירים — te_asof כשהמחירים מיום קודם.
+    prices=False לעקומים, שנמשכים בנפרד ועדכניים גם כש-Trading Economics נפל."""
+    d = str((snap.get("te_asof") if prices else None) or snap.get("date") or "")
     return (f"{d[8:10]}/{d[5:7]}", f"{d[8:10]}/{d[5:7]}/{d[:4]}") if len(d) >= 10 else ("", "")
 
 
 def _ai_sub(a: dict | None, snap: dict) -> str:
-    return (f'סקירה מ-{an._stamp((a or {}).get("analyzed_at"))}, על מחירים מ-{an._stamp(snap.get("fetched_at"))}. '
+    when = (f'{str(snap["te_asof"])[8:10]}/{str(snap["te_asof"])[5:7]}' if _stale(snap)
+            else an._stamp(snap.get("fetched_at")))
+    return (f'סקירה מ-{an._stamp((a or {}).get("analyzed_at"))}, על מחירים מ-{when}. '
             + share.DISCLAIMER)
 
 
@@ -369,7 +410,7 @@ def export_curves(snap: dict, cfg: dict) -> str:
         return ""
     lines = [f'{lab}: {an._mon(p["month"])} {share.arrow(p["vs_front_pct"])} מהחוזה הקרוב ({shape})'
              for _, lab, p, shape in sorted(ranked, reverse=True)[:4]]
-    day, date = _when(snap)
+    day, date = _when(snap, prices=False)
     blocks = [{"type": "curves", "title": "ההפרש מהחוזה הקרוב, באחוזים · חודשים קדימה",
                "ticks": [0] + list(horizons), "items": items},
               {"type": "notes", "items": [
@@ -779,7 +820,8 @@ def companies_html(cfg: dict, te: dict, wb: dict, a: dict | None, snap: dict | N
 def board_html(cfg: dict, snaps: list[dict]) -> str:
     if not snaps:
         return ""
-    te = snaps[-1].get("te") or {}
+    psnap = _price_snap(snaps)
+    te = psnap.get("te") or {}
     labels = _group_label(cfg)
     hist = _hist(snaps)
     out = []
@@ -803,7 +845,7 @@ def board_html(cfg: dict, snaps: list[dict]) -> str:
         if rows:
             out.append(f'<details class="cm-board" open><summary>{escape(labels.get(g["key"], g["key"]))} '
                        f'<span class="au-n">{len(rows)}</span></summary>'
-                       + export_board(g, pairs, snaps[-1], generic, hist) +
+                       + export_board(g, pairs, psnap, generic, hist) +
                        '<div class="tw"><table class="nadlan au-tbl"><thead><tr><th>סחורה</th><th>אזור</th><th>מחיר</th>'
                        '<th>יחידה</th><th>יום</th><th>חודש</th><th>שנה</th><th>מגמה</th><th>עדכון</th></tr></thead><tbody>'
                        + "".join(rows) + '</tbody></table></div></details>')
@@ -823,7 +865,7 @@ def page(data: dict) -> str:
     a = analyses[-1] if analyses else None
     if not snaps and not items:
         return '<h1>סחורות</h1><p class="lead">טרם נאספו נתונים. הם ייאספו בריצה הקרובה של צנרת הסחורות.</p>'
-    snap = snaps[-1] if snaps else {}
+    snap = _price_snap(snaps)
     te = snap.get("te") or {}
     hist = _hist(snaps)
     stamp = " · ".join(x for x in (f'מחירים {an._stamp(snap.get("fetched_at"))}' if snap else "",
@@ -852,6 +894,7 @@ def page(data: dict) -> str:
         'דרך החברות הנסחרות שתלויות בהם: איי.סי.אל, יצרניות הגז ובתי הזיקוק, יצרניות הפלסטיק, המזון והבנייה. '
         'מתעדכן פעמיים ביום.</p>',
         f'<nav class="cbs-toc" aria-label="בעמוד הזה">{toc}</nav>',
+        _stale_html(snap, fails),
         fail_html,
         *[html for _, _, html in parts],
         an.previous_html(analyses),
@@ -866,9 +909,10 @@ def report(data: dict) -> list[str]:
     analyses = data.get("analyses") or []
     if not snaps:
         return ['::warning title=אין נתוני סחורות::output/commodities ריק — העמוד נבנה בלי מחירים.']
-    snap = snaps[-1]
+    snap = _price_snap(snaps)
     a = analyses[-1] if analyses else None
-    out = [f'::notice::עמוד הסחורות: {len(snap.get("te") or {})} מחירים ({snap.get("date")}), '
+    out = [f'::notice::עמוד הסחורות: {len(snap.get("te") or {})} מחירים ({snap.get("date")}'
+           + (f', המחירים מ-{snap.get("te_asof")}' if _stale(snap) else "") + '), '
            f'{len(snap.get("curves") or {})} עקומים, {len(data.get("items") or [])} כותרות ב-{DAYS} ימים · '
            f'סקירה אחרונה {(a or {}).get("analyzed_at") or "—"}']
     fetched = an._local(snap.get("fetched_at"))

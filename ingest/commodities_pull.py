@@ -91,6 +91,9 @@ def te_snapshot() -> tuple[dict, str | None]:
                     for x in rows if isinstance(x, dict) and x.get("Symbol")}, None
         # TE מחזיר 403 גם על חנק קצב; "slow down" בגוף — ממתינים ומנסים שוב.
         err = f"HTTP {r.status_code}: {r.text[:80]}"
+        # **מכסה חודשית שמוצתה אינה חנק.** ניסיון חוזר לא יעזור עד החודש הבא.
+        if "subscription limit" in r.text.lower():
+            return {}, "מכסת ה-API החודשית של Trading Economics מוצתה"
         time.sleep(8 if "slow down" in r.text.lower() else 3)
     return {}, err
 
@@ -344,9 +347,9 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     failures = []
 
-    te, err = te_snapshot()
-    if err:
-        failures.append(f"Trading Economics: {err}")
+    te, te_err = te_snapshot()
+    if te_err:
+        failures.append(f"Trading Economics: {te_err}")
     cv, err = curves(cfg, today)
     if err:
         failures.append(err)
@@ -361,6 +364,25 @@ def main() -> int:
                 old = {}
         snap = {"date": today.isoformat(), "fetched_at": datetime.now(IL).isoformat(timespec="minutes"),
                 "te": te or old.get("te") or {}, "curves": cv or old.get("curves") or {}}
+        # **Trading Economics נפל — המחירים האחרונים, עם התאריך שלהם.** ב-26/10/2026 מוצתה
+        # המכסה החודשית, והתמונה של היום נכתבה עם te ריק: עמוד הסחורות הציג "0 מחירים"
+        # והסקירה נכתבה בלי מחירים. כאן נלקחים המחירים מהתמונה האחרונה שיש בה, ו-te_asof
+        # אומר מאיזה יום הם — העמוד והסקירה כותבים זאת, וקו המגמה מדלג על התמונה הזו.
+        if not te and old.get("te_asof"):
+            snap["te_asof"], snap["te_error"] = old["te_asof"], old.get("te_error") or te_err
+        elif not snap["te"]:
+            for p in sorted((OUT / "prices").glob("*.json"), reverse=True):
+                if p == snap_p:
+                    continue
+                try:
+                    prev = json.loads(p.read_text(encoding="utf-8"))
+                except ValueError:
+                    continue
+                if prev.get("te"):
+                    snap["te"] = prev["te"]
+                    snap["te_asof"] = prev.get("te_asof") or prev.get("date") or p.stem
+                    snap["te_error"] = te_err or prev.get("te_error")
+                    break
         prices_changed = (snap["te"] != old.get("te")) or (snap["curves"] != old.get("curves"))
         snap_p.parent.mkdir(parents=True, exist_ok=True)
         snap_p.write_text(json.dumps(snap, ensure_ascii=False), encoding="utf-8")

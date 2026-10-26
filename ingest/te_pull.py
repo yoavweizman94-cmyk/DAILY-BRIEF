@@ -41,6 +41,10 @@ class NotInPlan(Exception):
     """המנוי אינו כולל את הנתון — לא תקלה, פשוט מחוץ למסלול."""
 
 
+class QuotaExhausted(Exception):
+    """המכסה החודשית של המנוי מוצתה — תקלה שחוזרת עד תחילת החודש הבא."""
+
+
 def fetch(session, key: str, path: str, _retry: bool = True, **params):
     r = session.get(f"{BASE}{path}", params={"c": key, "f": "json", **params}, timeout=45)
     if r.status_code == 401:
@@ -54,6 +58,10 @@ def fetch(session, key: str, path: str, _retry: bool = True, **params):
                 time.sleep(8)
                 return fetch(session, key, path, _retry=False, **params)
             raise RuntimeError(f"חנק קצב של Trading Economics גם אחרי המתנה: {body}")
+        # **מכסה חודשית שמוצתה אינה "לא במנוי".** אותו 403, טקסט אחר — וכל קריאה נוספת
+        # באותה ריצה רק תיכשל שוב.
+        if "subscription limit" in body.lower():
+            raise QuotaExhausted(body)
         raise NotInPlan(body)
     r.raise_for_status()
     if not (r.headers.get("content-type") or "").startswith("application/json"):
@@ -81,7 +89,12 @@ def main() -> int:
                  "date": today.isoformat(), "failures": []}
 
     # -- לוח אירועים: מהיום ועד horizon ימים קדימה -------------------------
+    # **לא במנוי — ולכן לא נקרא.** כל קריאה נספרת במכסה החודשית גם כשהיא מחזירה 403,
+    # ובכל ריצת ברייף היא הייתה שליש מהקריאות. calendar_in_plan: true בקונפיג מחזיר אותה.
+    quota = False
     try:
+        if not tcfg.get("calendar_in_plan"):
+            raise NotInPlan("לא נקרא, כדי לחסוך במכסה")
         frm, to = today.isoformat(), (today + timedelta(days=horizon)).isoformat()
         events = fetch(s, key, f"/calendar/country/{','.join(countries)}/{frm}/{to}")
         out["calendar"] = [{
@@ -127,11 +140,15 @@ def main() -> int:
         out["failures"].append({"source": "bonds", "error": f"לא במנוי: {ex}"})
     except Exception as ex:
         out["bonds"], out["il_gov_10y"] = [], None
-        out["failures"].append({"source": "bonds", "error": str(ex)})
+        quota = isinstance(ex, QuotaExhausted)
+        out["failures"].append({"source": "bonds",
+                                "error": "מכסת ה-API החודשית מוצתה" if quota else str(ex)})
 
     # -- אינדיקטורים מרכזיים לישראל ---------------------------------------
     time.sleep(CALL_GAP_SEC)
     try:
+        if quota:      # אותה מכסה — הקריאה הבאה תיכשל באותה סיבה
+            raise QuotaExhausted("מכסת ה-API החודשית מוצתה")
         ind = fetch(s, key, "/country/israel")
         wanted = {w.lower() for w in (tcfg.get("indicators") or [])}
         out["indicators"] = [{
@@ -148,7 +165,9 @@ def main() -> int:
         out["failures"].append({"source": "indicators", "error": f"לא במנוי: {ex}"})
     except Exception as ex:
         out["indicators"] = []
-        out["failures"].append({"source": "indicators", "error": str(ex)})
+        out["failures"].append({"source": "indicators",
+                                "error": "מכסת ה-API החודשית מוצתה"
+                                if isinstance(ex, QuotaExhausted) else str(ex)})
 
     out_dir = ROOT / "data" / "raw" / today.isoformat()
     out_dir.mkdir(parents=True, exist_ok=True)
