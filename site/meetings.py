@@ -34,7 +34,8 @@ def firm(r: dict) -> str:
 
 
 def title(r: dict) -> str:
-    return firm(r) or Path(r.get("file") or "").stem or "שיחה"
+    folder = (r.get("folder") or "").rsplit("/", 1)[-1]
+    return firm(r) or folder or Path(r.get("file") or "").stem or "שיחה"
 
 
 def when(r: dict) -> str:

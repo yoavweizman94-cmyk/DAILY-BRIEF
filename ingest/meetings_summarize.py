@@ -178,8 +178,10 @@ def mmss(sec: float) -> str:
 def payload(r: dict) -> str:
     src = {"name": "שם הקובץ", "name+year": "שם הקובץ (השנה משוערת)", "media": "נתוני ההקלטה",
            "mtime": "תאריך השינוי של הקובץ — ייתכן שאינו יום השיחה"}.get(r.get("date_from"), "")
-    head = [f"שם הקובץ: {r.get('file')}",
-            f"חברה לפי שם הקובץ: {r.get('company') or 'לא זוהתה'}",
+    head = [f"שם הקובץ: {r.get('file')}"]
+    if r.get("folder"):
+        head.append(f"תיקייה (יואב מסדר תיקייה לכל חברה): {r['folder']}")
+    head += [f"חברה מרשימת הכיסוי, לפי שם הקובץ או התיקייה: {r.get('company') or 'לא זוהתה'}",
             f"תאריך: {r.get('date') or 'לא ידוע'}" + (f" (לפי {src})" if src else ""),
             f"אורך: {round((r.get('duration_sec') or 0) / 60)} דקות · דוברים שזוהו: {r.get('speakers') or 0}"]
     if r.get("period"):

@@ -513,7 +513,11 @@ def main() -> int:
             log(f"עברה שעה וחצי — {len(todo) - done} הקלטות יחכו לריצה הבאה")
             break
         p, fid = t["p"], t["fid"]
-        company = guess_company(p.stem, keys)
+        rel = p.parent.relative_to(base)
+        # שם הקובץ קודם, ואחריו התיקיות — יואב מסדר תת-תיקייה לכל חברה
+        # ("לוינשטיין הנדסה\לוינשטיין 14.09.2026.mp4")
+        company = next((c for c in [guess_company(p.stem, keys)]
+                        + [guess_company(part, keys) for part in reversed(rel.parts)] if c), None)
         log(f"{p.name} · {t['date'] or 'בלי תאריך'} · {company or 'חברה לא זוהתה'}")
         try:
             segs, dur = transcribe(sx, p, fid, company)
@@ -526,7 +530,6 @@ def main() -> int:
                           "at": datetime.now().isoformat(timespec="minutes")}
             log(f"  נכשל ({n}/{MAX_FAILS}): {type(e).__name__}: {e}")
             continue
-        rel = p.parent.relative_to(base)
         rec = {
             "id": fid, "file": p.name, "folder": "" if str(rel) == "." else rel.as_posix(),
             "company": company, "date": t["date"], "date_from": t["how"],
