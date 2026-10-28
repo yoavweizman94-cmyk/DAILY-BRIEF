@@ -274,8 +274,12 @@ def _source_dates(source: str) -> set[tuple]:
     return out
 
 
-def bad_numbers(text: str, source: str) -> list[str]:
-    """מספרים בטקסט שאינם במקור. השוואה אחרי הסרת פסיקים — 1,200 ו-1200 אותו מספר."""
+def bad_numbers(text: str, source: str, years: set[str] | None = None) -> list[str]:
+    """מספרים בטקסט שאינם במקור. השוואה אחרי הסרת פסיקים — 1,200 ו-1200 אותו מספר.
+
+    years — שנים שמותרות גם כשאינן כתובות במקור: שנת הפרסום עצמו. סיקור של משרד
+    הבריאות (28/10/2026) כתב "2026" על פרסום מ-23.10.26 ונפסל.
+    """
     src = {_norm_num(m) for m in _NUM.findall(source)}
     src_flat = source.replace(",", "")
     dates = None
@@ -286,12 +290,19 @@ def bad_numbers(text: str, source: str) -> list[str]:
             continue    # ספרה בודדת — "שני שלבים", "שלב 1" — אינה עובדה מספרית
         if n in src or n in src_flat:
             continue
+        if years and n in years:
+            continue
         k = _date_key(n)
         if k:
             if dates is None:
                 dates = _source_dates(source)
             if k in dates:
                 continue
+        # **טווח נבדק לפי קצותיו.** "27-33" הוא מספר אחד לביטוי הרגולרי, ובמקור
+        # כתוב "בין 27 ל-33" — סיקור של משרד החקלאות נפסל על כך (28/10/2026).
+        parts = [p for p in n.split("-") if len(p) > 1]
+        if len(parts) >= 2 and all(p in src or p in src_flat for p in parts):
+            continue
         out.append(m)
     return out
 
@@ -361,10 +372,13 @@ def run_office(office: dict, cid: str) -> tuple[int, int, list[str]]:
     # --- 2. סיקור ----------------------------------------------------------------
     # **גם סיקור ישן בלי "בפשטות" ובלי דוגמה נכתב מחדש** (28/10/2026, לבקשת יואב:
     # הסברים מפורטים וקלים יותר, עם דוגמאות). הוא ממשיך להיות מוצג עד שיוחלף.
+    # **סיקור שנפסל מקבל ניסיון אחד נוסף**, ולא יותר: חלק מהפסילות היו של הבדיקה
+    # ולא של הסיקור (טווח, שנת הפרסום), ופסילה שנייה — כבר מעידה על הסיקור.
     want = [it for it in items
             if (done.get(it["id"]) or {}).get("material")
             and not ((done.get(it["id"]) or {}).get("what") and (done.get(it["id"]) or {}).get("simple"))
-            and not (done.get(it["id"]) or {}).get("survey_failed")][:SURVEY_MAX]
+            and not ((done.get(it["id"]) or {}).get("survey_failed")
+                     and (done.get(it["id"]) or {}).get("survey_tries", 1) >= 2)][:SURVEY_MAX]
     if want:
         docs, links = {}, {}
         for n, it in enumerate(want, 1):
@@ -383,18 +397,22 @@ def run_office(office: dict, cid: str) -> tuple[int, int, list[str]]:
             it = want[n - 1]
             source = f"{it['title']} {it.get('description') or ''} {docs.get(n) or ''}"
             fields = {k: " ".join(str(r.get(k) or "").split()) for k in CHECKED + ("magnitude",)}
+            years = {(it.get("date") or "")[:4]} - {""}
             bad = []
             for k in CHECKED:
-                bad += bad_numbers(fields[k], source)
-            if bad_numbers(fields["magnitude"], source):
+                bad += bad_numbers(fields[k], source, years)
+            if bad_numbers(fields["magnitude"], source, years):
                 fields["magnitude"] = "לא ניתן לכמת מהמסמך"
             rec = {"id": it["id"], "surveyed_at": now,
                    "basis": "מסמך" if docs.get(n) else "כותרת",
                    "doc": links.get(n) or ""}
+            prev = done.get(it["id"]) or {}
             if bad:
                 problems.append(f"{it['id']}: {', '.join(sorted(set(bad))[:4])}")
                 rec["survey_failed"] = True
+                rec["survey_tries"] = (prev.get("survey_tries") or (1 if prev.get("survey_failed") else 0)) + 1
             else:
+                rec["survey_failed"] = False
                 rec.update(fields)
                 rec["direction"] = r.get("direction") if r.get("direction") in DIRECTIONS else "ניטרלי"
                 cos = [c for c in r.get("companies") or [] if c in names]
