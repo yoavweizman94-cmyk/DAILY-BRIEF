@@ -62,7 +62,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a><a href="{root}headlines.html">כותרות</a><a href="{root}reports.html">דיווחים</a><a href="{root}cbs.html">למ"ס</a><a href="{root}auto.html">רכב</a><a href="{root}commodities.html">סחורות</a><a href="{root}gov-communications.html">רגולציה</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}meetings.html" data-owner hidden>השיחות שלי</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a><a href="{root}headlines.html">כותרות</a><a href="{root}reports.html">דיווחים</a><a href="{root}cbs.html">למ"ס</a><a href="{root}auto.html">רכב</a><a href="{root}commodities.html">סחורות</a><a href="{root}gov.html">רגולציה</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}meetings.html" data-owner hidden>השיחות שלי</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
   <a class="brand" href="{root}index.html">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
 </header>
 <main>
@@ -1227,8 +1227,12 @@ def main() -> int:
     for _line in autonews.report(_auto):
         print(_line)
 
-    # עמודי הרגולציה: משרד התקשורת, רשות החשמל ומשרד התחבורה (site/gov.py)
+    # עמודי הרגולציה: 17 משרדים ורשויות, ועמוד ראשי שמרכז אותם (site/gov.py)
     _gov = gov.load()
+    (OUT / gov.HUB).write_text(
+        PAGE.format(title=f"רגולציה · {site_title}", site_title=site_title, root="",
+                    body=gov.hub(_gov)),
+        encoding="utf-8")
     for _o in _gov["cfg"].get("offices") or []:
         (OUT / _o["page"]).write_text(
             PAGE.format(title=f"{_o['name']} · {site_title}", site_title=site_title,

@@ -67,9 +67,11 @@ TRIAGE_SCHEMA = _obj({"items": {"type": "array", "items": _obj({
     "n": {"type": "integer"}, "material": {"type": "boolean"},
     "companies": {"type": "array", "items": _S}, "reason": _S})}})
 SURVEY_SCHEMA = _obj({"items": {"type": "array", "items": _obj({
-    "n": {"type": "integer"}, "headline": _S, "what": _S, "mechanism": _S,
-    "magnitude": _S, "next": _S, "direction": _S,
+    "n": {"type": "integer"}, "headline": _S, "simple": _S, "what": _S, "mechanism": _S,
+    "example": _S, "magnitude": _S, "next": _S, "direction": _S,
     "companies": {"type": "array", "items": _S}})}})
+# השדות שנבדקים מול המקור — כל מספר בהם חייב להופיע בכותרת, בתקציר או במסמך
+CHECKED = ("headline", "simple", "what", "mechanism", "example", "next")
 
 RULES = """כללים שאין לחרוג מהם:
 1. **חברות — רק מהמפה, בשמן המדויק.** הקשר לחברה הוא דרך התפקיד שלה במפה,
@@ -102,7 +104,13 @@ companies הוא מי שהפרסום נוגע בו בפועל — לא כל בע
 
 SURVEY_PROMPT = """אתה אנליסט הרגולציה של TLV TASE View, שירות מחקר על הבורסה בתל אביב.
 הנתונים בקלט: פרסומים מהותיים של {office}, עם גוף המסמך כשהיה זמין, ומפת החברות.
-כתוב לכל פרסום סיקור קצר למנהל השקעות מקצועי — מה נקבע, ואיך זה מגיע לדוחות.
+כתוב לכל פרסום סיקור — מה נקבע, ואיך זה מגיע לדוחות של החברות.
+
+**שני קוראים, ושניהם צריכים להבין.** מנהל השקעות מקצועי, וגם קורא שאינו מכיר
+את הענף הזה. לכן הסיקור נפתח בהסבר פשוט, כל מונח מקצועי מוסבר בסוגריים בפעם
+הראשונה (למשל: "SMP (המחיר שבו נמכר החשמל בשוק באותה שעה)"), ויש בו דוגמה
+מוחשית שמראה איך ההחלטה עובדת בפועל. הסבר מפורט אינו ריפוד: הוא המנגנון, צעד
+אחר צעד, ולא חזרה על הכותרת במילים אחרות.
 
 {rules}
 5. **כל מספר, סכום, אחוז ותאריך — רק מהכותרת, מהתקציר או מהמסמך**, בדיוק כפי
@@ -114,12 +122,20 @@ SURVEY_PROMPT = """אתה אנליסט הרגולציה של TLV TASE View, שי
 
 שדות:
 - headline — עד עשר מילים, העובדה עצמה ("רשות החשמל מפחיתה את הערבות של...").
-- what — 40–80 מילים: מה הוחלט או מוצע, על מי חל, ומה השתנה מול המצב הקודם.
-- mechanism — 60–120 מילים, בשני רבדים: **הענף** — מה הכלל משנה בכלכלה של כל
-  בעלי התפקיד (תעריף, עלות ציות, תחרות, לוח זמנים); ו**החברות** — לשתיים-שלוש מהמפה,
-  דרך איזו שורה בדוח זה עובר אצל כל אחת (הכנסה, עלות, השקעה, ערבות) ולמה היא
-  חשופה יותר או פחות מהאחרות, לפי התפקיד ותיאור הפעילות. ומי בכיוון ההפוך.
-  כשהמפה ותיאורי הפעילות אינם מבחינים בין החברות — אמור זאת, אל תמציא הבדל.
+- simple — "בפשטות": שניים-ארבעה משפטים קצרים, בשפה של עיתון יומי, למי שאינו מכיר
+  את הענף: מה קרה, ולמה זה משנה למישהו. מונח מקצועי — מוסבר בסוגריים. בלי ז'רגון
+  שלא הוסבר ובלי מספרים שאינם במקור.
+- what — 60–120 מילים: מה הוחלט או מוצע, על מי חל, ממתי, ומה השתנה מול המצב הקודם.
+- mechanism — 80–160 מילים, בשני רבדים: **הענף** — מה הכלל משנה בכלכלה של כל
+  בעלי התפקיד (תעריף, עלות ציות, תחרות, לוח זמנים), צעד אחר צעד: מי משלם, למי,
+  ואיפה זה נרשם; ו**החברות** — לשתיים-שלוש מהמפה, דרך איזו שורה בדוח זה עובר אצל
+  כל אחת (הכנסה, עלות, השקעה, ערבות) ולמה היא חשופה יותר או פחות מהאחרות, לפי
+  התפקיד ותיאור הפעילות. ומי בכיוון ההפוך. כשהמפה ותיאורי הפעילות אינם מבחינים
+  בין החברות — אמור זאת, אל תמציא הבדל.
+- example — 30–70 מילים, נפתח ב"לדוגמה:". מקרה מוחשי שמראה את ההחלטה בפעולה:
+  לקוח, עסקה או חברה טיפוסיים מהתפקיד ("יבואן שמביא דגם חדש...", "יזם שזכה
+  במכרז..."), ומה קורה להם בעקבות ההחלטה. מספר — רק אם הוא במקור; אחרת דוגמה
+  בלי מספרים. אל תייחס לחברה מסוימת נתון, חוזה או חשיפה שאינם כתובים במקור.
 - magnitude — סדר הגודל מהמסמך, או "לא ניתן לכמת מהמסמך".
 - next — מועד הגשת תגובות לשימוע, תחילת תוקף או ההחלטה הבאה — רק אם כתוב; אחרת ריק.
 - direction — חיובי / שלילי / מעורב / ניטרלי, ביחס לחברות שבשדה companies.
@@ -292,10 +308,11 @@ def items_block(items: list[dict], docs: dict[int, str] | None = None) -> str:
     return "\n\n".join(out)
 
 
-def call(prompt: str, data: str, schema: dict, job: str, max_usd: float) -> dict | None:
+def call(prompt: str, data: str, schema: dict, job: str, max_usd: float,
+         max_tokens: int = 12000) -> dict | None:
     # ישירות ל-API ולא דרך ה-CLI: קריאת CLI משלמת על ~54K טוקני הנחיות סוכן לפני
     # שהיא קוראת את הקלט (scripts/_api.py). max_usd חל רק בהרצה מקומית בלי מפתח.
-    res, err, _usd = _api.ask_json(prompt, data, schema, job=job, max_tokens=12000, max_usd=max_usd)
+    res, err, _usd = _api.ask_json(prompt, data, schema, job=job, max_tokens=max_tokens, max_usd=max_usd)
     if err:
         if _cli.CREDIT_RE in err:
             print(f"::error title=יתרת Anthropic אזלה::סיקור הרגולציה אינו נכתב.")
@@ -342,8 +359,11 @@ def run_office(office: dict, cid: str) -> tuple[int, int, list[str]]:
             done.setdefault(it["id"], {}).update(rec)
 
     # --- 2. סיקור ----------------------------------------------------------------
+    # **גם סיקור ישן בלי "בפשטות" ובלי דוגמה נכתב מחדש** (28/10/2026, לבקשת יואב:
+    # הסברים מפורטים וקלים יותר, עם דוגמאות). הוא ממשיך להיות מוצג עד שיוחלף.
     want = [it for it in items
-            if (done.get(it["id"]) or {}).get("material") and not (done.get(it["id"]) or {}).get("what")
+            if (done.get(it["id"]) or {}).get("material")
+            and not ((done.get(it["id"]) or {}).get("what") and (done.get(it["id"]) or {}).get("simple"))
             and not (done.get(it["id"]) or {}).get("survey_failed")][:SURVEY_MAX]
     if want:
         docs, links = {}, {}
@@ -353,7 +373,7 @@ def run_office(office: dict, cid: str) -> tuple[int, int, list[str]]:
         res = call(SURVEY_PROMPT.format(office=office["name"], rules=rules),
                    f"=== מפת החברות: תפקיד · המנגנון · חברות ===\n{roles}\n\n"
                    f"=== פרסומים מהותיים ({len(want)}) ===\n{items_block(want, docs)}",
-                   SURVEY_SCHEMA, "gov-survey", 1.5)
+                   SURVEY_SCHEMA, "gov-survey", 1.5, max_tokens=24000)
         got = set()
         for r in (res or {}).get("items") or []:
             n = r.get("n")
@@ -362,10 +382,9 @@ def run_office(office: dict, cid: str) -> tuple[int, int, list[str]]:
             got.add(n)
             it = want[n - 1]
             source = f"{it['title']} {it.get('description') or ''} {docs.get(n) or ''}"
-            fields = {k: " ".join(str(r.get(k) or "").split()) for k in
-                      ("headline", "what", "mechanism", "magnitude", "next")}
+            fields = {k: " ".join(str(r.get(k) or "").split()) for k in CHECKED + ("magnitude",)}
             bad = []
-            for k in ("headline", "what", "mechanism", "next"):
+            for k in CHECKED:
                 bad += bad_numbers(fields[k], source)
             if bad_numbers(fields["magnitude"], source):
                 fields["magnitude"] = "לא ניתן לכמת מהמסמך"

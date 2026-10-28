@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""פרסומי רגולטורים מה-API הפתוח של gov.il — תקשורת, חשמל, תחבורה.
+"""פרסומי רגולטורים מה-API הפתוח של gov.il — 17 משרדים ורשויות (config/gov.yaml).
 
 **המקור.** אוספי התוכן של gov.il (collectors) נטענים מ-
 openapi-gc.digital.gov.il עם clientId ציבורי, שכל דפדפן מקבל ב-
@@ -221,7 +221,8 @@ def main() -> int:
     if out:
         with open(out, "a", encoding="utf-8") as f:
             f.write(f"changed={'yes' if total_new else 'no'}\n")
-    return 0 if len(errors) < 9 else 1
+    # שלושה סוגי אוסף לכל גוף: נכשל רק כשרוב הקריאות נכשלו, לא כשגוף אחד לא ענה
+    return 0 if len(errors) < max(9, 2 * len(cfg["offices"])) else 1
 
 
 if __name__ == "__main__":
