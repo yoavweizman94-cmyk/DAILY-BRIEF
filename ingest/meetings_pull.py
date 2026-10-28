@@ -62,7 +62,8 @@ EXTS = {".m4a", ".mp3", ".mp4", ".wav", ".aac", ".flac", ".ogg", ".opus", ".webm
         ".amr", ".aiff", ".asf", ".wma"}
 MIN_BYTES = 100_000          # פחות מזה — הקלטה שנקטעה מיד, לא שיחה
 TIME_BUDGET_SEC = 90 * 60    # שתי ריצות ביום; אחרי שעה וחצי ממשיכים בריצה הבאה
-MAX_FAILS = 3                # קובץ שנכשל שלוש פעמים לא נשלח שוב עד שישתנה
+MAX_FAILS = 3                # קובץ שנכשל שלוש פעמים נשלח שוב רק פעם ביום — ולא נזנח:
+RETRY_AFTER = timedelta(days=1)   # הכישלון הראשון (28/10/2026) היה של הרשת, לא של הקובץ
 
 
 def log(msg: str) -> None:
@@ -291,9 +292,14 @@ class Soniox:
 
     def upload(self, p: Path, fid: str) -> str:
         # **שם ניטרלי.** שם הקובץ אומר עם מי נפגשת; ל-Soniox מספיקה הסיומת.
+        # **חומת האש של המשרד עוצרת העלאה גדולה לבדיקה.** Fortinet מיירט את ה-TLS
+        # ל-api.soniox.com (נבדק 28/10/2026): ‏156KB עלו בשנייה וחצי, ו-51MB נתקעו
+        # ונפלו אחרי 30 שניות על "write operation timed out" — ועם המתנה ארוכה עברו
+        # ב-136 שניות. ב-requests הערך הראשון חל גם על כל כתיבה בזמן השליחה, ולכן
+        # הוא ארוך כאן ולא רק הקריאה.
         with p.open("rb") as f:
             r = self.s.post(f"{API}/files", files={"file": (fid + p.suffix.lower(), f)},
-                            timeout=(30, 1800))
+                            timeout=(900, 1800))
         return self._ok(r, "העלאה")["id"]
 
     def create(self, file_id: str, fid: str, context: dict | None) -> str:
@@ -408,6 +414,16 @@ def write_state(st: dict) -> None:
     STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+def resting(fail: dict | None) -> bool:
+    """קובץ שנכשל MAX_FAILS פעמים ממתין יום מהכישלון האחרון, ואז מקבל ניסיון נוסף."""
+    if not fail or fail.get("n", 0) < MAX_FAILS:
+        return False
+    try:
+        return datetime.now() - datetime.fromisoformat(fail.get("at") or "") < RETRY_AFTER
+    except ValueError:
+        return False
+
+
 def write_record(folder: Path, rec: dict) -> None:
     f = folder / "meetings" / f"{rec['id']}.json"
     f.parent.mkdir(parents=True, exist_ok=True)
@@ -466,7 +482,7 @@ def main() -> int:
         if fid in have or fid in seen:
             continue
         seen.add(fid)
-        if (fails.get(fid) or {}).get("n", 0) >= MAX_FAILS:
+        if resting(fails.get(fid)):
             continue
         d, how = resolve_date(p)
         todo.append({"p": p, "fid": fid, "date": d, "how": how})
