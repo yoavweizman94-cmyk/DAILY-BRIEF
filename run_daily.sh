@@ -305,15 +305,33 @@ echo "מודל: $BRIEF_MODEL · תקרה: \$$BRIEF_MAX_USD · היום עד כה
 # ה-MCP של האתר (tlv-tase-view) — הוא לסשנים אינטראקטיביים, לא למהדורה:
 # הסוכן קורא את data/raw ישירות, וכל כלי שנטען הוא הגדרות שנשלחות מחדש
 # בכל תור. --strict-mcp-config מונע מ-.mcp.json להיטען לצד הקובץ שניתן.
+#
+# **השיחות של הבעלים אינן קלט של הברייף.** output/meetings מחזיק תמלילים של
+# פגישות עם הנהלות (ingest/meetings_pull.py), והברייף מופץ ללקוחות. כלל
+# בהנחיות אינו מספיק — Grep רחב אחד היה מכניס ציטוט לברייף — ולכן התיקייה
+# יוצאת מעץ העבודה לזמן הסוכן וחוזרת מיד אחריו (וב-trap, אם הריצה נקטעת).
+# content_repo.sh push ממילא אינו מוחק ממנה דבר, גם אם החזרה נכשלה.
+MEET_STASH=""
+restore_meetings() {
+  if [ -n "$MEET_STASH" ] && [ -d "$MEET_STASH/meetings" ]; then
+    mv "$MEET_STASH/meetings" output/ && rmdir "$MEET_STASH" 2>/dev/null
+  fi
+  MEET_STASH=""
+}
+if [ -d output/meetings ]; then
+  MEET_STASH="$(mktemp -d)" && mv output/meetings "$MEET_STASH/" \
+    && trap restore_meetings EXIT && trap 'restore_meetings; exit 130' INT TERM
+fi
 claude -p "$PROMPT" \
   --output-format stream-json --verbose \
   --mcp-config config/mcp.brief.json --strict-mcp-config \
   --permission-mode acceptEdits \
   --allowedTools "Read,Write,Edit,Glob,Grep,Skill,WebFetch,Bash(python:*),mcp__israel-statistics__*,mcp__nadlan__*" \
-  --disallowedTools "Agent,Task,WebSearch,ToolSearch,Read(//home/runner/.claude/**),Read(~/.claude/**)" \
+  --disallowedTools "Agent,Task,WebSearch,ToolSearch,Read(//home/runner/.claude/**),Read(~/.claude/**),Read(./output/meetings/**)" \
   --model "$BRIEF_MODEL" --max-budget-usd "$BRIEF_MAX_USD" \
   | python scripts/claude_stream.py "$ENVELOPE"
 CLAUDE_RC=${PIPESTATUS[0]}
+restore_meetings
 python scripts/claude_envelope.py "$ENVELOPE" brief "$EDITION" || CLAUDE_RC=1
 rm -f "$ENVELOPE"
 

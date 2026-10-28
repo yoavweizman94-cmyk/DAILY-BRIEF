@@ -13,7 +13,7 @@
 // **השער נכשל סגור.** בהיעדר SESSION_SECRET או מרחב המשתמשים, או בכל
 // חריגה בדרך, התשובה היא הפניה לדף הכניסה ולא מעבר הלאה. תקלת תצורה
 // שמפילה את השער פתוח היא בדיוק הכשל שאסור שיקרה כאן.
-import { readCookie, readSession, COOKIE } from "./_lib/auth.js";
+import { readCookie, readSession, normEmail, COOKIE } from "./_lib/auth.js";
 import { wellKnown } from "./_lib/oauth.js";
 
 const APEX = "tlvtaseview.com";
@@ -31,6 +31,26 @@ const PUBLIC_APEX = /^\/(landing(\.html)?)?$|^\/(style\.css|favicon\.ico|robots\
 // מה שמותר להגיש באפליקציה בלי סשן: דף הכניסה, ה-API (שמטפל בהרשאות
 // בעצמו), והנכסים שדף הכניסה צריך כדי להיראות.
 const PUBLIC_APP = /^\/(login(\.html)?)$|^\/(style\.css|favicon\.ico|robots\.txt)$|^\/api\//;
+
+// "השיחות שלי" — הקלטות של פגישות הבעלים עם הנהלות. **לבעלים בלבד**, גם
+// מול משתמש מחובר. meetings.html, ‏/meetings (Pages מוריד את הסיומת בהפניה)
+// ו-/meetings/<id>. הנתיב מפוענח ומנורמל לפני הבדיקה: "/%6Deetings.html"
+// ו-"//Meetings.html" מגיעים לאותו קובץ, ושער שבודק את הנתיב הגולמי היה
+// מחמיץ אותם.
+const OWNER_ONLY = /^\/meetings(\.html)?(\/|$)/;
+
+function ownerOnly(pathname) {
+  let p = pathname;
+  try {
+    p = decodeURIComponent(p);
+  } catch (e) {
+    return true;                       // נתיב שבור — נכשל סגור
+  }
+  return OWNER_ONLY.test(p.toLowerCase().replace(/\/{2,}/g, "/"));
+}
+
+// 404 ולא 403: מי שאינו הבעלים לא אמור לדעת שהעמוד קיים.
+const notFound = () => new Response("Not found", { status: 404 });
 
 function toLogin(url) {
   const next = url.pathname + url.search;
@@ -76,16 +96,24 @@ export async function onRequest(context) {
       }
       return next();
     }
+    let s;
     try {
       if (!env.SESSION_SECRET) return toLogin(url);
-      const s = await readSession(readCookie(request, COOKIE), env.SESSION_SECRET);
+      s = await readSession(readCookie(request, COOKIE), env.SESSION_SECRET);
       if (!s) return toLogin(url);
     } catch (e) {
       console.log("session gate error", String(e));
       return toLogin(url);
     }
+    // נכשל סגור: בלי OWNER_EMAIL אין לאיש גישה.
+    if (ownerOnly(url.pathname)) {
+      const owner = normEmail(env.OWNER_EMAIL || "");
+      if (!owner || normEmail(s.e) !== owner) return notFound();
+    }
     return next();
   }
+
+  if (ownerOnly(url.pathname)) return notFound();
 
   return next();
 }

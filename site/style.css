@@ -141,6 +141,7 @@ nav a {
 }
 nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 nav a.hi { color: var(--accent); font-weight: 700; }
+nav a[hidden] { display: none; }
 
 main {
   max-width: var(--wide);
@@ -1369,6 +1370,11 @@ li.revbox {
 }
 .tr-text p { margin: 0 0 0.75rem; }
 .tr-text p.sp b { color: var(--accent); font-weight: 700; }
+/* השיחות שלי: זמן בהקלטה ליד כל קטע, כדי למצוא אותו בקובץ */
+.mt-t {
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.74rem;
+  color: var(--faint); margin-inline: 0.3rem; font-variant-numeric: tabular-nums;
+}
 
 .tr-note {
   margin-top: 1.8rem; font-size: 0.78rem; color: var(--faint); line-height: 1.6;

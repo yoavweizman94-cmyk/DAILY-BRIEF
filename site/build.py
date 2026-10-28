@@ -29,6 +29,7 @@ import otc
 import offex
 import jumbo
 import transcripts
+import meetings
 import mcp_data
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,7 +62,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a><a href="{root}headlines.html">כותרות</a><a href="{root}reports.html">דיווחים</a><a href="{root}cbs.html">למ"ס</a><a href="{root}auto.html">רכב</a><a href="{root}commodities.html">סחורות</a><a href="{root}gov-communications.html">רגולציה</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a><a href="{root}headlines.html">כותרות</a><a href="{root}reports.html">דיווחים</a><a href="{root}cbs.html">למ"ס</a><a href="{root}auto.html">רכב</a><a href="{root}commodities.html">סחורות</a><a href="{root}gov-communications.html">רגולציה</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}meetings.html" data-owner hidden>השיחות שלי</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
   <a class="brand" href="{root}index.html">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
 </header>
 <main>
@@ -72,6 +73,12 @@ PAGE = """<!DOCTYPE html>
   <span>הנתונים נאספים ממקורות ציבוריים — מאיה, הלמ"ס, רמ"י, רשות המסים ופרסומי שוק.</span>
   <span>אין באמור ייעוץ השקעות, שיווק השקעות או המלצה לפעולה בניירות ערך, ואין בו תחליף לייעוץ אישי המתחשב בנתוניו של כל אדם.</span>
 </footer>
+<script>
+/* קישורים לבעלים בלבד ("השיחות שלי"). השער האמיתי הוא _middleware.js — כאן רק התצוגה. */
+fetch("/api/me", {{credentials: "same-origin"}}).then(function (r) {{ return r.ok ? r.json() : null; }})
+  .then(function (j) {{ if (j && j.owner) document.querySelectorAll("[data-owner]").forEach(function (e) {{ e.hidden = false; }}); }})
+  .catch(function () {{}});
+</script>
 </body>
 </html>
 """
@@ -1351,6 +1358,24 @@ def main() -> int:
                             site_title=site_title, root="../", body=tbody),
                 encoding="utf-8")
         print(f"::notice::תמלולי שיחות שנבנו לאתר: {len(tr_rows)}")
+
+    # השיחות של הבעלים עם חברות — הקלטות שתומללו במחשב שלו. נבנה תמיד, גם ריק,
+    # כדי שהקישור בניווט לא יוביל ל-404 לפני ההקלטה הראשונה. **לבעלים בלבד**:
+    # השער ב-functions/_middleware.js. הלוג ציבורי — ולכן ספירות בלבד.
+    mt_rows = meetings.load()
+    (OUT / "meetings.html").write_text(
+        PAGE.format(title=f"השיחות שלי · {site_title}", site_title=site_title, root="",
+                    body=meetings.index(mt_rows)),
+        encoding="utf-8")
+    if mt_rows:
+        (OUT / "meetings").mkdir(exist_ok=True)
+        for fname, title, mbody in meetings.pages(mt_rows, render):
+            (OUT / "meetings" / fname).write_text(
+                PAGE.format(title=f"{title} · {site_title}",
+                            site_title=site_title, root="../", body=mbody),
+                encoding="utf-8")
+        print(f"::notice::השיחות שלי: {len(mt_rows)} הקלטות, "
+              f"{sum(1 for r in mt_rows if r.get('summary'))} עם סקירה")
 
     # site/functions/ נשאר מחוץ ל-dist בכוונה: הוא קוד שרץ לפני כל בקשה,
     # לא נכס סטטי. העתקה לתוך תיקיית הפריסה גרמה לו להיות שניהם בו-זמנית,

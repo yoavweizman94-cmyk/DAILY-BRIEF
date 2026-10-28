@@ -1,0 +1,110 @@
+name: Meetings
+
+# "השיחות שלי" — הקלטות של שיחות הבעלים עם חברות. התמלול נעשה במחשב שלו
+# (ingest/meetings_pull.py, Soniox) ונדחף לריפו התוכן; כאן: סקירה לכל הקלטה
+# (ingest/meetings_summarize.py), ופריסה.
+#
+# **הלוג ציבורי, והתוכן אינו.** שום שלב כאן אינו מדפיס שם חברה, שם קובץ או
+# מילה מתמליל — רק ספירות ועלויות. העמוד עצמו לבעלים בלבד (_middleware.js).
+on:
+  # המשימה המקומית דוחפת טריגר אחרי כל תמלול (12:00, 17:30): פריסה של
+  # התמלילים מיד, וסקירה רק אם זה כבר ערב.
+  push:
+    paths:
+      - ".trigger/meetings.json"
+  # **הסקירות בערב, אחרי מהדורת הנעילה.** הן נספרות בבלם היומי של הברייף,
+  # ובבוקר היו מורידות את מהדורת הצהריים למודל הזול. 17:30 UTC — 19:30
+  # בחורף, 20:30 בקיץ.
+  schedule:
+    - cron: "30 17 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "לכתוב סקירות גם מחוץ לחלון הערב (לא מעל התקרה היומית)"
+        type: boolean
+        default: false
+      limit:
+        description: "כמה סקירות לכל היותר בריצה"
+        default: "15"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meetings
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Jerusalem
+
+jobs:
+  meetings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Install
+        run: pip install anthropic pyyaml truststore certifi markdown
+
+      - name: Summarize
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          IN_FORCE: ${{ inputs.force }}
+          IN_LIMIT: ${{ inputs.limit }}
+        run: |
+          FLAGS=""
+          [ "${IN_FORCE:-false}" = "true" ] && FLAGS="--force"
+          python ingest/meetings_summarize.py --limit "${IN_LIMIT:-15}" $FLAGS
+
+      # **סקירה שנכתבה שולמה.** נשמרת גם כשהשלבים הבאים נופלים.
+      - name: Commit summaries
+        id: commit
+        if: always()
+        run: |
+          CH="$(git -C output status --porcelain -- meetings costs 2>/dev/null | wc -l)"
+          if [ "$CH" -gt 0 ]; then
+            CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' \
+              bash scripts/content_repo.sh push meetings || {
+                echo "::error title=הסקירות לא נשמרו::ריפו התוכן דחה את הדחיפה"; exit 1; }
+            echo "changed=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      # טריגר מהמחשב = תמלילים חדשים בריפו התוכן, גם כשלא נכתבה אף סקירה.
+      - name: Refresh content before build
+        if: always() && (steps.commit.outputs.changed == 'yes' || github.event_name == 'push')
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Rebuild site
+        if: always() && (steps.commit.outputs.changed == 'yes' || github.event_name == 'push')
+        run: python site/build.py
+
+      - uses: actions/setup-node@v7
+        if: always() && (steps.commit.outputs.changed == 'yes' || github.event_name == 'push')
+        with:
+          node-version: "20"
+
+      - name: Deploy to Cloudflare Pages
+        if: always() && (steps.commit.outputs.changed == 'yes' || github.event_name == 'push')
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
+          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
+            echo "::error::הפריסה לא החזירה כתובת"; exit 1; }

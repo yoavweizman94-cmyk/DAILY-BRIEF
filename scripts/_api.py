@@ -28,6 +28,8 @@ DEFAULT_MODEL = "claude-sonnet-5"
 # ו-$10 לפלט ביחס המקובל של 1:5. מודל שאינו כאן מתומחר כ-Sonnet, ומסומן.
 PRICES = {
     "claude-sonnet-5": {"in": 2e-6, "out": 10e-6, "cache_write": 2.5e-6, "cache_read": 0.2e-6},
+    # מהמחירון של Anthropic, 10/2026: $4 קלט, $20 פלט (סקירות השיחות, meetings_summarize).
+    "claude-opus-5-5": {"in": 4e-6, "out": 20e-6, "cache_write": 5e-6, "cache_read": 0.2e-6},
 }
 
 

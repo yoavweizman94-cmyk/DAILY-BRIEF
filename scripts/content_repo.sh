@@ -33,6 +33,12 @@ case "${1:-}" in
     git config user.name "forest-brief-bot"
     git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
     git add -A
+    # **השיחות של הבעלים נמחקות רק מהמחשב שלו, לעולם לא מצנרת.** run_daily.sh
+    # מוציא את output/meetings מעץ העבודה לזמן סוכן הברייף; אם החזרה נכשלה,
+    # "add -A" היה מוחק כאן את כל התמלילים מהריפו. מחיקה כזו מוחזרת לפני הקומיט.
+    git diff --cached --name-only --diff-filter=D -- meetings | while IFS= read -r p; do
+      git reset -q -- "$p" && git checkout -q -- "$p"
+    done
     git diff --cached --quiet && { echo "אין שינוי בתוכן"; exit 0; }
     git commit -q -m "${2:-content update} $(date +'%F %H:%M')"
     # שתי ריצות יכולות לכתוב במקביל (daily-brief ו-maya-watch בקבוצות
