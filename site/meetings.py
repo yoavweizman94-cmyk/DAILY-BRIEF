@@ -54,11 +54,25 @@ def clock(sec) -> str:
     return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}" if s >= 3600 else f"{s // 60:02d}:{s % 60:02d}"
 
 
+PLACEHOLDER = {"", "—", "-", "לא נאמר", "לא ידוע", "לא ידוע.", "לא נאמר."}
+
+
 def speaker(r: dict, sp: str) -> str:
-    """"דובר 2", ואם הסקירה זיהתה אותו מהתוכן — השם והתפקיד שנאמרו בשיחה."""
-    who = (r.get("speakers_map") or {}).get(str(sp)) or {}
-    parts = [p for p in (who.get("name"), who.get("role")) if p]
-    return " · ".join(parts) if parts else (f"דובר {sp}" if sp else "דובר")
+    """"דובר 2", ואם הסקירה זיהתה אותו מהתוכן — השם והתפקיד שנאמרו בשיחה.
+
+    **רק תווית קצרה ונקייה.** בהקלטה הראשונה (פולירם, 28/10/2026) המכונה איחדה
+    שני אנשי הנהלה לדובר אחד, והמודל כתב בשדה השם "יובל (ברוב הקטעים); בקטע
+    18:25 ככל הנראה נתנאל". הסתייגות כזו שייכת לטבלת "מי דיבר" שבסקירה; ליד כל
+    קטע בתמליל היא רעש — ואז נשאר "דובר N". המפתח הוא "2", או "דובר 2" כפי
+    שהחזירה הסקירה הראשונה."""
+    m = r.get("speakers_map") or {}
+    who = m.get(str(sp)) or m.get(f"דובר {sp}") or {}
+    parts = [v for v in ((who.get("name") or "").strip(), (who.get("role") or "").strip())
+             if v not in PLACEHOLDER and len(v) <= 24 and ";" not in v]
+    label = " · ".join(parts)
+    if len(label) > 34:
+        label = parts[0]
+    return label or (f"דובר {sp}" if sp else "דובר")
 
 
 def slug(r: dict) -> str:

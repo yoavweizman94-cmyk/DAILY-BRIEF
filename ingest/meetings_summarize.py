@@ -114,8 +114,11 @@ summary_md — **בדיוק** המבנה הבא, בכותרות markdown, בלי
 
 שאר השדות:
 - headline — אותו משפט של "בשורה אחת".
-- speakers — לכל מספר דובר שמופיע בתמליל: שם ותפקיד אם נאמרו, אחרת מחרוזת ריקה.
-  לשואל: role "המשקיע".
+- speakers — לכל מספר דובר שמופיע בתמליל. id — המספר בלבד ("2", לא "דובר 2").
+  name — השם בלבד, עד שלוש מילים, ורק כשהזיהוי ודאי; אחרת מחרוזת ריקה. role —
+  התפקיד בקצרה, עד ארבע מילים; לשואל: "המשקיע". השדות האלה מוצגים כתווית ליד כל
+  קטע בתמליל — הסתייגויות ("ככל הנראה", איחוד של שני אנשים לדובר אחד) נכתבות
+  בטבלת "מי דיבר" שבסקירה, לא כאן.
 - company — שם החברה, או מחרוזת ריקה.
 - company_basis — file_name, ‏transcript, ‏both או unknown.
 - is_company_meeting — false רק כשההקלטה בבירור אינה שיחה עם חברה."""
@@ -238,8 +241,9 @@ def main() -> int:
             "ai_company": (res.get("company") or "").strip() or None,
             "company_basis": res.get("company_basis"),
             "is_meeting": bool(res.get("is_company_meeting", True)),
-            "speakers_map": {str(s.get("id")): {"name": (s.get("name") or "").strip(),
-                                                "role": (s.get("role") or "").strip()}
+            # "דובר 2" → "2": המפתח הוא מספר הדובר שבתמליל, גם כשהמודל העתיק את התווית
+            "speakers_map": {(re.sub(r"\D", "", str(s.get("id"))) or str(s.get("id"))):
+                             {"name": (s.get("name") or "").strip(), "role": (s.get("role") or "").strip()}
                              for s in res.get("speakers") or [] if s.get("id") is not None},
             "summary_model": MODEL, "summary_usd": round(usd, 4),
             "summarized_at": datetime.now().isoformat(timespec="minutes"),
