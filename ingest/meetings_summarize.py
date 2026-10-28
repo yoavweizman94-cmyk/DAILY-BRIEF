@@ -222,8 +222,10 @@ def main() -> int:
             r["summary_skip"] = "התמליל קצר מכדי לסכם"
             f.write_text(json.dumps(r, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
             continue
+        # **64K ולא 32K.** הסקירה של שיחה בת שעה (לוינשטיין, 64 דקות, 28/10/2026)
+        # נקטעה ב-32,000 — החשיבה והסקירה הארוכה נספרות יחד — ו-$0.77 נזרקו.
         res, err, usd = _api.ask_json(SYSTEM, payload(r), SCHEMA, job=JOB, model=MODEL,
-                                      max_tokens=32000, effort="high", max_usd=3.0)
+                                      max_tokens=64000, effort="high", max_usd=3.0)
         run_usd += usd
         if err:
             failed += 1
