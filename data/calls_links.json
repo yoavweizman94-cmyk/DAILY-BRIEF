@@ -252,5 +252,45 @@
   "others": [
    "http://www.cgen.com/"
   ]
+ },
+ "1778307": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": [
+   "http://www.nice.com/",
+   "https://www.nice.com/company/investors/ir-events",
+   "https://www.nice.com/",
+   "http://www.nice.com/nice-trademarks"
+  ]
+ },
+ "1778339": {
+  "link": "https://event.choruscall.com/mediaframe/webcast.html?webcastid=MlIn7tTU",
+  "certain": true,
+  "known": [
+   "https://event.choruscall.com/mediaframe/webcast.html?webcastid=MlIn7tTU"
+  ],
+  "others": [
+   "https://dpregister.com/DiamondPassRegistration/register?confirmationNumber=10212839&linkSecurityString=10523a0994b",
+   "http://www.opko.com/"
+  ]
+ },
+ "1778498": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_2skMv0jZTk6uE61IKBmSlQ",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_2skMv0jZTk6uE61IKBmSlQ",
+   "https://us06web.zoom.us/webinar/register/WN_OYCj0N_tR7-xjNbXSJkUOA"
+  ],
+  "others": []
+ },
+ "1778497": {
+  "link": "https://urldefense.proofpoint.com/v2/url?u=https-3A__us06web.zoom.us_webinar_register_WN-5F2skMv0jZTk6uE61IKBmSlQ&d=DwMGaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=aREQyGFFwrvO9gXb0xBp6_EIxauOGpZ5j8OJUAvqARY&m=fmmi4FPfae0zW3kqJye36OQsRR9m8pwrYOQ6A4Vb8fR0zz2weAc0iguDVYuOwTZ9&s=FlJnxUkQjheVOBCtrVM62VIRuyw2YnaizHcxUFMbkQA&e=",
+  "certain": true,
+  "known": [
+   "https://urldefense.proofpoint.com/v2/url?u=https-3A__us06web.zoom.us_webinar_register_WN-5F2skMv0jZTk6uE61IKBmSlQ&d=DwMGaQ&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=aREQyGFFwrvO9gXb0xBp6_EIxauOGpZ5j8OJUAvqARY&m=fmmi4FPfae0zW3kqJye36OQsRR9m8pwrYOQ6A4Vb8fR0zz2weAc0iguDVYuOwTZ9&s=FlJnxUkQjheVOBCtrVM62VIRuyw2YnaizHcxUFMbkQA&e=",
+   "https://us06web.zoom.us/webinar/register/WN_OYCj0N_tR7-xjNbXSJkUOA"
+  ],
+  "others": []
  }
 }
