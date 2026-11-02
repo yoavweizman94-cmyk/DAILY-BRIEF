@@ -87,8 +87,7 @@ export async function onRequestPost({ request, env }) {
 
   // בלי אסימון: הבקשה נרשמת ל-KV ונתבעת בפעימה הקרובה. מפתח אחד בכוונה —
   // שתי לחיצות עוקבות הן בקשה אחת, לא שתי מהדורות.
-  if (!env.GITHUB_DISPATCH_TOKEN) {
-    if (!env.USERS) return json({ error: "לא הוגדר אסימון הפעלה", setup: SETUP }, 501);
+  async function enqueue(why) {
     await env.USERS.put(QUEUE_KEY, JSON.stringify({
       edition, at: new Date().toISOString(), by: email,
     }), { expirationTtl: QUEUE_TTL });
@@ -97,10 +96,15 @@ export async function onRequestPost({ request, env }) {
       edition,
       queued: true,
       label: LABEL[edition],
-      message: `נרשמה בקשה להפקת ברייף (${LABEL[edition]}) ולרענון כל עמודי האתר. ההפקה מתחילה `
+      message: (why ? why + " " : "")
+        + `נרשמה בקשה להפקת ברייף (${LABEL[edition]}) ולרענון כל עמודי האתר. ההפקה מתחילה `
         + `${QUEUE_WAIT} ונמשכת 15–25 דקות. להתחלה מיידית צריך אסימון — ראה המדריך.`,
       runs: `https://github.com/${REPO}/actions/workflows/brief-request.yml`,
     }, 202, NO_STORE);
+  }
+  if (!env.GITHUB_DISPATCH_TOKEN) {
+    if (!env.USERS) return json({ error: "לא הוגדר אסימון הפעלה", setup: SETUP }, 501);
+    return enqueue("");
   }
 
   const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`, {
@@ -116,6 +120,12 @@ export async function onRequestPost({ request, env }) {
   });
   if (res.status !== 204) {
     const detail = (await res.text().catch(() => "")).slice(0, 200);
+    // **אסימון שנדחה אינו סוף הבקשה.** אסימון fine-grained פג בתאריך שנקבע כשנוצר:
+    // ב-02/11/2026 הכפתור נכשל כך, ואף לחיצה לא הגיעה ל-GitHub. הבקשה נרשמת לתור
+    // כמו בלי אסימון, וההודעה אומרת גם למה וגם מה לתקן.
+    if (env.USERS && (res.status === 401 || res.status === 403 || res.status === 404)) {
+      return enqueue(`GitHub דחה את אסימון ההפעלה (${res.status}) — כנראה שפג תוקפו.`);
+    }
     return json({ error: `GitHub השיב ${res.status}`, detail }, 502);
   }
   return json({
