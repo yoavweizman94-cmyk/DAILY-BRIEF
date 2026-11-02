@@ -41,6 +41,25 @@ jobs:
           sparse-checkout-cone-mode: false
           fetch-depth: 1
 
+      # **האסימון נבדק לפני ההצבה.** אסימון fine-grained פג בתאריך שנקבע כשנוצר, ואז
+      # הכפתור באתר נכשל בלי שום סימן כאן. הבדיקה מול GitHub מדפיסה את קוד התשובה ואת
+      # תאריך התפוגה (הכותרת github-authentication-token-expiration) — לא את הערך.
+      - name: Check the token
+        env:
+          T: ${{ secrets.DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$T" ]; then echo "::error title=אין DISPATCH_TOKEN::הסוד אינו מוגדר ב-GitHub"; exit 1; fi
+          code=$(curl -s -o /dev/null -D h.txt -w "%{http_code}" -H "Authorization: Bearer $T" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/daily-brief.yml")
+          exp=$(grep -i '^github-authentication-token-expiration:' h.txt | cut -d' ' -f2- | tr -d '\r')
+          rm -f h.txt
+          echo "::notice title=אסימון ההפעלה::GitHub השיב $code · תפוגה: ${exp:-לא צוינה}"
+          if [ "$code" != "200" ]; then
+            echo "::error title=אסימון ההפעלה נדחה ($code)::צריך אסימון fine-grained חדש לריפו DAILY-BRIEF עם Actions: Read and write, שמור כסוד DISPATCH_TOKEN"
+            exit 1
+          fi
+
       - name: Put token into Pages
         env:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
