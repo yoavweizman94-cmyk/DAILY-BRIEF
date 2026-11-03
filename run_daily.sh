@@ -204,6 +204,18 @@ python scripts/brief_pack.py "$DATE" ||   echo "::warning title=דיגסט הק�
 # בשקט הוא בדיוק מה שאיש אינו מבחין בו.
 [ -s "$RAW/pack/nadlan.json" ] ||   echo "::warning title=תמונת שוק הדיור חסרה::pack/nadlan.json לא נוצר — סעיף שוק הדיור ייצא ריק"
 
+# **הברייפים הקודמים מהיום — ברשימה, לא "אם קיימים".** במהדורת הנעילה של
+# 03/11/2026 הסוכן פתח ב-11 קריאות Bash (ls, git log, git ls-files, .gitignore)
+# רק כדי לברר מה כבר נכתב היום: output/ הוא שכפול של ריפו התוכן, וריפו הקוד
+# מתעלם ממנו. הרשימה ידועה כאן מראש. הקובץ שנכתב עכשיו אינו בה — בהרצה
+# מכוונת הוא מקבל הנחיה משלו, למטה. מהדורת לילה שנכתבת אחרי חצות כבר נושאת
+# את תאריך היום החדש, אבל היום שהיא מסכמת הוא אתמול — ולכן גם הוא ברשימה.
+PRIOR_DAYS="$DATE"
+if [ "$EDITION" = "night" ] && [ "$(date +%H)" -lt 12 ]; then
+  PRIOR_DAYS="$(date -d "$DATE -1 day" +%F) $DATE"
+fi
+PRIOR="$(for d in $PRIOR_DAYS; do ls output/brief_"$d"*.md 2>/dev/null; done | grep -vxF "$BRIEF" | tr '\n' ' ' || true)"
+
 PROMPT="היום $DATE, מהדורת $ED_HE, השעה $(date +%H:%M) שעון ישראל. \
 בצע את הפייפליין היומי לפי CLAUDE.md: קרא את הקבצים ב-data/raw/$DATE/, \
 ובתוכם את data/raw/$DATE/pack/ — קלט מעוכל שמחליף את הקבצים הגדולים: \
@@ -215,7 +227,7 @@ companies.txt (רשימת הכיסוי, הפרופילים והדרייברים)
 נקרא ממקורו. הפעל את הסקיל israeli-statistics לבדיקת פרסומי למ\"ס, \
 וכתוב את $BRIEF לפי מבנה הפלט הקשיח. \
 מיקוד המהדורה: $ED_FOCUS \
-אם כבר קיימים ב-output/ ברייפים מהיום, קרא אותם קודם ואל תחזור על אותם אייטמים — \
+ברייפים קודמים שכבר נכתבו: ${PRIOR:-אין}. אם יש כאלה, קרא אותם קודם ב-Read ואל תחזור על אותם אייטמים — \
 דווח מה השתנה מאז וסמן במפורש מה חדש. **קרא אותם לתוכן בלבד ולא לצורה**: הם כתובים \
 בצורת תבליט ישנה שאיננו משתמשים בה עוד. שורת הכותרת תכלול 'מהדורת $ED_HE'. \
 דרישה מחייבת לסעיפים הענפיים (נדל\"ן ובנייה, תעשייה וצריכה, פיננסים, אנרגיה ותשתיות, \
@@ -312,6 +324,10 @@ echo "מודל: $BRIEF_MODEL · תקרה: \$$BRIEF_MAX_USD · היום עד כה
 # · WebSearch — החדשות מגיעות מה-ingest, לא מחיפוש; מעקה 1 ממילא אוסר
 #   מספרים ממקור שאינו בצנרת.
 # · ToolSearch — אין כאן כלים נדחים שצריך לטעון.
+# · Bash לקריאה — Bash(python:*) ברשימת ההיתר לא עצר אותו. נצפה 03/11/2026:
+#   במהדורת הנעילה רצו 68 קריאות Bash (cat|jq על rss.jsonl ×20, sed, ls, git)
+#   מול 12 Read, והיא עלתה $9.37 ב-Sonnet; בצהריים 33. פקודות קריאה עוברות
+#   בלי היתר, ורק כלל חסימה עוצר אותן. python נשאר — לסקיל הלמ"ס ולחישוב.
 # WebFetch נשאר: לפעמים צריך לפתוח גוף של ידיעה שהכותרת בלבד אינה מספיקה
 # לה, וזה בדיוק מה שמעקה 3 דורש.
 # **config/mcp.brief.json ולא .mcp.json.** קובץ הפרויקט מכיל גם את שרת
@@ -340,7 +356,7 @@ claude -p "$PROMPT" \
   --mcp-config config/mcp.brief.json --strict-mcp-config \
   --permission-mode acceptEdits \
   --allowedTools "Read,Write,Edit,Glob,Grep,Skill,WebFetch,Bash(python:*),mcp__israel-statistics__*,mcp__nadlan__*" \
-  --disallowedTools "Agent,Task,WebSearch,ToolSearch,Read(//home/runner/.claude/**),Read(~/.claude/**),Read(./output/meetings/**)" \
+  --disallowedTools "Agent,Task,WebSearch,ToolSearch,Read(//home/runner/.claude/**),Read(~/.claude/**),Read(./output/meetings/**),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(sed:*),Bash(awk:*),Bash(jq:*),Bash(grep:*),Bash(rg:*),Bash(find:*),Bash(ls:*),Bash(wc:*),Bash(sort:*),Bash(git:*)" \
   --model "$BRIEF_MODEL" --max-budget-usd "$BRIEF_MAX_USD" \
   | python scripts/claude_stream.py "$ENVELOPE"
 CLAUDE_RC=${PIPESTATUS[0]}
