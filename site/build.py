@@ -29,6 +29,7 @@ import otc
 import offex
 import jumbo
 import transcripts
+import callreviews
 import meetings
 import mcp_data
 
@@ -62,7 +63,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a><a href="{root}headlines.html">כותרות</a><a href="{root}reports.html">דיווחים</a><a href="{root}cbs.html">למ"ס</a><a href="{root}auto.html">רכב</a><a href="{root}commodities.html">סחורות</a><a href="{root}gov.html">רגולציה</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}meetings.html" data-owner hidden>השיחות שלי</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a><a href="{root}headlines.html">כותרות</a><a href="{root}reports.html">דיווחים</a><a href="{root}cbs.html">למ"ס</a><a href="{root}auto.html">רכב</a><a href="{root}commodities.html">סחורות</a><a href="{root}gov.html">רגולציה</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}results.html">דוח ושיחה</a><a href="{root}meetings.html" data-owner hidden>השיחות שלי</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
   <a class="brand" href="{root}index.html">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
 </header>
 <main>
@@ -1346,6 +1347,7 @@ def main() -> int:
     # אומר מה נאמר. הופרדו לשני עמודים כי הלוח נצרך לפני השיחה והתמליל
     # אחריה, ואיחודם היה מציג לקורא חצי לא רלוונטי בכל פעם.
     tr_rows = transcripts.load()
+    cr_rows = callreviews.load()
     (OUT / "transcripts.html").write_text(
         PAGE.format(title=f"תמלולי שיחות משקיעים · {site_title}",
                     site_title=site_title, root="",
@@ -1356,12 +1358,28 @@ def main() -> int:
     # חייב להמשיך להצביע לשורש.
     if tr_rows:
         (OUT / "transcripts").mkdir(exist_ok=True)
-        for fname, title, tbody in transcripts.pages(tr_rows, render):
+        for fname, title, tbody in transcripts.pages(tr_rows, render, callreviews.by_did(cr_rows)):
             (OUT / "transcripts" / fname).write_text(
                 PAGE.format(title=f"{title} · {site_title}",
                             site_title=site_title, root="../", body=tbody),
                 encoding="utf-8")
         print(f"::notice::תמלולי שיחות שנבנו לאתר: {len(tr_rows)}")
+
+    # דוח ושיחה: הסקירה המשולבת של הדוח ושל שיחת הוועידה (ingest/call_reviews.py).
+    # נבנה תמיד, גם ריק, כדי שהקישור בניווט לא יוביל ל-404 לפני הסקירה הראשונה.
+    (OUT / "results.html").write_text(
+        PAGE.format(title=f"דוח ושיחה · {site_title}", site_title=site_title, root="",
+                    body=callreviews.index(cr_rows)),
+        encoding="utf-8")
+    if cr_rows:
+        (OUT / "results").mkdir(exist_ok=True)
+        for fname, title, cbody in callreviews.pages(cr_rows, render):
+            (OUT / "results" / fname).write_text(
+                PAGE.format(title=f"{title} · {site_title}",
+                            site_title=site_title, root="../", body=cbody),
+                encoding="utf-8")
+        print(f"::notice::דוח ושיחה: {len(cr_rows)} סקירות, "
+              f"{sum(1 for r in cr_rows if r.get('tweets'))} עם שרשור")
 
     # השיחות של הבעלים עם חברות — הקלטות שתומללו במחשב שלו. נבנה תמיד, גם ריק,
     # כדי שהקישור בניווט לא יוביל ל-404 לפני ההקלטה הראשונה. **לבעלים בלבד**:

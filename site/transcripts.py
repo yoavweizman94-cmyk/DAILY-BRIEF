@@ -112,7 +112,7 @@ def anchor_heads(html: str) -> str:
 
 
 # ── עמוד השיחה ────────────────────────────────────────────────────────
-def detail(rec: dict, rows: list[dict], render) -> str:
+def detail(rec: dict, rows: list[dict], render, combined: set | None = None) -> str:
     md = rec.get("summary") or ""
     body = anchor_heads(render(md))
 
@@ -142,7 +142,9 @@ def detail(rec: dict, rows: list[dict], render) -> str:
         f'<p class="stamp">{he_date(rec.get("date"))}{approx} · '
         f'תמליל בן {rec.get("chars", 0):,} תווים · '
         f'<a href="{esc(rec.get("url"))}" target="_blank" rel="noopener">המקור בגלובס</a>'
-        f'</p>'
+        + (f' · <a href="../results/{esc(rec.get("did"))}.html">יחד עם הדוח</a>'
+           if combined and str(rec.get("did")) in combined else "")
+        + f'</p>'
         + other
         + summary_toc(body)
         + f'<div class="tr-body tr-full">{body}</div>'
@@ -244,8 +246,11 @@ def note() -> str:
         'לכיסוי מסומנות ככאלה.</p>')
 
 
-def pages(rows: list[dict], render) -> list[tuple[str, str, str]]:
-    """(שם קובץ, כותרת, גוף) לכל שיחה — build.py עוטף ב-PAGE."""
+def pages(rows: list[dict], render, combined: set | None = None) -> list[tuple[str, str, str]]:
+    """(שם קובץ, כותרת, גוף) לכל שיחה — build.py עוטף ב-PAGE.
+
+    combined — מזהי השיחות שיש להן סקירה עם הדוח (callreviews), לקישור אליה.
+    """
     return [(slug(r),
              f'{r.get("company")} · {r.get("period")} · שיחת משקיעים',
-             detail(r, rows, render)) for r in rows]
+             detail(r, rows, render, combined)) for r in rows]

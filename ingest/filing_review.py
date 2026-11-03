@@ -168,7 +168,11 @@ def as_text(blob: bytes) -> str | None:
         return None
 
 
-def review_one(client: anthropic.Anthropic, rec: dict, blob: bytes) -> str | None:
+def request_content(rec: dict, blob: bytes) -> list | None:
+    """תוכן ההודעה: ה-PDF כמסמך, או טקסט שחולץ ממנו כשהוא גדול מדי. None — לא נקרא.
+
+    משותף לסקירה כאן ולסקירה ש-call_reviews.py כותב כשאין סקירה לדוח.
+    """
     who = ", ".join(rec.get("c") or []) if isinstance(rec.get("c"), list) else str(rec.get("c"))
     head = (f"חברה: {who}\nכותרת הדיווח: {rec.get('t')}\n"
             f"תאריך הדיווח: {rec.get('d')}\nמזהה מאיה: {rec.get('id')}"
@@ -178,16 +182,32 @@ def review_one(client: anthropic.Anthropic, rec: dict, blob: bytes) -> str | Non
         doc = {"type": "document",
                "source": {"type": "base64", "media_type": "application/pdf",
                           "data": base64.standard_b64encode(blob).decode()}}
-        content = [doc, {"type": "text", "text": head + "\n\nכתוב את הסקירה."}]
-    else:
-        txt = as_text(blob)
-        if not txt:
-            return None
-        content = [{"type": "text",
-                    "text": head + "\n\n**הערה: הדוח גדול מכדי לשלוח כקובץ, "
-                    "ולכן להלן טקסט שחולץ ממנו. החילוץ עלול לערבב עמודות — "
-                    "ציין זאת בסעיף 'מה הדוח לא אומר'.**\n\n" + txt
-                    + "\n\nכתוב את הסקירה."}]
+        return [doc, {"type": "text", "text": head + "\n\nכתוב את הסקירה."}]
+    txt = as_text(blob)
+    if not txt:
+        return None
+    return [{"type": "text",
+             "text": head + "\n\n**הערה: הדוח גדול מכדי לשלוח כקובץ, "
+             "ולכן להלן טקסט שחולץ ממנו. החילוץ עלול לערבב עמודות — "
+             "ציין זאת בסעיף 'מה הדוח לא אומר'.**\n\n" + txt
+             + "\n\nכתוב את הסקירה."}]
+
+
+def save(rec: dict, md: str, pdf_bytes: int, model: str = MODEL) -> None:
+    """הסקירה לריפו, עם שורת מטא בראשה — build.py מסיר אותה ומרנדר את השאר."""
+    meta = {"id": rec["id"], "date": rec["d"], "title": rec["t"],
+            "companies": rec.get("c"), "model": model,
+            "generated": datetime.now().isoformat(timespec="seconds"),
+            "pdf": rec["p"], "pdf_bytes": pdf_bytes}
+    (REVIEWS / f"{rec['id']}.md").write_text(
+        "<!--" + json.dumps(meta, ensure_ascii=False) + "-->\n" + md,
+        encoding="utf-8")
+
+
+def review_one(client: anthropic.Anthropic, rec: dict, blob: bytes) -> str | None:
+    content = request_content(rec, blob)
+    if content is None:
+        return None
 
     with client.messages.stream(
         model=MODEL,
@@ -269,13 +289,7 @@ def main() -> int:
         if not md:
             failed += 1
             continue
-        meta = {"id": rec["id"], "date": rec["d"], "title": rec["t"],
-                "companies": rec.get("c"), "model": MODEL,
-                "generated": datetime.now().isoformat(timespec="seconds"),
-                "pdf": rec["p"], "pdf_bytes": len(blob)}
-        (REVIEWS / f"{rec['id']}.md").write_text(
-            "<!--" + json.dumps(meta, ensure_ascii=False) + "-->\n" + md,
-            encoding="utf-8")
+        save(rec, md, len(blob))
         done += 1
 
     total = write_index()

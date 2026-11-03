@@ -57,6 +57,12 @@ on:
         description: "אבחון HTML של כתבה בודדת: מזהה did (אופציונלי)"
         required: false
         default: ""
+      combine:
+        description: "דוח ושיחה: evening — בערב בלבד; now — גם עכשיו; backfill — גם שיחות ישנות שלדוח שלהן כבר יש סקירה"
+        type: choice
+        required: false
+        default: evening
+        options: [evening, now, backfill]
 
 permissions:
   contents: write
@@ -89,7 +95,8 @@ jobs:
         run: bash scripts/content_repo.sh pull
 
       - name: Install
-        run: pip install anthropic curl_cffi pyyaml truststore certifi markdown
+        # pypdf — לדוח גדול מכדי לשלוח כקובץ, כשדוח ושיחה כותבים סקירה לדוח
+        run: pip install anthropic curl_cffi pyyaml truststore certifi markdown pypdf
 
       # אבחון HTML של כתבה בודדת — רק כשמבקשים במפורש מזהה.
       - name: Probe article
@@ -135,6 +142,25 @@ jobs:
             fi
             exit "$rc"
           fi
+
+      # דוח ושיחה (ingest/call_reviews.py): לכל שיחה שסוכמה — הדוח הכספי שלה,
+      # סקירה משולבת ושרשור ל-X. בערב בלבד, אחרי מהדורת הנעילה; ראה בראש
+      # הסקריפט למה. כישלון כאן אינו עוצר את שמירת הסיכומים שכבר שולמו.
+      - name: Combine reports and calls
+        if: github.event_name != 'workflow_dispatch' || inputs.mode == 'run'
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          COMBINE: ${{ inputs.combine }}
+        run: |
+          case "$COMBINE" in
+            now)      set -- --force ;;
+            backfill) set -- --force --reviewed-only --since 2026-01-01 --limit 20 ;;
+            *)        set -- ;;
+          esac
+          python ingest/call_reviews.py "$@"
 
       # **ביטוח על עבודה משולמת.** ריצה #9 הפיקה שמונה סיכומים, ריצה #10
       # הפיקה את אותם שמונה שוב — כלומר הראשונים לא שרדו את השמירה, ואי
