@@ -300,5 +300,40 @@
    "https://us06web.zoom.us/webinar/register/WN_ReY_ZHbYQ4KfjF0IzMKMTQ"
   ],
   "others": []
+ },
+ "1779127": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_ZVioRpYSTg6ebgJxlydJLA",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_ZVioRpYSTg6ebgJxlydJLA"
+  ],
+  "others": [
+   "https://www.mlrn.co.il/",
+   "https://link.accessidoc.com/MVqkMiKjoWw9uDKcBaFr0qtsYFEq487ywiKSnq-80NbA4Rw7hmGVfxQ7xxAv-HBvEmowIaHHgLQEwTU_2bvcFEZfK2"
+  ]
+ },
+ "1779198": {
+  "link": "https://protect.checkpoint.com/v2/r02/___https:/us02web.zoom.us/webinar/register/WN_BH2AMCv4Q566j89w7D0Uqg___.YzJlOm1laXRhcmxhdzpjOm86ZTJlOGY5YmNjMmRlNTY5NjBhZWI0YWU5NDhhNjM4OWY6Nzo4ZDFmOjA5YTg2ZWI1NWJkNzc2OWE3NjQ1YWMxMTg0MmExOTZkNTQ2OGFjMzQ3YzYxMjIxNzliNzBjYTg2MmFmYTEyZjE6aDpGOkY",
+  "certain": true,
+  "known": [
+   "https://protect.checkpoint.com/v2/r02/___https:/us02web.zoom.us/webinar/register/WN_BH2AMCv4Q566j89w7D0Uqg___.YzJlOm1laXRhcmxhdzpjOm86ZTJlOGY5YmNjMmRlNTY5NjBhZWI0YWU5NDhhNjM4OWY6Nzo4ZDFmOjA5YTg2ZWI1NWJkNzc2OWE3NjQ1YWMxMTg0MmExOTZkNTQ2OGFjMzQ3YzYxMjIxNzliNzBjYTg2MmFmYTEyZjE6aDpGOkY"
+  ],
+  "others": []
+ },
+ "1779151": {
+  "link": "https://link.accessidoc.com/ReqlcKYlkB1tZRWTxlcdrRiswRaRga1P0OxqZfBUM_qnwaw3yd14XevqGPzT0r5kpTmnyG52nw0p97xY6krS60azws",
+  "certain": false,
+  "known": [],
+  "others": []
+ },
+ "1779280": {
+  "link": "https://zoom.us/webinar/register/WN_UQSyWYTNQkiB-_0YCrPI1w",
+  "certain": true,
+  "known": [
+   "https://zoom.us/webinar/register/WN_UQSyWYTNQkiB-_0YCrPI1w"
+  ],
+  "others": [
+   "https://www.pcb-technologies.com/"
+  ]
  }
 }
