@@ -116,6 +116,19 @@ if [ -z "${TOPICS_ONLY:-}" ] && [ -z "${BRIEF_FORCE:-}" ] && [ -s "$BRIEF" ]; th
   echo "::notice title=המהדורה כבר קיימת::מהדורת $ED_HE של $DATE כבר נכתבה — הריצה יוצאת בלי לשלם."
   exit 0
 fi
+# **בקשה מהתור שכבר נענתה.** לחיצה על "הפק" נרשמת לתור כשהאסימון נדחה, והתור
+# נתבע באיחור: ב-03/11/2026 בקשה מ-07:52 נתבעה אחרי 195 דקות, כשמהדורת הבוקר
+# כבר נכתבה ב-08:19 באופוס — והפיקה אותה שוב ב-Sonnet ($5.20), על גבי הטובה.
+# מהדורה שנכתבה אחרי הלחיצה היא מה שהלחיצה ביקשה; העמודים עדיין מתרעננים.
+if [ -n "${BRIEF_FORCE:-}" ] && [ -n "${BRIEF_REQUESTED_AT:-}" ] && [ -s "$BRIEF" ]; then
+  REQ_TS="$(date -d "$BRIEF_REQUESTED_AT" +%s 2>/dev/null || echo 0)"
+  WROTE_TS="$(git -C output log -1 --format=%ct -- "${BRIEF#output/}" 2>/dev/null)"
+  if [ "$REQ_TS" -gt 0 ] && [ "${WROTE_TS:-0}" -ge "$REQ_TS" ]; then
+    echo "exists" > .brief_skip
+    echo "::notice title=הבקשה כבר נענתה::מהדורת $ED_HE של $DATE נכתבה אחרי הלחיצה על הפק ($BRIEF_REQUESTED_AT) — הריצה מרעננת את העמודים בלי להפיק אותה שוב."
+    exit 0
+  fi
+fi
 if [ -n "${TOPICS_ONLY:-}" ]; then
   # **ריצה שלא כתבה ברייף חייבת לומר זאת.** הדגל יושב בקובץ טריגר
   # שנשמר בגיט, ולכן הוא שורד לטריגר הבא: מי שידחוף טריגר מחר בלי

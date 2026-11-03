@@ -67,6 +67,11 @@ on:
         type: string
         required: false
         default: ""
+      # מתי נלחץ "הפק" — בקשה שחיכתה בתור עד שהמהדורה נכתבה כבר נענתה.
+      requested_at:
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -155,6 +160,7 @@ jobs:
           BRIEF_EDITION: ${{ steps.ed.outputs.edition }}
           # הרצה ידנית תמיד מפיקה מחדש; מתוזמנת מדלגת אם כבר יש ברייף טרי
           BRIEF_FORCE: ${{ env.BRIEF_FORCE_IN }}
+          BRIEF_REQUESTED_AT: ${{ inputs.requested_at }}
           # קובץ טריגר עם "topics_only": 1 מדלג על כתיבת הברייף ומרענן
           # רק חדשות, סיכומי סקטור והאתר. ראה scripts/brief_args.py.
           TOPICS_ONLY: ${{ env.BRIEF_TOPICS_ONLY }}

@@ -140,7 +140,9 @@ def main() -> int:
 
     print(f"::notice title=בקשת הפקה::מהדורת {edition or 'לפי השעה'} — "
           f"נתבעה מ-KV אחרי {max(age, 0):.0f} דקות המתנה")
-    out(run="true", edition=edition)
+    # שעת הלחיצה עוברת הלאה: בקשה שחיכתה בתור עד שהמהדורה נכתבה בלעדיה
+    # כבר נענתה, ו-run_daily.sh יוצא בלי להפיק אותה שוב.
+    out(run="true", edition=edition, at=at)
     return 0
 
 

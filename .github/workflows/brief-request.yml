@@ -34,6 +34,7 @@ jobs:
     outputs:
       run: ${{ steps.kv.outputs.run }}
       edition: ${{ steps.kv.outputs.edition }}
+      at: ${{ steps.kv.outputs.at }}
     steps:
       # רק הסקריפט, בלי היסטוריה ובלי שאר הריפו — זו ריצה שרצה 144 פעמים ביום.
       - uses: actions/checkout@v7
@@ -90,4 +91,5 @@ jobs:
     with:
       edition: ${{ needs.poll.outputs.edition }}
       source: kv
+      requested_at: ${{ needs.poll.outputs.at }}
     secrets: inherit
