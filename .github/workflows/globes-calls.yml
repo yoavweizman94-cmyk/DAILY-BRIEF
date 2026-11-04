@@ -58,11 +58,11 @@ on:
         required: false
         default: ""
       combine:
-        description: "דוח ושיחה: evening — בערב בלבד; now — גם עכשיו; backfill — גם שיחות ישנות שלדוח שלהן כבר יש סקירה"
+        description: "דוח ושיחה (רק דוחות חדשים): evening — בערב בלבד; now — גם עכשיו"
         type: choice
         required: false
         default: evening
-        options: [evening, now, backfill]
+        options: [evening, now]
 
 permissions:
   contents: write
@@ -155,11 +155,7 @@ jobs:
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           COMBINE: ${{ inputs.combine }}
         run: |
-          case "$COMBINE" in
-            now)      set -- --force ;;
-            backfill) set -- --force --reviewed-only --since 2026-01-01 --limit 20 ;;
-            *)        set -- ;;
-          esac
+          if [ "$COMBINE" = "now" ]; then set -- --force; else set --; fi
           python ingest/call_reviews.py "$@"
 
       # **ביטוח על עבודה משולמת.** ריצה #9 הפיקה שמונה סיכומים, ריצה #10

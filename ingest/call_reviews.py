@@ -18,6 +18,10 @@
 לריפו ומוגשת מאז גם בעמוד הדוחות. כשיש סקירה, הצמד עולה כ-30 סנט; כשאין,
 עוד כדולר וחצי, כי הדוח נקרא כולו.
 
+**רק דוחות חדשים.** סקירה נכתבת רק לדוח שפורסם ב-14 הימים האחרונים, ואין
+מילוי לאחור — יואב ב-04/11/2026: "רק על הדוחות החדשים שמתפרסמים". שבועיים ולא
+יום: השיחה מגיעה לפעמים ימים אחרי הדוח, וריצה שהחמיצה ערב צריכה להשלים.
+
 **החלון והתקרה.** בערב בלבד (19:00–23:30), אחרי מהדורת הנעילה: הבלם של
 הברייף (scripts/cost_guard.py) סוכם את כל עלויות היום, וסקירות בשעות היום
 היו מורידות את הנעילה ל-Sonnet או מבטלות אותה. CALL_REVIEWS_MAX_USD ליום
@@ -56,7 +60,7 @@ MODEL = "claude-opus-5-5"
 SHORT_MODEL = "claude-sonnet-5"
 WINDOW = ((19, 0), (23, 30))
 BEFORE, AFTER = 21, 3        # ימים: הדוח לפני השיחה, או אחריה
-SINCE_DAYS = 45              # ברירת המחדל: העונה הנוכחית
+NEW_DAYS = 14                # רק דוח שפורסם בשבועיים האחרונים — ראה למעלה
 MAX_TRIES = 2                # ניסיונות בתשלום לפני שמוותרים על שיחה
 TEXT_CAP = 40_000            # תווי תמליל לאימות; הסיכום הוא העיקר
 X_MAX = 280
@@ -368,27 +372,31 @@ def spent_today() -> float:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=4, help="כמה סקירות בריצה")
-    ap.add_argument("--since", default="", help="רק שיחות מתאריך זה (ברירת מחדל: 45 יום אחורה)")
     ap.add_argument("--force", action="store_true", help="גם מחוץ לחלון הערב (לא מעל התקרה)")
-    ap.add_argument("--reviewed-only", action="store_true",
-                    help="רק דוחות שכבר יש להם סקירה — מילוי זול לאחור")
     ap.add_argument("--list", action="store_true", help="להציג את ההצמדות בלי לכתוב דבר")
     args = ap.parse_args()
 
-    since = args.since or (date.today() - timedelta(days=SINCE_DAYS)).isoformat()
-    calls = sorted((c for c in load_calls() if c["date"] >= since),
+    # רק דוחות חדשים. שיחה יכולה להקדים את הדוח ב-AFTER ימים, ולכן הסינון
+    # הראשון של השיחות רחב ממנו בהתאם; הדוח עצמו נבדק אחרי ההצמדה.
+    floor = (date.today() - timedelta(days=NEW_DAYS)).isoformat()
+    early = (date.today() - timedelta(days=NEW_DAYS + AFTER)).isoformat()
+    calls = sorted((c for c in load_calls() if c["date"] >= early),
                    key=lambda c: (c["date"], c["did"]), reverse=True)
     by_company = index_filings()
     OUT.mkdir(parents=True, exist_ok=True)
 
-    rows = [(c, find_report(c, by_company), state(c["did"])) for c in calls]
+    rows = []
+    for c in calls:
+        r = find_report(c, by_company)
+        if r is None or (r.get("d") or "") >= floor:   # שיחה על דוח ישן אינה נכתבת
+            rows.append((c, r, state(c["did"])))
     done = sum(1 for _, _, st in rows if st and st.get("status") != "failed")
     todo = [(c, r, st) for c, r, st in rows
             if r and not (st and st.get("status") != "failed")
             and int((st or {}).get("tries") or 0) < MAX_TRIES]
     with_report = sum(1 for _, r, _ in rows if r)
-    print(f"::notice::דוח ושיחה: {len(calls)} שיחות מאז {since}, {with_report} עם דוח · "
-          f"{done} נכתבו · {len(todo)} ממתינות")
+    print(f"::notice::דוח ושיחה: {with_report} שיחות על דוחות מ-{floor} ואילך, "
+          f"{len(rows) - with_report} בלי דוח · {done} נכתבו · {len(todo)} ממתינות")
 
     if args.list:
         for c, r, st in rows:
@@ -425,8 +433,6 @@ def main() -> int:
 
         review, src = stored_review(rec)
         if not review:
-            if args.reviewed_only:
-                continue
             review, usd, err = write_review(rec)
             run_usd += usd
             item_usd += usd
