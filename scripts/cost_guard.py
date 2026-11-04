@@ -29,6 +29,13 @@ HARD = float(os.environ.get("BRIEF_HARD_USD") or 30)
 CHEAP = "claude-sonnet-5"
 
 
+# **עבודה עם תקרה יומית משלה אינה נספרת כאן.** "דוח ושיחה" (ingest/call_reviews.py)
+# רץ מ-04/11/2026 גם ב-15:00, לפני מהדורת הנעילה, והנעילה מתחילה ממילא קרוב
+# לסף הקשה — $29.73 ב-03/11. אילו נספר, הנעילה הייתה מבוטלת בדיוק בימי
+# הדוחות. ההוצאה שלו חסומה בתקרה שלו (CALL_REVIEWS_MAX_USD), לא בבלם הזה.
+OWN_CAP = ("call-reviews",)
+
+
 def spent(day: str) -> tuple[float, int]:
     p = ROOT / "output" / "costs" / f"{day}.jsonl"
     if not p.exists():
@@ -38,7 +45,10 @@ def spent(day: str) -> tuple[float, int]:
         if not line.strip():
             continue
         try:
-            total += float(json.loads(line).get("usd") or 0)
+            j = json.loads(line)
+            if j.get("job") in OWN_CAP:
+                continue
+            total += float(j.get("usd") or 0)
             n += 1
         except (ValueError, AttributeError):
             continue

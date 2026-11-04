@@ -22,10 +22,12 @@
 מילוי לאחור — יואב ב-04/11/2026: "רק על הדוחות החדשים שמתפרסמים". שבועיים ולא
 יום: השיחה מגיעה לפעמים ימים אחרי הדוח, וריצה שהחמיצה ערב צריכה להשלים.
 
-**החלון והתקרה.** בערב בלבד (19:00–23:30), אחרי מהדורת הנעילה: הבלם של
-הברייף (scripts/cost_guard.py) סוכם את כל עלויות היום, וסקירות בשעות היום
-היו מורידות את הנעילה ל-Sonnet או מבטלות אותה. CALL_REVIEWS_MAX_USD ליום
-(ברירת מחדל $8); --force עוקף את החלון, לא את התקרה.
+**שני חלונות ותקרה אחת.** 15:00–16:30 ו-19:00–23:30; את 15:00 ביקש יואב
+ב-04/11/2026. הסקירות אינן נספרות בבלם של הברייף (scripts/cost_guard.py):
+הריצה של 15:00 קודמת למהדורת הנעילה, שמתחילה ממילא קרוב לסף הקשה ($29.73
+מתוך $30 ב-03/11), ואילו נספרו — הנעילה הייתה מבוטלת בדיוק בימי הדוחות.
+במקום זה יש להן תקרה משלהן, CALL_REVIEWS_MAX_USD ליום (ברירת מחדל $8),
+משותפת לשני החלונות. --force עוקף את החלונות, לא את התקרה.
 """
 from __future__ import annotations
 
@@ -58,7 +60,7 @@ OUT = CALLS / "combined"
 JOB = "call-reviews"
 MODEL = "claude-opus-5-5"
 SHORT_MODEL = "claude-sonnet-5"
-WINDOW = ((19, 0), (23, 30))
+WINDOWS = (((15, 0), (16, 30)), ((19, 0), (23, 30)))
 BEFORE, AFTER = 21, 3        # ימים: הדוח לפני השיחה, או אחריה
 NEW_DAYS = 14                # רק דוח שפורסם בשבועיים האחרונים — ראה למעלה
 MAX_TRIES = 2                # ניסיונות בתשלום לפני שמוותרים על שיחה
@@ -408,9 +410,9 @@ def main() -> int:
     if not todo:
         return 0
     now = datetime.now()
-    if not (args.force or WINDOW[0] <= (now.hour, now.minute) <= WINDOW[1]):
-        print(f"::notice::דוח ושיחה נכתבים בין {WINDOW[0][0]}:{WINDOW[0][1]:02d} ל-"
-              f"{WINDOW[1][0]}:{WINDOW[1][1]:02d}, אחרי מהדורת הנעילה — עכשיו {now:%H:%M}")
+    if not (args.force or any(a <= (now.hour, now.minute) <= b for a, b in WINDOWS)):
+        spans = " וב-".join(f"{a[0]}:{a[1]:02d}–{b[0]}:{b[1]:02d}" for a, b in WINDOWS)
+        print(f"::notice::דוח ושיחה נכתבים ב-{spans} — עכשיו {now:%H:%M}")
         return 0
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("::error::ANTHROPIC_API_KEY חסר — אי אפשר לכתוב את סקירות דוח ושיחה")
