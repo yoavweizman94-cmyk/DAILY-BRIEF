@@ -351,5 +351,23 @@
   "certain": false,
   "known": [],
   "others": []
+ },
+ "1779573": {
+  "link": "https://www.veidan-conferencing.com/fibi",
+  "certain": true,
+  "known": [
+   "https://www.veidan-conferencing.com/fibi"
+  ],
+  "others": [
+   "https://www.fibi.co.il/private/general/financialreports/reports/reports2026/"
+  ]
+ },
+ "1778592": {
+  "link": "https://events.q4inc.com/attendee/792571252",
+  "certain": false,
+  "known": [],
+  "others": [
+   "http://www.sec.gov/"
+  ]
  }
 }
