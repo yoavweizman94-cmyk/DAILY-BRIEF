@@ -328,9 +328,12 @@ jobs:
           # מחוץ לרשימה בכוונה: filings-backfill (מילוי היסטוריה לאחור, לא רענון),
           # nadlan-scan (Govmap דורש reCAPTCHA), והעסקאות המתואמות — הן נאספות במחשב
           # המשרד מ-GTO כל חצי שעה, ואין להן ריצה בענן.
+          # **ועמוד ההשפעה על מניות** (impact-watch) — מ-05/11/2026. הוא קורא את מה שהצנרות
+          # האחרות כתבו, ולכן ריצה מקבילה מנתחת את מה שכבר בריפו; השאר נאסף בריצה הבאה שלו.
           for spec in 'maya-watch.yml|{}' 'auto-watch.yml|{"force":"true"}' \
                       'commodities-watch.yml|{"force":"true"}' 'cbs-watch.yml|{}' \
-                      'gov-watch.yml|{}' 'headlines.yml|{}' 'globes-calls.yml|{"mode":"run"}'; do
+                      'gov-watch.yml|{}' 'headlines.yml|{}' 'globes-calls.yml|{"mode":"run"}' \
+                      'impact-watch.yml|{}'; do
             wf=${spec%%|*}
             inputs=${spec#*|}
             code=$(curl -sS -o resp.txt -w '%{http_code}' -X POST \

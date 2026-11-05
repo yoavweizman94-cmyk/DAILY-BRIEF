@@ -24,6 +24,8 @@ SOURCES = ROOT / "config" / "sources.yaml"
 REGIONS = ("ישראל", "עולם")
 DIR_CLASS = {"חיובי": "up", "שלילי": "down", "מעורב": "mixed"}
 DIR_MARK = {"חיובי": "▲", "שלילי": "▼", "מעורב": "◆", "ניטרלי": "●"}
+# מזהה כותרת → העוגן שלה בעמוד ההשפעה על מניות; build.py ממלא לפני הבנייה
+IMPACT: dict[str, str] = {}
 
 
 def _jsonl(p: Path) -> list[dict]:
@@ -96,6 +98,8 @@ def _item(r: dict, latest: str | None, today) -> str:
         text = escape(s["name"]) if n == 1 else str(n)
         links.append(f'<a href="{escape(s["url"])}" target="_blank" rel="noopener" '
                      f'title="{escape(s.get("title") or "")}">{text}</a>')
+    if r.get("id") in IMPACT:
+        links.append(f'<a class="im-link" href="impact.html#{IMPACT[r["id"]]}">מה זה עושה למניה ←</a>')
     srcs = " · ".join(links)
     cos = ("" if not r.get("companies") else
            '<div class="cc-cos">' + "".join(f'<span class="co">{escape(c)}</span>' for c in r["companies"]) + "</div>")

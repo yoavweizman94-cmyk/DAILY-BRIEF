@@ -63,11 +63,12 @@ case "${1:-}" in
         # וזה גם מה שהיה קורה אילו רצו בזו אחר זו.
         # אותו דין לקבצים שמצטברים מכמה צנרות: סיכומי מאיה (reports), סיווג
         # החדשות (news) ועמוד הכותרות (digest) — כל צנרת מוסיפה שורות משלה.
+        # וגם ניתוחי ההשפעה על מניות (impact): הסדר בקובץ אינו משנה לעמוד, שממיין לפי זמן.
         while IFS= read -r p; do
           [ -n "$p" ] || continue
           { git show ":2:$p" 2>/dev/null; git show ":3:$p" 2>/dev/null; } \
             | sort -u > "$p.merged" && mv "$p.merged" "$p" && git add -- "$p"
-        done < <(git diff --name-only --diff-filter=U -- 'costs/*.jsonl' 'reports/*.jsonl' 'news/*.jsonl' 'digest/*.jsonl')
+        done < <(git diff --name-only --diff-filter=U -- 'costs/*.jsonl' 'reports/*.jsonl' 'news/*.jsonl' 'digest/*.jsonl' 'impact/*.jsonl')
         # **כל קובץ נתונים אחר — הגרסה של הריצה הזו.** 12/10/2026: ברייף שנכתב
         # ושולם עליו (8.07 דולר) נזרק כאן בגלל קונפליקט ב-otc/2026.jsonl, שצנרת
         # אחרת משכה באותן דקות. קבצי נתונים כאלה הם תמונת מצב שכל צנרת מחשבת מחדש

@@ -49,6 +49,7 @@ WORKFLOWS = {
     "תמלולי שיחות": "globes-calls.yml",
     "שוק הדיור": "nadlan-scan.yml",
     "לוח שיחות ועידה": "daily-brief.yml",
+    "השפעה על מניות": "impact-watch.yml",
 }
 
 
@@ -441,6 +442,8 @@ def main() -> int:
     for label, path, field, limit, hint in (
         ("שוק הדיור", ROOT / "data" / "nadlan_state.json", "updated", 9, "Nadlan Scan"),
         ("לוח שיחות ועידה", ROOT / "output" / "calls" / "upcoming.json", "asof", 2, "Daily Brief"),
+        # רץ כל שעתיים, כל יום; יומיים בלי ריצה מוצלחת הם תקלה ולא יום שקט
+        ("השפעה על מניות", ROOT / "output" / "impact" / "state.json", "updated", 2, "Impact Watch"),
     ):
         stamp = None
         if path.exists():

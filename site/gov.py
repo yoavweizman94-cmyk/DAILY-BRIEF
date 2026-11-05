@@ -30,6 +30,8 @@ MATERIAL_DAYS = 45
 LIST_DAYS = 45
 HUB = "gov.html"
 DATAGOV = "https://data.gov.il/he/organizations/{}"
+# "gv:<גוף>:<פרסום>" → העוגן בעמוד ההשפעה על מניות; build.py ממלא לפני הבנייה
+IMPACT: dict[str, str] = {}
 
 
 def _jsonl(p: Path) -> list[dict]:
@@ -117,6 +119,9 @@ def _card(it: dict, a: dict) -> str:
     links = [f'<a href="{escape(it["url"])}" target="_blank" rel="noopener">העמוד ב-gov.il</a>']
     if a.get("doc") and a["doc"].startswith("https://"):
         links.append(f'<a href="{escape(a["doc"])}" target="_blank" rel="noopener">המסמך (PDF)</a>')
+    im = IMPACT.get(f"gv:{it.get('office')}:{it['id']}"[:200])
+    if im:
+        links.append(f'<a class="im-link" href="impact.html#{im}">מה זה עושה למניה ←</a>')
     if a.get("what"):
         basis = "מתוך המסמך" if a.get("basis") == "מסמך" else "לפי הכותרת"
         body = ((f'<p class="dg-simple gv-simple"><b>בפשטות:</b> {_txt(a["simple"])}</p>'

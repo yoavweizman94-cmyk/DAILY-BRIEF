@@ -32,6 +32,7 @@ import transcripts
 import callreviews
 import meetings
 import mcp_data
+import impact
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "site" / "dist"
@@ -41,6 +42,10 @@ PAGES = Path(__file__).parent / "pages"
 # בלי smarty: הוא ממיר גרשיים אנגליים טיפוגרפיים ומשבש עברית —
 # ש"ח הפך ל-ש&rdquo;ח וג'י סיטי ל-ג&rsquo;י סיטי.
 MD_EXT = ["tables", "sane_lists"]
+
+# מזהה מקור ("my:<דיווח>", "dg:<כותרת>") → העוגן שלו בעמוד ההשפעה על מניות. נמלא
+# בתחילת main, לפני שנבנים העמודים שמקשרים אליו.
+IMPACT_LINKS: dict[str, str] = {}
 
 # מספר עם סימן מפורש בהקשר RTL: אלגוריתם ה-bidi מציב את הסימן מימין למספר,
 # כך ש-"-7.11%" נקרא על המסך "7.11%-". בטבלת שווקים זו טעות קריאה של ממש,
@@ -63,7 +68,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a><a href="{root}headlines.html">כותרות</a><a href="{root}reports.html">דיווחים</a><a href="{root}cbs.html">למ"ס</a><a href="{root}auto.html">רכב</a><a href="{root}commodities.html">סחורות</a><a href="{root}gov.html">רגולציה</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}results.html">דוח ושיחה</a><a href="{root}meetings.html" data-owner hidden>השיחות שלי</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a><a href="{root}headlines.html">כותרות</a><a href="{root}reports.html">דיווחים</a><a href="{root}impact.html">השפעה על מניות</a><a href="{root}cbs.html">למ"ס</a><a href="{root}auto.html">רכב</a><a href="{root}commodities.html">סחורות</a><a href="{root}gov.html">רגולציה</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}results.html">דוח ושיחה</a><a href="{root}meetings.html" data-owner hidden>השיחות שלי</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
   <a class="brand" href="{root}index.html">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
 </header>
 <main>
@@ -479,6 +484,13 @@ def load_reports(day: str | None = None) -> list[dict]:
     return sorted(rows, key=lambda x: x.get("ts") or "", reverse=True)
 
 
+def _impact_link(r: dict) -> str:
+    """קישור לכרטיס של הדיווח בעמוד ההשפעה על מניות, כשנותח שם."""
+    a = IMPACT_LINKS.get(f"my:{r.get('id')}")
+    return (f'<div class="rep-watch"><a class="im-link" href="{impact.PAGE}#{a}">'
+            'מה זה עושה למניה ←</a></div>' if a else "")
+
+
 def reports_rows(rows: list[dict], limit: int | None = None,
                  day_separators: bool = False) -> str:
     out, last_day = [], None
@@ -527,6 +539,7 @@ def reports_rows(rows: list[dict], limit: int | None = None,
                + "</div>" if aff else "")
             + (f'<div class="rep-watch"><b>לעקוב:</b> {r.get("watch")}</div>'
                if (r.get("watch") or "").strip() else "")
+            + _impact_link(r)
             + "</li>")
     return "".join(out)
 
@@ -980,6 +993,14 @@ def main() -> int:
     (OUT / "briefs").mkdir(parents=True)
     shutil.copy(STYLE, OUT / "style.css")
 
+    # **השפעה על מניות נטען לפני כל העמודים** — הכותרות, הדיווחים והרגולציה מקשרים
+    # לכרטיס של אותו אירוע ("מה זה עושה למניה ←"), ועמוד הבית מציג את הבולטים.
+    _imp = impact.load()
+    IMPACT_LINKS.clear()
+    IMPACT_LINKS.update(impact.links(_imp))
+    digest.IMPACT = IMPACT_LINKS
+    gov.IMPACT = IMPACT_LINKS
+
     # --- עמודי נושאים -----------------------------------------------------
     news = load_news()
     calls = load_calls()
@@ -1079,6 +1100,7 @@ def main() -> int:
             topics_nav(topics, counts),
             markets_strip(markets, te),
             reports_panel(reports),
+            impact.home(_imp),
             calls_panel(calls, date.today().isoformat()),
             indicators_panel(te),
             calendar_panel(te),
@@ -1251,6 +1273,14 @@ def main() -> int:
                         root="", body=gov.page(_gov, _o["key"])),
             encoding="utf-8")
     for _line in gov.report(_gov):
+        print(_line)
+
+    # השפעה על מניות: מה דיווח, ידיעה או החלטת רגולטור עושים למניה מסוימת (site/impact.py)
+    (OUT / impact.PAGE).write_text(
+        PAGE.format(title=f"השפעה על מניות · {site_title}", site_title=site_title,
+                    root="", body=impact.page(_imp)),
+        encoding="utf-8")
+    for _line in impact.report(_imp):
         print(_line)
 
     # עמוד הכותרות: מה מהותי מהחדשות בארץ ובעולם, כל שלוש שעות (site/digest.py)

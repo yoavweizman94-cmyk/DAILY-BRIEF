@@ -1,0 +1,117 @@
+name: Impact Watch
+
+# עמוד "השפעה על מניות" (impact.html): לכל דיווח של חברה, ידיעה בתקשורת או החלטת
+# רגולטור שמעוררים את השאלה "מה זה עושה למניה?" — התשובה, צעד אחר צעד: שרשרת
+# ההשפעה עד השורה בדוח, כמה זה גדול ביחס לחברה, ומה יכול לבטל את ההשפעה.
+# הקלט כבר בריפו התוכן — הכותרות (headlines.yml), סיכומי מאיה (maya-watch.yml)
+# והרגולציה (gov-watch.yml) — והצנרת אינה מושכת דבר בעצמה. ראה scripts/analyze_impact.py.
+#
+# **כל שעתיים, 07:40–23:40 בחורף** (05:40–21:40 UTC; בקיץ שעה מאוחר יותר). הדקה
+# נבחרה בין הפריסות של הצנרות האחרות: מאיה ב-:00 וב-:30, הרגולציה ב-:25, הכותרות ב-:50.
+#
+# **משלם רק כשיש מה לנתח**, ובתקרה יומית משלו (IMPACT_MAX_USD, $3) — מחוץ לבלם של
+# הברייף, כמו "דוח ושיחה" (scripts/cost_guard.py, OWN_CAP).
+on:
+  schedule:
+    - cron: "40 5-21/2 * * *"
+  push:
+    paths:
+      - ".trigger/impact.json"
+  workflow_dispatch:
+    inputs:
+      max:
+        description: "כמה אירועים לנתח בריצה (ריק = 6)"
+        required: false
+        default: ""
+      reset:
+        description: "true = למחוק את ניתוחי שלושת הימים האחרונים ולנתח מחדש (אחרי תיקון בהנחיות)"
+        required: false
+        default: ""
+
+# אין כתיבה לריפו הציבורי: הניתוחים נשמרים בריפו התוכן הפרטי.
+permissions:
+  contents: read
+
+concurrency:
+  group: impact-watch
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Jerusalem
+
+jobs:
+  impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      # anthropic — המיון והניתוח קוראים ל-API ישירות (scripts/_api.py), בלי ה-CLI
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # כישלון אינו מפיל את הריצה: מה שלא נותח נשאר בחלון של 36 שעות לריצה הבאה,
+      # והמיון שכבר שולם נשמר. הלוג ציבורי — הסקריפט מדפיס מספרים בלבד.
+      - name: Triage and analyze
+        id: analyze
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          IMPACT_MAX: ${{ inputs.max }}
+          IMPACT_RESET: ${{ inputs.reset }}
+        run: |
+          set +e
+          python scripts/analyze_impact.py 2>&1 | tee analyze.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            # סוג החריגה בלבד: הודעת חריגה עלולה לשאת תוכן
+            why=$(grep -E '^[A-Za-z_.]+(Error|Exception)' analyze.log | tail -1 | cut -d: -f1)
+            echo "::warning title=עמוד ההשפעה על מניות לא עודכן (קוד $rc)::${why:-הסיבה באנוטציה שמעל} — מה שלא נותח ימתין לריצה הבאה."
+          fi
+          exit 0
+
+      # המצב נשמר גם כשלא פורסם דבר: המיון שולם, ופריט שמוין לא ימוין שוב.
+      - name: Save content
+        if: steps.analyze.outputs.changed == 'yes'
+        run: CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push impact
+
+      # התוכן נמשך שוב לפני הבנייה: צנרת אחרת עשויה הייתה לדחוף מאז, ובנייה על
+      # עותק ישן הייתה דורסת באתר תוכן חדש יותר.
+      - name: Refresh content before build
+        if: steps.analyze.outputs.published == 'yes'
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Build site
+        if: steps.analyze.outputs.published == 'yes'
+        run: python site/build.py
+
+      - uses: actions/setup-node@v7
+        if: steps.analyze.outputs.published == 'yes'
+        with:
+          node-version: "20"
+
+      - name: Check inline JS
+        if: steps.analyze.outputs.published == 'yes'
+        run: python scripts/check_inline_js.py
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.analyze.outputs.published == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
+          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
+            echo "::error::הפריסה לא החזירה כתובת"; exit 1; }

@@ -33,7 +33,10 @@ CHEAP = "claude-sonnet-5"
 # רץ מ-04/11/2026 גם ב-15:00, לפני מהדורת הנעילה, והנעילה מתחילה ממילא קרוב
 # לסף הקשה — $29.73 ב-03/11. אילו נספר, הנעילה הייתה מבוטלת בדיוק בימי
 # הדוחות. ההוצאה שלו חסומה בתקרה שלו (CALL_REVIEWS_MAX_USD), לא בבלם הזה.
-OWN_CAP = ("call-reviews",)
+#
+# **ועמוד ההשפעה על מניות** (scripts/analyze_impact.py, מ-05/11/2026) — רץ כל שעתיים
+# לאורך היום, ובתקרה יומית משלו (IMPACT_MAX_USD).
+OWN_CAP = ("call-reviews", "impact-triage", "impact")
 
 
 def spent(day: str) -> tuple[float, int]:
