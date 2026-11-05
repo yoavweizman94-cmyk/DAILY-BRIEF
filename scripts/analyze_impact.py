@@ -65,6 +65,12 @@ GOV_CFG = ROOT / "config" / "gov.yaml"
 WINDOW_H = 36          # פריט ותיק מזה כבר אינו "מה זה עושה היום"
 TRIAGE_MAX = 60        # פריטים בקריאת מיון אחת; השאר לריצה הבאה
 ANALYZE_MAX = 6        # אירועים לניתוח בריצה
+# **עדיפות 1 — "השאלה עולה, אבל סביר שההשפעה קטנה" — אחד בריצה.** בשתי הריצות
+# הראשונות (05/11/2026) המיון סימן כמחצית מהפריטים, ורובם בעדיפות 1. ניתוח של כולם
+# היה ממלא את "נבדק — כנראה לא משנה" בעשרות ביום ומכלה את התקרה היומית. האזור לא
+# מתרוקן בגלל זה: גם אירוע בעדיפות 2 שהניתוח מצא בו השפעה קטנה מגיע אליו. השאר פג
+# בסוף החלון.
+LOW_MAX = 1
 TRIES = 2              # ניתוח שנפסל בבדיקת המספרים — עוד ניסיון אחד, ואז נכשל
 KEEP_DAYS = 4          # כמה זמן נשמר מצב המיון
 DONE_HOURS = 48        # "כבר נותח" שנשלח למיון — כדי שאותו סיפור לא ינותח פעמיים
@@ -565,16 +571,22 @@ def main() -> int:
             return _finish(state, tri, entry, now, written=0, dry=args.dry)
         for i, c in enumerate(fresh, 1):
             t = res.get(i) or {"ask": False, "companies": [], "priority": 0, "reason": ""}
-            tri[c["cid"]] = {**t, "at": run, "tries": 0, "done": False}
+            tri[c["cid"]] = {**t, "at": run, "ts": c["ts_utc"], "tries": 0, "done": False}
     entry["asked"] = sum(1 for c in cands if (tri.get(c["cid"]) or {}).get("ask"))
 
     # 2. ניתוח — לפי עדיפות, ואז החדש קודם
     queue = [c for c in cands if (t := tri.get(c["cid"])) and t.get("ask") and not t.get("done")
              and int(t.get("tries") or 0) < TRIES]
     queue.sort(key=lambda c: (int(tri[c["cid"]].get("priority") or 0), c["ts_utc"]), reverse=True)
-    batch = []
-    for c in queue[: max(0, args.max)]:
+    batch, low = [], 0
+    for c in queue:
+        if len(batch) >= max(0, args.max):
+            break
         t = tri[c["cid"]]
+        if int(t.get("priority") or 0) <= 1:
+            if low >= LOW_MAX:
+                continue
+            low += 1
         batch.append({**c, "companies": list(t.get("companies") or []), "reason": t.get("reason")})
     written = 0
     if batch and spent + entry["usd"] < cap:
@@ -619,6 +631,14 @@ def main() -> int:
     return _finish(state, tri, entry, now, written=written, dry=args.dry)
 
 
+def waiting(tri: dict, now: datetime) -> int:
+    """כמה ממתינים לניתוח באמת: עדיפות 2 ומעלה, שעוד בתוך החלון. עדיפות 1 מנותחת רק
+    כמדגם (LOW_MAX), ושאר הפריטים בה פגים — לספור אותם היה מבטיח ניתוח שלא יבוא."""
+    since = (now - timedelta(hours=WINDOW_H)).isoformat(timespec="seconds")
+    return sum(1 for v in tri.values() if v.get("ask") and not v.get("done")
+               and int(v.get("priority") or 0) >= 2 and (v.get("ts") or v.get("at") or "") >= since)
+
+
 def _finish(state: dict, tri: dict, entry: dict, now: datetime, written: int, dry: bool) -> int:
     cut = (now - timedelta(days=KEEP_DAYS)).isoformat(timespec="seconds")
     tri = {k: v for k, v in tri.items() if (v.get("at") or "") >= cut}
@@ -628,7 +648,7 @@ def _finish(state: dict, tri: dict, entry: dict, now: datetime, written: int, dr
         state["updated"] = entry["at"]
     state["last"] = entry
     state["runs"] = ([entry] + list(state.get("runs") or []))[:40]
-    pending = sum(1 for v in tri.values() if v.get("ask") and not v.get("done"))
+    pending = waiting(tri, now)
     print(f"::notice title=השפעה על מניות::{entry['candidates']} פריטים בחלון, {entry['new']} חדשים "
           f"למיון, {entry['asked']} מעוררים את השאלה, נותחו {entry['analyzed']} ופורסמו "
           f"{entry['published']}, נפסלו {entry['rejected']}, תוקנו {entry['fixed']} שדות, "

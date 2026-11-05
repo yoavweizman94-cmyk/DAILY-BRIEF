@@ -237,7 +237,11 @@ def page(data: dict) -> str:
     stamp = f"עודכן {_stamp(latest)}" if latest else "טרם עודכן"
     if last and not last.get("ok"):
         stamp += f' · <span class="stale">העדכון של {_stamp(last.get("at"))} נכשל</span>'
-    pending = sum(1 for v in (state.get("triage") or {}).values() if v.get("ask") and not v.get("done"))
+    # כמו analyze_impact.waiting: עדיפות 2 ומעלה ובתוך החלון — עדיפות 1 מנותחת רק כמדגם
+    since = (now - timedelta(hours=36)).isoformat(timespec="seconds")
+    pending = sum(1 for v in (state.get("triage") or {}).values()
+                  if v.get("ask") and not v.get("done") and int(v.get("priority") or 0) >= 2
+                  and (v.get("ts") or v.get("at") or "") >= since)
     if pending:
         stamp += f" · {pending} ממתינים לניתוח"
     head = f'<div class="dash-head"><h1>השפעה על מניות</h1><span class="stamp">{stamp}</span></div>'
