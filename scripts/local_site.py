@@ -119,8 +119,13 @@ def update(force: bool) -> int:
     built = read_state().get("built", "אף פעם")
     try:
         code = Repo(SITE_URL, CODE, "/*", author="local site")
-        code.sync()
         content = Repo(CONTENT_URL, CONTENT, "/*", author="local site")
+        for r in (code, content):
+            # השכפולים שייכים לעותק בלבד. שינוי מקומי בהם, למשל קובץ שהועתק לבדיקה,
+            # היה עוצר את ה-checkout ב-Repo.sync, ובכל ריצה מחדש. נמדד 05/11/2026.
+            if (r.dir / ".git").exists():
+                r.git("reset", "--quiet", "--hard")
+        code.sync()
         content.sync()
     except Exception as e:  # noqa: BLE001 — בלי רשת נשאר העותק הקודם
         log(f"המשיכה מ-GitHub נכשלה ({str(e)[:200]}), ולכן נשאר העותק שנבנה ב-{built}")
