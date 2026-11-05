@@ -2400,3 +2400,14 @@ ul.im-home li { grid-template-columns: 3.4rem 1fr auto; }
   border: 1px solid var(--border-strong); border-radius: 3px; padding: 0 0.4rem;
 }
 .im-kind.k-mail, .im-kind.k-price { border-style: dotted; }
+/* "עוד על אותו נושא": ידיעות שאוחדו לכרטיס — מקופל, שורה לכל אחת, עם הכיוון והמקור */
+details.im-rel { margin: 0.45rem 0 0.1rem; font-size: 0.8rem; }
+details.im-rel > summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+details.im-rel > summary:hover { color: var(--accent); }
+details.im-rel ul { list-style: none; margin: 0.35rem 0 0; padding: 0; }
+details.im-rel li {
+  display: grid; grid-template-columns: 3.4rem 1fr; gap: 0 0.5rem; align-items: baseline;
+  padding: 0.3rem 0; border-top: 1px solid var(--border); line-height: 1.5;
+}
+details.im-rel li .im-rel-meta { grid-column: 2; font-size: 0.74rem; color: var(--faint); }
+details.im-rel li .im-rel-meta a { color: var(--muted); }

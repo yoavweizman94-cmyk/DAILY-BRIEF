@@ -85,31 +85,56 @@ _STOP = {"אחרי", "לפני", "בגלל", "מול", "כמו", "עוד", "יו
 _RANK = {"maya": 3, "gov": 3, "cbs": 2, "call": 2, "news": 1, "price": 1, "mail": 0}
 
 
+_NUMS = re.compile(r"\d+(?:[.,]\d+)+|\d{3,}")
+
+
 def _words(text: str) -> set[str]:
     out = set()
-    for w in re.findall(r"[א-ת״׳\"']+|[a-z0-9]+", (text or "").lower()):
+    for w in re.findall(r"[א-ת״׳\"']+|[a-z]+", (text or "").lower()):
         w = _PFX.sub("", w.strip("\"'״׳"))
         if len(w) >= 3 and w not in _STOP:
             out.add(w)
     return out
 
 
+def _overlap(a: str, b: str) -> int:
+    """מילים משותפות, ומספר מובחן משותף ("1.27", "8.7", "450") נספר כשתיים — הוא חתימה."""
+    na, nb = set(_NUMS.findall(a or "")), set(_NUMS.findall(b or ""))
+    return len(_words(a) & _words(b)) + 2 * len(na & nb)
+
+
 def dedupe(rows: list[dict]) -> list[dict]:
+    """כרטיס אחד לכל סיפור ולכל מנגנון, והשאר כ"עוד על אותו נושא" בתוך הכרטיס שנשאר.
+
+    שני כללים, שניהם לחברה משותפת:
+    · **אותו סיפור** — כותרות עם שלוש מילים משותפות (מספר מובחן נספר כשתיים), עד יומיים.
+      חוות השרתים של בזק ואדגר הגיעה מכותרת, ממאיה ומגלובס (05/11/2026).
+    · **אותו מנגנון** — אותה קבוצת חברות בדיוק, ושתי מילים משותפות ב"שורה בדוח" של החברה
+      הראשונה, באותו יום. ב-05/11 חמש ידיעות על הנפט הסתיימו כולן ב"מרווח הזיקוק" של בזן.
+    נשאר הכרטיס בעוצמה הגבוהה, ואז ממקור מוסמך (דיווח החברה לפני ידיעה עליו), ואז החדש."""
     best = sorted(rows, key=lambda r: (int(r.get("sig") or 1), _RANK.get(r.get("kind"), 0),
                                        r.get("ts") or ""), reverse=True)
-    kept: list[tuple[dict, set, set, datetime | None]] = []
+    kept: list[tuple[dict, set, str, datetime | None]] = []
     for r in best:
         cos = {c.get("name") for c in r.get("companies") or []}
-        ws = _words(r.get("headline"))
+        head = r.get("headline") or ""
+        line = ((r.get("companies") or [{}])[0].get("line") or "")
         t = _local(r.get("ts"))
-        twin = next((k for k, kc, kw, kt in kept
-                     if cos & kc and len(ws & kw) >= 3
-                     and (not t or not kt or abs(t - kt) <= timedelta(days=2))), None)
+        twin = None
+        for k, kc, kh, kt in kept:
+            near = not t or not kt or abs(t - kt) <= timedelta(days=2)
+            same_day = bool(t and kt and t.date() == kt.date())
+            k_line = ((k.get("companies") or [{}])[0].get("line") or "")
+            if (cos & kc and near and _overlap(head, kh) >= 3) or \
+               (cos == kc and same_day and len(_words(line) & _words(k_line)) >= 2):
+                twin = k
+                break
         if twin is not None:
-            # הקישור מהכותרת או מהדיווח שהוסר מוביל לכרטיס שנשאר
+            # הקישור מהכותרת או מהדיווח שהוסר מוביל לכרטיס שנשאר, והפריט מוצג בתוכו
             twin.setdefault("_alias", []).append(r.get("src"))
+            twin.setdefault("_related", []).append(r)
             continue
-        kept.append((r, cos, ws, t))
+        kept.append((r, cos, head, t))
     return sorted((k[0] for k in kept), key=lambda r: r.get("ts") or "", reverse=True)
 
 
@@ -222,7 +247,25 @@ def _card(r: dict, profiles: dict, latest: str | None, today) -> str:
             + (f'<p class="im-verdict"><b>השורה התחתונה:</b> {_txt(r["verdict"])}</p>' if r.get("verdict") else "")
             + (f'<p class="au-conf"><b>מה יאשר או יפריך:</b> {_txt(r["watch"])}</p>' if r.get("watch") else "")
             + (f'<p class="dg-src">{src}</p>' if src else "")
+            + _related(r, today)
             + "</article>")
+
+
+def _related(r: dict, today) -> str:
+    """ידיעות נוספות על אותו סיפור או אותו מנגנון — שורה לכל אחת, עם המקור שלה."""
+    rel = sorted(r.get("_related") or [], key=lambda x: x.get("ts") or "", reverse=True)
+    if not rel:
+        return ""
+    lis = []
+    for x in rel:
+        src = _sources(x)
+        dirs = " · ".join(f'{escape(c["name"])} {DIR_MARK.get(c.get("direction"), "")}'
+                          for c in (x.get("companies") or [])[:2])
+        lis.append(f'<li><span class="dg-time">{_when(x.get("ts"), today)}</span>'
+                   f'<span dir="auto">{_txt(x.get("headline"))}</span>'
+                   f'<span class="im-rel-meta">{dirs}{" · " + src if src else ""}</span></li>')
+    return (f'<details class="im-rel"><summary>עוד על אותו נושא <span class="au-cnt">{len(rel)}</span>'
+            f'</summary><ul>{"".join(lis)}</ul></details>')
 
 
 HOW = """<details class="im-how"><summary>איך לקרוא את הכרטיסים</summary><dl>

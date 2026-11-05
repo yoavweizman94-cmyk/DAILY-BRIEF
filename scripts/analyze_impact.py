@@ -210,6 +210,9 @@ ask: false — כשאין חברה מסוימת שהשאלה עולה לגביה
 - סיפור שכבר מופיע ב"כבר נותח" — אלא אם יש בו התפתחות מהותית חדשה.
 - אותו סיפור בכמה פריטים (דיווח במאיה וידיעה עליו בתקשורת, או שתי ידיעות) — ask רק
   לאחד מהם: הדיווח של החברה כשיש, אחרת הפריט המפורט יותר.
+- **אותו מנגנון לאותן חברות** שכבר נותח היום (ברשימת "כבר נותח" — החברה והשורה בדוח) —
+  למשל עוד ידיעה על תזוזת הנפט אחרי שכבר נותח מה היא עושה למרווח הזיקוק של בזן. ask
+  רק אם הכיוון התהפך או שהגודל השתנה מהותית; אחרת זה אותו כרטיס במילים אחרות.
 - ידיעה מהעולם שהקשר שלה לחברה מהמפה הוא רק "אותו ענף בגדול" — בלי ערוץ שאפשר
   להצביע עליו בתיאור החברה.
 
@@ -703,8 +706,15 @@ def words(text: str) -> set[str]:
     return out
 
 
+_NUMS = re.compile(r"\d+(?:[.,]\d+)+|\d{3,}")
+
+
 def same_story(a_title: str, a_cos, b_title: str, b_cos) -> bool:
-    return bool(set(a_cos) & set(b_cos)) and len(words(a_title) & words(b_title)) >= 3
+    """חברה משותפת, ושלוש מילים משותפות — כשמספר מובחן ("1.27", "8.7") נספר כשתיים."""
+    if not set(a_cos) & set(b_cos):
+        return False
+    nums = set(_NUMS.findall(a_title or "")) & set(_NUMS.findall(b_title or ""))
+    return len(words(a_title) & words(b_title)) + 2 * len(nums) >= 3
 
 
 def candidates(now: datetime, names: set[str], mail: list[dict] | None = None) -> list[dict]:
@@ -766,8 +776,13 @@ def _cand_block(n: int, c: dict) -> str:
 
 def triage(batch: list[dict], done: list[dict], names: set[str],
            sector: dict[str, str]) -> tuple[dict[int, dict] | None, float]:
-    already = "\n".join(f"- {r.get('title')} ({', '.join(x['name'] for x in r.get('companies') or [])})"
-                        for r in done) or "— אין"
+    # **הכותרת היא headline, לא title.** עד 05/11/2026 23:15 הרשימה נשלחה עם "None" במקום
+    # כותרת, והמיון לא יכול היה לזהות סיפור שכבר נותח — חוות השרתים של בזק ואדגר נותחה
+    # שלוש פעמים. השורה בדוח לצד כל חברה היא מה שמזהה "אותו מנגנון".
+    already = "\n".join(
+        f"- {r.get('headline') or r.get('title')} ("
+        + "; ".join(f"{x.get('name')}: {x.get('line') or '—'}" for x in r.get("companies") or []) + ")"
+        for r in done) or "— אין"
     data = (f"=== מפת חברות הכיסוי ({len(names)}) — סקטור, ומה כל חברה עושה לפי מאיה ===\n"
             f"{_map_block(names, sector)}\n\n=== הדרייברים של כל סקטור ===\n{drivers_block()}\n\n"
             f"=== כבר נותח ב-48 השעות האחרונות ===\n{already}\n\n"
