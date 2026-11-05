@@ -2394,3 +2394,9 @@ ul.im-home li { grid-template-columns: 3.4rem 1fr auto; }
   .im-filters input { width: 100%; }
   .im-count { margin-inline-start: 0; }
 }
+/* תג האזור — ישראל או עולם — ליד סוג המקור; שקט, כי הוא הקשר ולא דירוג */
+.im-reg {
+  font-size: 0.66rem; font-weight: 600; line-height: 1.6; color: var(--muted);
+  border: 1px solid var(--border-strong); border-radius: 3px; padding: 0 0.4rem;
+}
+.im-kind.k-mail, .im-kind.k-price { border-style: dotted; }

@@ -8,11 +8,25 @@
 "מה זה עושה למניה?" — שרשרת ההשפעה צעד אחר צעד, כמה זה גדול ביחס לחברה, ומה עלול
 לבטל את ההשפעה. **"כמעט כלום" היא תשובה לגיטימית**, והעמוד מציג אותה בנפרד.
 
-**שלושה מקורות, כולם כבר מעובדים בריפו התוכן** — הצנרת אינה מושכת דבר בעצמה:
-· output/digest/ — הכותרות שעמוד הכותרות בחר כמהותיות (scripts/digest.py).
+**כל המקורות שיש באתר, מהארץ ומהעולם** (מ-05/11/2026, לבקשת יואב — "לא רק חדשות
+בישראל"). כולם כבר בריפו התוכן, חוץ מהניוזלטרים שנמשכים באותה ריצה:
+· output/digest/ — הכותרות שעמוד הכותרות בחר כמהותיות (scripts/digest.py), ישראל ועולם.
+· output/news/ — כל הידיעות מ-21 פידי הברייף (רויטרס, FreightWaves, Mining.com, Defense
+  News, Electrive, TheMarker, גלובס...), מסווגות לפי ענף. כותרת בלבד.
+· output/commodities/items/, output/auto/items/ — חדשות הסחורות והרכב מהארץ ומהעולם,
+  עם תקציר.
+· output/commodities/prices/ — תזוזה חדה במחיר סחורה (Trading Economics, 108 מכשירים):
+  יומית מ-PX_DAY% או שבועית מ-PX_WEEK%.
 · output/reports/ — דיווחי מאיה עם הסיכום שלהם (scripts/summarize_reports.py),
   מהותיות 2 ומעלה, שנוגעים בחברת כיסוי.
 · output/gov/ — פרסומי רגולטורים שסומנו מהותיים וסוקרו (scripts/analyze_gov.py).
+· output/cbs/analyses/ — פרסומי הלמ"ס והניתוח שלהם, כולל ההשלכות לפי ענף.
+· output/calls/transcripts_<שנה>.jsonl — סיכומי שיחות המשקיעים (globes_calls).
+· data/raw/<היום>/gmail.jsonl — הניוזלטרים מהמייל (FT, WSJ, Bloomberg, רויטרס, Economist,
+  NYT, כלכליסט, TheMarker, Industry Dive...), מ-ingest/gmail_pull.py באותה ריצה, בקטעים
+  של סיפור או שניים. **הקובץ אינו נשמר בשום ריפו**, ולכרטיס אין קישור — הכתובת היא של
+  תיבת הדואר של יואב — רק שם הניוזלטר. התראות "סוכן חכם" של מאיה מדולגות: מאיה כבר מקור.
+אותו סיפור מכמה מקורות נספר פעם אחת (כתובת וכותרת), והמקור העשיר יותר נשאר.
 
 **שני שלבים, כדי לא לשלם על ניתוח של כל ידיעה:**
 1. **מיון** — קריאת Sonnet אחת על הכותרות והתמציות, מול מפת 400 החברות ומה כל אחת
@@ -26,7 +40,8 @@
 המקור או בשורת שווי השוק של החברה — החברה נשמטת מהאירוע, או השדה נמחק. אירוע שלא
 נשארה בו אף חברה ינוסה פעם נוספת ואז יירשם כנכשל.
 
-**תקרה יומית משלו** (IMPACT_MAX_USD, ברירת מחדל $3), כמו "דוח ושיחה": העבודה
+**תקרה יומית משלו** (IMPACT_MAX_USD, ברירת מחדל $5 — הועלתה מ-$3 עם המעבר לכל
+המקורות, כשהמיון רואה פי ארבעה פריטים), כמו "דוח ושיחה": העבודה
 אינה נספרת בבלם של הברייף (cost_guard.OWN_CAP), כדי שמהדורת הנעילה לא תרד למודל
 זול בגלל עמוד אחר — והתקרה כאן מבטיחה שהיא גם לא תתנפח.
 
@@ -58,13 +73,23 @@ CONTENT = ROOT / "output"
 DIGEST = CONTENT / "digest"
 REPORTS = CONTENT / "reports"
 GOV = CONTENT / "gov"
+NEWS = CONTENT / "news"
+COMMOD_ITEMS = CONTENT / "commodities" / "items"
+COMMOD_PRICES = CONTENT / "commodities" / "prices"
+AUTO_ITEMS = CONTENT / "auto" / "items"
+CBS_AN = CONTENT / "cbs" / "analyses"
+CALLS = CONTENT / "calls"
+RAW = ROOT / "data" / "raw"
 OUT = CONTENT / "impact"
 COMPANIES = ROOT / "config" / "companies.yaml"
 GOV_CFG = ROOT / "config" / "gov.yaml"
 
 WINDOW_H = 36          # פריט ותיק מזה כבר אינו "מה זה עושה היום"
-TRIAGE_MAX = 60        # פריטים בקריאת מיון אחת; השאר לריצה הבאה
-ANALYZE_MAX = 6        # אירועים לניתוח בריצה
+# כל המקורות יחד הם 500–700 פריטים ביום. ריצה כל שעתיים רואה כ-60–90 חדשים.
+TRIAGE_MAX = 100       # פריטים בקריאת מיון אחת; השאר לריצה הבאה
+ANALYZE_MAX = 8        # אירועים לניתוח בריצה
+PX_DAY, PX_WEEK = 3.0, 8.0     # % — מכאן תזוזת מחיר סחורה היא אירוע
+MAIL_CHUNKS = 12       # קטעים לניוזלטר — הסיפורים הראשונים הם הראשיים
 # **עדיפות 1 — "השאלה עולה, אבל סביר שההשפעה קטנה" — אחד בריצה.** בשתי הריצות
 # הראשונות (05/11/2026) המיון סימן כמחצית מהפריטים, ורובם בעדיפות 1. ניתוח של כולם
 # היה ממלא את "נבדק — כנראה לא משנה" בעשרות ביום ומכלה את התקרה היומית. האזור לא
@@ -79,7 +104,24 @@ TRIAGE_MODEL = "claude-sonnet-5"
 MODEL = "claude-opus-5-5"
 JOBS = ("impact-triage", "impact")
 
-KINDS = {"news": "תקשורת", "maya": "דיווח החברה", "gov": "רגולציה"}
+KINDS = {"news": "תקשורת", "maya": "דיווח החברה", "gov": "רגולציה", "cbs": "הלמ\"ס",
+         "price": "מחיר סחורה", "call": "שיחת משקיעים", "mail": "ניוזלטר"}
+REGIONS = {"il": "ישראל", "world": "עולם"}
+# אתר ישראלי — לפי שם המקור או כותרת בעברית. ידיעה בלי שדה אזור מקבלת כך את האזור שלה.
+IL_SRC = re.compile(r"[֐-׿]|globes|calcalist|themarker|bizportal|ynet|maariv|haaretz|"
+                    r"ice\.co\.il|walla|mako|davar|israelhayom|jpost|timesofisrael", re.I)
+# שם הניוזלטר לפי דומיין השולח — הכתובת עצמה אינה נשמרת
+MAIL_NAMES = (("ft.com", "FT"), ("wsj.com", "WSJ"), ("bloomberg", "Bloomberg"),
+              ("thomsonreuters", "Reuters"), ("reuters", "Reuters"), ("economist", "The Economist"),
+              ("nytimes", "NYT"), ("haaretz", "TheMarker"), ("calcalist", "כלכליסט"),
+              ("divenewsletter", "Industry Dive"), ("ittnewsletter", "Data Center Knowledge"),
+              ("stratechery", "Stratechery"))
+MAIL_IL = ("TheMarker", "כלכליסט")
+MAIL_SKIP = re.compile(r"mailtase\.co\.il", re.I)   # "סוכן חכם" של מאיה — מאיה כבר מקור ישיר
+MAIL_BOILER = re.compile(r"unsubscribe|view (?:this|it|in) (?:email )?(?:in )?(?:your )?browser|"
+                         r"privacy (?:policy|notice)|manage (?:your )?(?:preferences|subscriptions?|"
+                         r"email)|all rights reserved|©|copyright|להסרה|הסר(?:ת)? (?:מ|את)|"
+                         r"לצפייה בדפדפן|terms of (?:use|service)|sign up|subscribe to", re.I)
 DIRECTIONS = ("חיובי", "שלילי", "מעורב", "ניטרלי")
 LEVELS = ("גבוהה", "בינונית", "נמוכה")
 
@@ -123,9 +165,18 @@ RULES = """כללים שאין לחרוג מהם:
 
 TRIAGE_PROMPT = """אתה עורך עמוד "השפעה על מניות" של TLV TASE View, שירות מחקר על הבורסה בתל אביב.
 העמוד עונה לכל אירוע על שאלה אחת: **"מה זה עושה למניה?"**. הקלט: פריטים חדשים
-ממוספרים — ידיעות שעמוד הכותרות בחר, דיווחים של חברות במאיה ופרסומי רגולטורים —
-ומפת חברות הכיסוי, עם מה שכל אחת עושה לפי מאיה. סמן לכל פריט אם הוא מעורר את
-השאלה הזו לגבי חברה מסוימת מהמפה.
+ממוספרים מכל המקורות, מהארץ ומהעולם — ידיעות (כותרות, חדשות ענפיות, סחורות ורכב),
+ניוזלטרים (FT, WSJ, Bloomberg, רויטרס ועוד), דיווחים של חברות במאיה, פרסומי רגולטורים
+והלמ"ס, שיחות משקיעים, ותזוזות חדות במחירי סחורות — ומפת חברות הכיסוי, עם מה שכל
+אחת עושה לפי מאיה והדרייברים של כל סקטור. סמן לכל פריט אם הוא מעורר את השאלה הזו
+לגבי חברה מסוימת מהמפה.
+
+**ידיעה מהעולם רלוונטית בדיוק כמו ידיעה מהארץ** — כשהיא מזיזה דרייבר של חברה מהמפה:
+מחיר של סחורה שהחברה מייצרת, צורכת או מחזיקה במלאי; ספק, לקוח או מתחרה גלובליים;
+ביקוש בשוק היעד שלה; מכס או רגולציה במדינה שהיא מוכרת אליה. רוב הידיעות מהעולם לא
+יעברו — אבל אלה שכן הן לעיתים הדבר החשוב ביותר, כי אף אחד אחר לא חיבר אותן לבורסה
+בתל אביב. **תזוזת מחיר של סחורה** רלוונטית רק לחברה שהתיאור שלה מראה חשיפה ישירה
+אליה. **קטע מניוזלטר** עשוי להכיל כמה סיפורים — reason אומר על איזה מהם מדובר.
 
 ask: true — כשמי שמחזיק במניה מסוימת או עוקב אחריה היה שואל "מה זה עושה לה?":
 - דיווח של החברה עצמה שמשנה את התמונה: תוצאות עם שינוי מגמה או הפתעה, עסקה, הזמנה
@@ -144,6 +195,8 @@ ask: false — כשאין חברה מסוימת שהשאלה עולה לגביה
 - סיפור שכבר מופיע ב"כבר נותח" — אלא אם יש בו התפתחות מהותית חדשה.
 - אותו סיפור בכמה פריטים (דיווח במאיה וידיעה עליו בתקשורת, או שתי ידיעות) — ask רק
   לאחד מהם: הדיווח של החברה כשיש, אחרת הפריט המפורט יותר.
+- ידיעה מהעולם שהקשר שלה לחברה מהמפה הוא רק "אותו ענף בגדול" — בלי ערוץ שאפשר
+  להצביע עליו בתיאור החברה.
 
 {rules}
 
@@ -156,8 +209,10 @@ ask: false — כשאין חברה מסוימת שהשאלה עולה לגביה
 ANALYSIS_PROMPT = """אתה אנליסט המחקר של TLV TASE View, שירות מחקר על הבורסה בתל אביב. אתה כותב
 לעמוד "השפעה על מניות", שעונה לכל אירוע על שאלה אחת: **מה זה עושה למניה?**
 
-הקלט: אירועים ממוספרים — דיווחי חברות במאיה, ידיעות מהתקשורת ופרסומי רגולטורים —
-ולצד כל אחד החברות שהשאלה עולה לגביהן, עם מה שכל אחת עושה ושווי השוק שלה לפי מאיה.
+הקלט: אירועים ממוספרים מכל המקורות, מהארץ ומהעולם — דיווחי חברות במאיה, ידיעות
+וניוזלטרים, פרסומי רגולטורים והלמ"ס, שיחות משקיעים ותזוזות במחירי סחורות — ולצד
+כל אחד החברות שהשאלה עולה לגביהן, עם מה שכל אחת עושה ושווי השוק שלה לפי מאיה.
+באירוע מהעולם, הצעד הראשון בשרשרת מסביר איך הוא מגיע לישראל או לשוק של החברה.
 
 **שני קוראים, ושניהם צריכים להבין.** מנהל השקעות מקצועי, וגם קורא נבון שאינו מכיר
 את הענף. לכן: משפטים קצרים, כל מונח מקצועי מוסבר בסוגריים בהופעה הראשונה ("מרווח
@@ -173,7 +228,8 @@ ANALYSIS_PROMPT = """אתה אנליסט המחקר של TLV TASE View, שירו
 - simple — "בפשטות": 2–4 משפטים קצרים בשפה של עיתון יומי: מה קרה, ולמה מי שמחזיק
   במניה צריך לדעת. בלי ז'רגון שלא הוסבר.
 - what — "מה קרה": 40–90 מילים, העובדות מהמקור עם המספרים שבו. כשהמקור הוא כותרת
-  בלבד — פתח ב"לפי הכותרת", ואל תוסיף פרטים שאינם בה.
+  בלבד — פתח ב"לפי הכותרת", ואל תוסיף פרטים שאינם בה. בתזוזת מחיר — המחיר והשינוי
+  כפי שהם בנתונים, ומה ידוע מהמקור על הסיבה (אם לא ידוע — אמור זאת).
 - companies — אחת עד שלוש, רק מהרשימה שלצד האירוע, בשמן המדויק:
   · direction — חיובי / שלילי / מעורב / ניטרלי.
   · significance — גבוהה: עשוי לשנות במידה ניכרת את הרווח, השווי או הסיכון ביחס לגודל
@@ -242,6 +298,22 @@ def coverage() -> tuple[set[str], dict[str, str]]:
     return set(sector), sector
 
 
+def drivers_block() -> str:
+    """הדרייברים של כל סקטור (config/companies.yaml) — הגשר בין ידיעה מהעולם לחברה מהמפה."""
+    data = yaml.safe_load(COMPANIES.read_text(encoding="utf-8"))
+    cat = data.get("drivers_catalog") or {}
+    rows = []
+    for k, v in (data.get("sector_profiles") or {}).items():
+        ds = [(cat.get(x) or {}).get("desc", x) for x in (v or {}).get("drivers") or []]
+        if ds:
+            rows.append(f"{(v or {}).get('label', k)}: {', '.join(ds)}")
+    return "\n".join(rows)
+
+
+def _region(*text: str) -> str:
+    return "il" if IL_SRC.search(" ".join(t or "" for t in text)) else "world"
+
+
 def _news(days: list[str], names: set[str]) -> list[dict]:
     by: dict[str, dict] = {}
     for d in days:
@@ -260,7 +332,9 @@ def _news(days: list[str], names: set[str]) -> list[dict]:
         ) if x)
         # בגוגל ניוז אין תקציר — התמצית של עמוד הכותרות נשענת על הכותרת לבדה
         gn = bool(srcs) and all("news.google.com" in str(s.get("url") or "") for s in srcs)
-        out.append({"cid": r["id"], "kind": "news", "ts": r.get("ts") or r.get("run") or "",
+        region = {"ישראל": "il", "עולם": "world"}.get(r.get("region"), "il")
+        out.append({"cid": r["id"], "kind": "news", "region": region,
+                    "ts": r.get("ts") or r.get("run") or "",
                     "title": _clean(r.get("headline")), "text": text,
                     "hint": [c for c in r.get("companies") or [] if c in names],
                     "headline_only": gn or not r.get("summary"),
@@ -296,7 +370,7 @@ def _maya(days: list[str], names: set[str]) -> list[dict]:
             f"חברות נוספות: {_clean(r.get('affected_why'))}" if r.get("affected_why") else "",
             f"לעקוב: {_clean(r.get('watch'))}" if r.get("watch") else "",
         ) if x)
-        out.append({"cid": f"my:{rid}", "kind": "maya", "ts": r.get("ts") or "",
+        out.append({"cid": f"my:{rid}", "kind": "maya", "region": "il", "ts": r.get("ts") or "",
                     "title": _clean(r.get("headline") or r.get("title")), "text": text,
                     "hint": list(dict.fromkeys(hint)), "materiality": r.get("materiality"),
                     "headline_only": not r.get("summary"),
@@ -334,7 +408,7 @@ def _gov(since: str, names: set[str]) -> list[dict]:
             # חותמת הסיקור היא שעה מקומית בלי אזור; ההשוואות כאן הן ISO מלא
             stamp = ts if ("+" in ts[10:] or ts.endswith("Z")) else \
                 datetime.fromisoformat(ts).astimezone().isoformat(timespec="seconds")
-            out.append({"cid": f"gv:{o['key']}:{gid}"[:200], "kind": "gov", "ts": stamp,
+            out.append({"cid": f"gv:{o['key']}:{gid}"[:200], "kind": "gov", "region": "il", "ts": stamp,
                         "title": _clean(a.get("headline") or it.get("title")), "text": text,
                         "hint": hint, "headline_only": a.get("basis") != "מסמך",
                         "office": o.get("name"), "page": o.get("page"),
@@ -343,11 +417,198 @@ def _gov(since: str, names: set[str]) -> list[dict]:
     return out
 
 
+def _items(folder: Path, days: list[str], tag: str, names: set[str]) -> list[dict]:
+    """ידיעות מהפידים: output/news (כותרת וענף), output/commodities/items ו-auto/items
+    (כותרת, תקציר, אזור). ה-cid מקבל תחילית לפי המאגר — המזהים בהם אינם ייחודיים ביניהם."""
+    out = []
+    for d in days:
+        for r in _jsonl(folder / f"{d}.jsonl"):
+            title = _clean(r.get("title"))
+            if not title or not r.get("id"):
+                continue
+            body = _clean(r.get("snippet") or r.get("summary") or r.get("body"))
+            src = _clean(r.get("source"))
+            region = {"il": "il", "ישראל": "il", "world": "world", "עולם": "world"}.get(
+                r.get("region")) or _region(src, title)
+            tags = r.get("themes") or r.get("topics") or []
+            text = "\n".join(x for x in (
+                f"מקור: {src}" if src else "",
+                f"תקציר: {body[:600]}" if body else "",
+                f"תחומים: {', '.join(str(t) for t in tags)}" if tags else "",
+            ) if x)
+            url = str(r.get("url") or "")
+            out.append({"cid": f"{tag}:{r['id']}", "kind": "news", "region": region,
+                        "ts": r.get("ts") or "", "title": title, "text": text,
+                        "hint": [c for c in r.get("companies") or [] if c in names],
+                        "headline_only": not body or "news.google.com" in url,
+                        "links": [{"name": src or "מקור", "url": url, "title": title}]
+                        if url.startswith("http") else []})
+    return out
+
+
+def _num(v, digits: int = 2) -> str:
+    try:
+        return f"{float(v):,.{digits}f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _prices(days: list[str]) -> list[dict]:
+    """תזוזה חדה במחיר סחורה, מהתמונה האחרונה של היום (Trading Economics).
+
+    יומית — אירוע של אותו יום; שבועית בלבד — אירוע אחד לשבוע, כדי ששבוע של ירידות
+    לא ייספר מחדש בכל יום שהוא נמשך."""
+    data = None
+    for d in days:
+        data = _load(COMMOD_PRICES / f"{d}.json", None)
+        if data:
+            break
+    if not data:
+        return []
+    day = data.get("date") or ""
+    stamp = data.get("fetched_at") or f"{day}T12:00:00"
+    out = []
+    for sym, p in (data.get("te") or {}).items():
+        try:
+            dd, ww = float(p.get("DailyPercentualChange")), float(p.get("WeeklyPercentualChange"))
+        except (TypeError, ValueError):
+            continue
+        daily = abs(dd) >= PX_DAY
+        if not daily and abs(ww) < PX_WEEK:
+            continue
+        name = p.get("Name") or sym
+        move = dd if daily else ww
+        try:
+            y, w, _ = datetime.fromisoformat(day).isocalendar()
+        except ValueError:
+            continue
+        cid = f"px:{sym}:{day}" if daily else f"px:{sym}:{y}w{w}"
+        text = (f"מחיר {name} ({p.get('Group') or ''}): {_num(p.get('Last'))} {p.get('unit') or ''}, "
+                f"נכון ל-{str(p.get('Date') or '')[:16]}.\n"
+                f"שינוי יומי {_num(p.get('DailyPercentualChange'))}%, שבועי {_num(ww)}%, "
+                f"חודשי {_num(p.get('MonthlyPercentualChange'))}%, שנתי {_num(p.get('YearlyPercentualChange'))}%.\n"
+                f"לפני יום {_num(p.get('yesterday'))}, לפני שבוע {_num(p.get('lastWeek'))}, "
+                f"לפני חודש {_num(p.get('lastMonth'))}. המקור: Trading Economics. הסיבה לתזוזה "
+                "אינה בנתונים — רק במה שידיעות אחרות אומרות.")
+        out.append({"cid": cid, "kind": "price", "region": "world", "ts": stamp,
+                     "title": f"{name}: {'עלייה' if move > 0 else 'ירידה'} של {abs(move):.1f}% "
+                              f"{'ביום' if daily else 'בשבוע'}",
+                     "text": text, "hint": [], "headline_only": False,
+                     "links": [{"name": "Trading Economics", "url": "https://tradingeconomics.com/commodities",
+                                "title": name}]})
+    return out
+
+
+def _cbs(since: str, names: set[str]) -> list[dict]:
+    """פרסומי הלמ"ס שנותחו בחלון — עם ההשלכות לפי ענף שעמוד הלמ"ס כבר כתב."""
+    out = []
+    for f in sorted(CBS_AN.glob("*.jsonl"))[-2:]:
+        for r in _jsonl(f):
+            ts = str(r.get("analyzed_at") or "")
+            if not r.get("headline") or not ts:
+                continue
+            figs = "; ".join(f"{k.get('label')}: {k.get('value')}" + (f" ({k.get('change')})" if k.get("change") else "")
+                             for k in r.get("key_figures") or [] if isinstance(k, dict))
+            micro = r.get("micro") or []
+            fx = "; ".join(f"{m.get('sector')}: {_clean(m.get('body'))[:280]}" for m in micro if isinstance(m, dict))
+            hint = [c for m in micro if isinstance(m, dict) for c in m.get("companies") or [] if c in names]
+            text = "\n".join(x for x in (
+                f"פרסום הלמ\"ס: {_clean(r.get('title'))} ({r.get('date') or ''})",
+                f"מה פורסם: {_clean(r.get('what_happened'))[:900]}",
+                f"נתונים: {figs}" if figs else "",
+                f"השלכות לפי ענף (עמוד הלמ\"ס): {fx[:1400]}" if fx else "",
+            ) if x)
+            out.append({"cid": f"cbs:{r.get('release_id') or r.get('title')}", "kind": "cbs", "region": "il",
+                        "ts": ts, "title": _clean(r.get("headline")), "text": text,
+                        "hint": list(dict.fromkeys(hint))[:4], "headline_only": False, "page": "cbs.html",
+                        "links": [{"name": "הלמ\"ס", "url": r.get("url") or "", "title": _clean(r.get("title"))}]
+                        if str(r.get("url") or "").startswith("http") else []})
+    return out
+
+
+def _calls(days: list[str], names: set[str]) -> list[dict]:
+    """סיכומי שיחות המשקיעים מגלובס — מה שההנהלה אמרה מעבר לדוח (תחזית, צבר, תמחור)."""
+    out = []
+    for path in {CALLS / f"transcripts_{d[:4]}.jsonl" for d in days}:
+        for r in _jsonl(path):
+            if (r.get("date") or "") not in days or not r.get("summary"):
+                continue
+            company = r.get("company") or ""
+            out.append({"cid": f"call:{r.get('did')}", "kind": "call", "region": "il",
+                        "ts": r.get("generated") or f"{r.get('date')}T18:00:00",
+                        "title": _clean(r.get("title")),
+                        "text": f"שיחת משקיעים: {_clean(r.get('title'))} ({r.get('date')})\n"
+                                f"סיכום השיחה: {_clean(r.get('summary'))[:2600]}",
+                        "hint": [company] if company in names else [], "headline_only": False,
+                        "page": "transcripts.html",
+                        "links": [{"name": "גלובס", "url": r.get("url") or "", "title": _clean(r.get("title"))}]
+                        if str(r.get("url") or "").startswith("http") else []})
+    return out
+
+
+def _mail_name(sender: str) -> str:
+    dom = (re.search(r"@([\w.-]+)", sender or "") or [None, ""])[1].lower()
+    for key, name in MAIL_NAMES:
+        if key in dom:
+            return name
+    disp = (sender or "").removeprefix("gmail:").split("<")[0].strip().strip('"')
+    return disp[:40] or "ניוזלטר"
+
+
+def _chunks(body: str) -> list[str]:
+    """ניוזלטר לקטעים של סיפור או שניים. clean_html משאיר שורה לכל פסקה; שורות קצרות
+    (תפריטים, "קרא עוד") ושורות של הסרה ופרטיות — בחוץ."""
+    out, cur = [], ""
+    for line in (body or "").splitlines():
+        line = " ".join(line.split())
+        if len(line) < 35 or MAIL_BOILER.search(line):
+            continue
+        # 450 ולא יותר: פסקת ניוזלטר היא 200–400 תווים, וקטע גדול מזה מערבב סיפורים זרים
+        if cur and len(cur) + len(line) > 450:
+            out.append(cur)
+            cur = ""
+            if len(out) >= MAIL_CHUNKS:
+                break
+        cur = f"{cur} {line}".strip()[:900]
+    if cur and len(out) < MAIL_CHUNKS:
+        out.append(cur)
+    return out
+
+
+def _mail(days: list[str]) -> list[dict]:
+    """הניוזלטרים של היום מ-data/raw/<היום>/gmail.jsonl (ingest/gmail_pull.py, באותה ריצה).
+    בלי קישור: הכתובת היא של תיבת הדואר של יואב, ולמנויים אין בה דבר."""
+    out = []
+    for d in days[:1]:
+        for r in _jsonl(RAW / d / "gmail.jsonl"):
+            sender = str(r.get("source") or "")
+            if MAIL_SKIP.search(sender) or not r.get("id"):
+                continue
+            name = _mail_name(sender)
+            region = "il" if name in MAIL_IL else _region(_clean(r.get("title")))
+            for i, chunk in enumerate(_chunks(r.get("body") or "")):
+                first = re.split(r"(?<=[.!?])\s", chunk, 1)[0][:140]
+                out.append({"cid": f"mail:{r['id']}:{i}", "kind": "mail", "region": region,
+                            "ts": r.get("ts") or "", "title": first,
+                            "text": f"ניוזלטר: {name} — {_clean(r.get('title'))}\nקטע: {chunk}",
+                            "hint": [], "headline_only": False,
+                            "links": [{"name": name, "url": "", "title": ""}]})
+    return out
+
+
+def _key(title: str) -> str:
+    return re.sub(r"[\W_]+", "", (title or "").lower())[:60]
+
+
 def candidates(now: datetime, names: set[str]) -> list[dict]:
     since = (now - timedelta(hours=WINDOW_H)).isoformat(timespec="seconds")
     days = _days(now, 2)
-    rows = _news(days, names) + _maya(days, names) + _gov(since, names)
-    out = []
+    # **הסדר הוא העדפה בכפילות**: אותו סיפור מכמה מקורות נשאר פעם אחת, מהעשיר ביותר —
+    # דיווח החברה, הרגולטור והלמ"ס קודם; עמוד הכותרות (עם תמצית) לפני הפידים (כותרת).
+    rows = (_maya(days, names) + _gov(since, names) + _cbs(since, names) + _calls(days, names)
+            + _prices(days) + _news(days, names) + _items(COMMOD_ITEMS, days, "cm", names)
+            + _items(AUTO_ITEMS, days, "au", names) + _items(NEWS, days, "nw", names) + _mail(days))
+    out, keys, urls = [], set(), set()
     for c in rows:
         try:
             ts = datetime.fromisoformat(c["ts"]).astimezone(timezone.utc).isoformat(timespec="seconds")
@@ -355,6 +616,13 @@ def candidates(now: datetime, names: set[str]) -> list[dict]:
             continue
         if ts < since or not c["title"]:
             continue
+        k = _key(c["title"])
+        # מחירי סחורות חולקים את אותה כתובת (עמוד הסחורות ב-Trading Economics) — לא כפילות
+        u = set() if c["kind"] == "price" else {x.get("url") for x in c["links"] if x.get("url")}
+        if (k and k in keys) or (u & urls):
+            continue
+        keys.add(k)
+        urls |= u
         out.append({**c, "ts_utc": ts})
     out.sort(key=lambda c: c["ts_utc"], reverse=True)
     return out
@@ -382,11 +650,11 @@ def _map_block(names: set[str], sector: dict[str, str]) -> str:
 
 def _cand_block(n: int, c: dict) -> str:
     when = datetime.fromisoformat(c["ts"]).astimezone().strftime("%d/%m %H:%M")
-    head = f"[{n}] {KINDS[c['kind']]} · {when}"
+    head = f"[{n}] {KINDS[c['kind']]} · {REGIONS.get(c.get('region'), '')} · {when}"
     if c["kind"] == "maya" and c.get("materiality"):
         head += f" · מהותיות לפי סיכום הדיווח: {c['materiality']}"
     hint = f"\nחברות שנקבו בפריט או בסיכום שלו: {', '.join(c['hint'])}" if c["hint"] else ""
-    return f"{head}\nכותרת: {c['title']}{hint}\n{c['text'][:600]}"
+    return f"{head}\nכותרת: {c['title']}{hint}\n{c['text'][:500]}"
 
 
 def triage(batch: list[dict], done: list[dict], names: set[str],
@@ -394,7 +662,8 @@ def triage(batch: list[dict], done: list[dict], names: set[str],
     already = "\n".join(f"- {r.get('title')} ({', '.join(x['name'] for x in r.get('companies') or [])})"
                         for r in done) or "— אין"
     data = (f"=== מפת חברות הכיסוי ({len(names)}) — סקטור, ומה כל חברה עושה לפי מאיה ===\n"
-            f"{_map_block(names, sector)}\n\n=== כבר נותח ב-48 השעות האחרונות ===\n{already}\n\n"
+            f"{_map_block(names, sector)}\n\n=== הדרייברים של כל סקטור ===\n{drivers_block()}\n\n"
+            f"=== כבר נותח ב-48 השעות האחרונות ===\n{already}\n\n"
             f"=== פריטים חדשים ({len(batch)}) ===\n"
             + "\n\n".join(_cand_block(i, c) for i, c in enumerate(batch, 1)))
     res, err, usd = _api.ask_json(TRIAGE_PROMPT.format(rules=RULES), data, TRIAGE_SCHEMA,
@@ -430,7 +699,7 @@ def analyze(batch: list[dict], model: str) -> tuple[dict[int, dict] | None, floa
         cos = list(dict.fromkeys(c["companies"] + c["hint"]))[:MAX_COS + 1]
         c["_cos"] = cos
         basis = "\nהמקור: כותרת בלבד, בלי גוף." if c.get("headline_only") else ""
-        blocks.append(f"=== אירוע {i} · {KINDS[c['kind']]} ===\n"
+        blocks.append(f"=== אירוע {i} · {KINDS[c['kind']]} · {REGIONS.get(c.get('region'), '')} ===\n"
                       f"זמן: {datetime.fromisoformat(c['ts']).astimezone():%d/%m/%Y %H:%M}\n"
                       f"כותרת: {c['title']}{basis}\n{c['text'][:3000]}\n"
                       f"למה נבחר (המיון): {c.get('reason') or '—'}\n"
@@ -538,7 +807,7 @@ def main() -> int:
         if OUT.exists():
             (OUT / "state.json").write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
         print("::notice title=השפעה על מניות::אופס: ניתוחי שלושת הימים האחרונים ומצב המיון נמחקו")
-    cap = float(os.environ.get("IMPACT_MAX_USD") or 3.0)
+    cap = float(os.environ.get("IMPACT_MAX_USD") or 5.0)
     model = os.environ.get("IMPACT_MODEL") or MODEL
 
     now = datetime.now(timezone.utc)
@@ -611,11 +880,12 @@ def main() -> int:
                 t["done"] = True
                 entry["analyzed"] += 1
                 rows.append({"id": "im:" + c["cid"], "src": c["cid"], "kind": c["kind"],
+                             "region": c.get("region") or "il",
                              "ts": c["ts_utc"], "run": run, **rec,
                              "basis": "כותרת" if c.get("headline_only") else "",
                              "links": c["links"],
-                             **({"office": c.get("office"), "page": c.get("page")}
-                                if c["kind"] == "gov" else {}),
+                             **({"office": c.get("office")} if c["kind"] == "gov" else {}),
+                             **({"page": c["page"]} if c.get("page") else {}),
                              "model": model})
             if rows and not args.dry:
                 with path.open("a", encoding="utf-8", newline="\n") as fh:

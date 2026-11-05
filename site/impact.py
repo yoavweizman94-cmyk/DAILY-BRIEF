@@ -27,7 +27,13 @@ OUT = ROOT / "output" / "impact"
 PROFILES = ROOT / "data" / "company_profiles.json"
 PAGE = "impact.html"
 PAGE_DAYS = 7
-KIND_HE = {"news": "תקשורת", "maya": "דיווח החברה", "gov": "רגולציה"}
+KIND_HE = {"news": "תקשורת", "maya": "דיווח החברה", "gov": "רגולציה", "cbs": 'הלמ"ס',
+           "price": "מחיר סחורה", "call": "שיחת משקיעים", "mail": "ניוזלטר"}
+REG_HE = {"il": "ישראל", "world": "עולם"}
+# קישור לעמוד באתר שבו המקור כבר מנותח
+PAGE_LINK = {"gov": "הסיקור בעמוד הרגולציה", "cbs": 'הניתוח בעמוד הלמ"ס', "call": "הסיכום בעמוד התמלולים"}
+# ניתוחים מלפני שנוסף שדה האזור (05/11/2026): לפי שם המקור או כותרת בעברית
+_IL = re.compile(r"[֐-׿]|globes|calcalist|themarker|bizportal|ynet|haaretz", re.I)
 DIR_CLASS = {"חיובי": "up", "שלילי": "down", "מעורב": "mixed"}
 DIR_MARK = {"חיובי": "▲", "שלילי": "▼", "מעורב": "◆", "ניטרלי": "●"}
 SIG = {"גבוהה": 3, "בינונית": 2, "נמוכה": 1}
@@ -123,29 +129,48 @@ def _sources(r: dict) -> str:
     out, seen = [], {}
     for s in r.get("links") or []:
         url = str(s.get("url") or "")
+        name = s.get("name") or "מקור"
+        if r.get("kind") == "mail":
+            # ניוזלטר: שם בלבד — הקישור היה לתיבת הדואר של הבעלים
+            out.append(f"{escape(name)} (ניוזלטר)")
+            continue
         if not url.startswith("http"):
             continue
-        name = s.get("name") or "מקור"
         k = seen[name] = seen.get(name, 0) + 1
         text = escape(name) if k == 1 else str(k)
         out.append(f'<a href="{escape(url)}" target="_blank" rel="noopener" '
                    f'title="{escape(s.get("title") or "")}">{text}</a>')
-    if r.get("kind") == "gov" and r.get("page"):
-        out.append(f'<a href="{escape(r["page"])}">הסיקור בעמוד הרגולציה</a>')
+    if r.get("page") and r.get("kind") in PAGE_LINK:
+        out.append(f'<a href="{escape(r["page"])}">{PAGE_LINK[r["kind"]]}</a>')
     return ("מקור: " if len(out) == 1 else "מקורות: ") + " · ".join(out) if out else ""
+
+
+def region(r: dict) -> str:
+    """ישראל או עולם. לניתוחים שלפני השדה — דיווח, רגולציה, למ"ס ושיחה הם ישראל, וידיעה
+    לפי שם האתר."""
+    if r.get("region") in REG_HE:
+        return r["region"]
+    if r.get("kind") in ("maya", "gov", "cbs", "call"):
+        return "il"
+    probe = " ".join(str(s.get("name") or "") for s in r.get("links") or [])
+    return "il" if _IL.search(probe) else "world"
 
 
 def _card(r: dict, profiles: dict, latest: str | None, today) -> str:
     sig = int(r.get("sig") or 1)
     kind = r.get("kind") or "news"
+    reg = region(r)
     cos = r.get("companies") or []
     tags = ' <span class="dg-tag dg-new">חדש</span>' if latest and r.get("run") == latest else ""
     basis = ' <span class="au-basis">לפי הכותרת</span>' if r.get("basis") == "כותרת" else ""
+    # דיווח, רגולציה, למ"ס ושיחה הם תמיד מישראל — התג נכתב רק כשהוא אומר משהו
+    where = (f'<span class="im-reg r-{reg}">{REG_HE[reg]}</span>'
+             if kind in ("news", "mail", "price") else "")
     names = "|".join(c["name"] for c in cos)
     src = _sources(r)
     return (f'<article class="im-card" id="{anchor(r.get("src") or r["id"])}" data-kind="{escape(kind)}" '
-            f'data-sig="{sig}" data-cos="{escape(names)}">'
-            f'<p class="im-meta"><span class="im-kind k-{escape(kind)}">{KIND_HE.get(kind, "")}</span>'
+            f'data-region="{reg}" data-sig="{sig}" data-cos="{escape(names)}">'
+            f'<p class="im-meta"><span class="im-kind k-{escape(kind)}">{KIND_HE.get(kind, "")}</span>{where}'
             f'<span class="dg-time">{_when(r.get("ts"), today)}</span>{tags}{basis}</p>'
             f'<h3 dir="auto">{_txt(r.get("headline"))}</h3>'
             + (f'<p class="dg-simple"><b>בפשטות:</b> {_txt(r["simple"])}</p>' if r.get("simple") else "")
@@ -158,8 +183,9 @@ def _card(r: dict, profiles: dict, latest: str | None, today) -> str:
 
 
 HOW = """<details class="im-how"><summary>איך לקרוא את הכרטיסים</summary><dl>
-<dt>האירוע</dt><dd>דיווח של החברה במאיה, ידיעה בתקשורת או החלטה של רגולטור — וכל כרטיס עונה עליו על שאלה
-אחת: מה זה עושה למניה.</dd>
+<dt>האירוע</dt><dd>מכל המקורות, מהארץ ומהעולם: דיווח של החברה במאיה, ידיעה (גם מאתרי ענף בעולם ומחדשות
+הסחורות והרכב), ניוזלטר (FT, WSJ, Bloomberg, רויטרס ועוד), תזוזה חדה במחיר סחורה, פרסום של רגולטור או של
+הלמ"ס, או שיחת משקיעים. כל כרטיס עונה עליו על שאלה אחת: מה זה עושה למניה.</dd>
 <dt>שרשרת ההשפעה</dt><dd>הצעדים מהאירוע ועד השורה בדוח של החברה. הצעד האחרון, המודגש, הוא מה שקורה לחברה
 עצמה — ולמה דווקא לה.</dd>
 <dt>עוצמה</dt><dd><b>גבוהה</b> — עשוי לשנות במידה ניכרת את הרווח, השווי או הסיכון של החברה ביחס לגודלה.
@@ -174,9 +200,9 @@ FILTERS = """<div class="im-filters" id="im-filters" hidden>
 <div class="im-modes" role="group" aria-label="סינון">
 <button type="button" data-mode="all" aria-pressed="true">הכל</button>
 <button type="button" data-mode="sig" aria-pressed="false">גבוהה ובינונית</button>
-<button type="button" data-mode="maya" aria-pressed="false">דיווחי חברות</button>
-<button type="button" data-mode="news" aria-pressed="false">תקשורת</button>
-<button type="button" data-mode="gov" aria-pressed="false">רגולציה</button>
+<button type="button" data-mode="co" aria-pressed="false">דיווחי חברות</button>
+<button type="button" data-mode="il" aria-pressed="false">ישראל</button>
+<button type="button" data-mode="world" aria-pressed="false">עולם</button>
 </div>
 <input type="search" id="im-q" placeholder="חיפוש חברה" aria-label="חיפוש לפי שם חברה" autocomplete="off">
 <span class="im-count" id="im-count" aria-live="polite"></span>
@@ -195,8 +221,11 @@ SCRIPT = r"""<script>
   function apply() {
     var q = norm(input.value), shown = 0;
     cards.forEach(function (c) {
-      var ok = mode === "all" || (mode === "sig" ? Number(c.getAttribute("data-sig")) >= 2
-                                                 : c.getAttribute("data-kind") === mode);
+      var kind = c.getAttribute("data-kind");
+      var ok = mode === "all"
+        || (mode === "sig" && Number(c.getAttribute("data-sig")) >= 2)
+        || (mode === "co" && (kind === "maya" || kind === "call"))
+        || ((mode === "il" || mode === "world") && c.getAttribute("data-region") === mode);
       if (ok && q) {
         ok = c.getAttribute("data-cos").split("|").some(function (n) { return norm(n).indexOf(q) >= 0; });
       }
@@ -245,10 +274,11 @@ def page(data: dict) -> str:
     if pending:
         stamp += f" · {pending} ממתינים לניתוח"
     head = f'<div class="dash-head"><h1>השפעה על מניות</h1><span class="stamp">{stamp}</span></div>'
-    lead = ('<p class="lead">דיווחים של החברות עצמן, ידיעות בתקשורת והחלטות של רגולטורים — ולכל אחד '
-            'התשובה לשאלה <b>מה זה עושה למניה</b>: דרך מה זה מגיע לחברה צעד אחר צעד, כמה זה גדול '
-            'ביחס אליה, ומה יכול לבטל את ההשפעה. גם "כמעט כלום" היא תשובה, והיא מוסברת. מתעדכן כל '
-            'שעתיים, מתוך הכותרות שנבחרו באתר, דיווחי מאיה ופרסומי הרגולטורים.</p>')
+    lead = ('<p class="lead">אירועים מכל המקורות, מהארץ ומהעולם — דיווחים של החברות עצמן, ידיעות '
+            'וניוזלטרים, תזוזות חדות במחירי סחורות, החלטות של רגולטורים, פרסומי הלמ"ס ושיחות '
+            'משקיעים — ולכל אחד התשובה לשאלה <b>מה זה עושה למניה</b>: דרך מה זה מגיע לחברה צעד אחר '
+            'צעד, כמה זה גדול ביחס אליה, ומה יכול לבטל את ההשפעה. גם "כמעט כלום" היא תשובה, והיא '
+            'מוסברת. מתעדכן כל שעתיים.</p>')
     if not items:
         return "\n".join([head, lead, HOW,
                           '<p class="au-quiet">טרם נותחו אירועים. העמוד מתעדכן כל שעתיים, בשעות היום.</p>'])
@@ -260,6 +290,8 @@ def page(data: dict) -> str:
              f'<div class="tile"><div class="lbl">אירועים</div><div class="val">{len(items)}</div>'
              f'<div class="chg txt">ב-{PAGE_DAYS} הימים האחרונים</div></div>'
              f'<div class="tile"><div class="lbl">היום</div><div class="val">{n_today}</div></div>'
+             f'<div class="tile"><div class="lbl">מהעולם</div><div class="val">'
+             f'{sum(1 for r in items if region(r) == "world")}</div><div class="chg txt">ב-{PAGE_DAYS} ימים</div></div>'
              f'<div class="tile"><div class="lbl">השפעה גבוהה</div><div class="val">{n_high}</div>'
              '<div class="chg txt">לפחות חברה אחת</div></div>'
              f'<div class="tile"><div class="lbl">חברות</div><div class="val">{n_cos}</div>'
@@ -284,10 +316,13 @@ def page(data: dict) -> str:
         secs.append(f'<section class="im-day" id="im-d-{d.isoformat()}"><h2>{_day_title(d, today)} '
                     f'<span class="au-cnt">{len(rows)}</span></h2>{body}</section>')
 
-    src = ('<p class="au-src">המקורות: הכותרות שנבחרו בעמוד <a href="headlines.html">כותרות</a>, '
-           '<a href="reports.html">דיווחי מאיה</a> ופרסומי <a href="gov.html">הרגולטורים</a>. הניתוח: '
-           'TLV TASE View — כל מספר בכרטיס נבדק מול המקור, ומה שכל חברה עושה נלקח מתיאור הפעילות '
-           'שהיא מסרה למאיה. ניתוח השפעה, לא המלצת השקעה.</p>')
+    src = ('<p class="au-src">המקורות: <a href="reports.html">דיווחי מאיה</a>; <a href="headlines.html">'
+           'הכותרות</a> וכל הידיעות מ-21 פידי הברייף, מהארץ ומאתרי ענף בעולם; חדשות <a href="commodities.html">'
+           'הסחורות</a> ו<a href="auto.html">הרכב</a>; מחירי 108 סחורות (Trading Economics); ניוזלטרים '
+           '(FT, WSJ, Bloomberg, רויטרס, The Economist, NYT, כלכליסט, TheMarker ועוד); פרסומי '
+           '<a href="gov.html">הרגולטורים</a> ו<a href="cbs.html">הלמ"ס</a>; ו<a href="transcripts.html">'
+           'שיחות המשקיעים</a>. הניתוח: TLV TASE View — כל מספר בכרטיס נבדק מול המקור, ומה שכל חברה '
+           'עושה נלקח מתיאור הפעילות שהיא מסרה למאיה. ניתוח השפעה, לא המלצת השקעה.</p>')
     return "\n".join([f'<div class="im-wrap">{head}', lead, tiles, HOW, FILTERS, *secs, src,
                       "</div>", SCRIPT])
 
