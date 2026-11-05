@@ -75,10 +75,21 @@ PAGE = """<!DOCTYPE html>
   <span>אין באמור ייעוץ השקעות, שיווק השקעות או המלצה לפעולה בניירות ערך, ואין בו תחליף לייעוץ אישי המתחשב בנתוניו של כל אדם.</span>
 </footer>
 <script>
-/* קישורים לבעלים בלבד ("השיחות שלי"). השער האמיתי הוא _middleware.js — כאן רק התצוגה. */
-fetch("/api/me", {{credentials: "same-origin"}}).then(function (r) {{ return r.ok ? r.json() : null; }})
+/* קישורים לבעלים בלבד ("השיחות שלי"). השער האמיתי הוא _middleware.js — כאן רק התצוגה.
+   **בעותק המקומי** (file://, scripts/local_site.py) אין /api/me. העותק נבנה במחשב של
+   הבעלים ונפתח ממנו, והסתרה בתצוגה אינה מגינה על דבר ממילא: התוכן כבר בקובץ. */
+(location.protocol === "file:" ? Promise.resolve({{owner: true}})
+  : fetch("/api/me", {{credentials: "same-origin"}}).then(function (r) {{ return r.ok ? r.json() : null; }}))
   .then(function (j) {{ if (j && j.owner) document.querySelectorAll("[data-owner]").forEach(function (e) {{ e.hidden = false; }}); }})
   .catch(function () {{}});
+/* פס שמסמן את העותק המקומי ואת שעת הבנייה שלו: מועד השינוי של הקובץ הוא שעת הבנייה. */
+if (location.protocol === "file:") {{
+  var lc = document.createElement("div");
+  lc.className = "local-copy";
+  lc.textContent = "עותק מקומי · נבנה " + new Date(document.lastModified).toLocaleString("he-IL",
+    {{day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}});
+  document.body.insertBefore(lc, document.body.firstChild);
+}}
 </script>
 </body>
 </html>

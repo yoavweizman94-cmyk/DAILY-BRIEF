@@ -143,6 +143,18 @@ nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 nav a.hi { color: var(--accent); font-weight: 700; }
 nav a[hidden] { display: none; }
 
+/* העותק המקומי (scripts/local_site.py): פס דק מעל המאסטהד, כדי שלא יתבלבל
+   עם האתר החי ויהיה ברור מאיזו שעה הנתונים. */
+.local-copy {
+  padding: 0.2rem 1rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
 main {
   max-width: var(--wide);
   margin: 0 auto;
