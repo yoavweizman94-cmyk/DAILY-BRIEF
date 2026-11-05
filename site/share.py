@@ -131,7 +131,8 @@ def source_line(parts: list[str], lead: str = "מקורות") -> str:
 
 
 def card(kicker: str, title: str, sub: str, blocks: list, source: str, file: str) -> dict:
-    return otc.card(title, sub, blocks, file=file, kicker=kicker, source=source)
+    # הערכה הבהירה: עיצוב הלילה (otc.card) שייך לעמוד מחוץ לבורסה בלבד.
+    return otc.card(title, sub, blocks, file=file, kicker=kicker, source=source, theme="")
 
 
 def controls(key: str, payload: dict, tweet_text: str, label: str = "ייצוא לתמונה") -> str:

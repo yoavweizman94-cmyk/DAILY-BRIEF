@@ -158,7 +158,8 @@
   // ---------------------------------------------------------------- גופנים
 
   var fontsP = null;
-  function fontsReady() {
+  function fontsReady(theme) {
+    if (theme === "night") { return Promise.all([fontsReady(), nightFonts()]); }
     if (fontsP) { return fontsP; }
     if (!document.fonts || !document.fonts.load) {
       fontsP = Promise.resolve();
@@ -196,7 +197,7 @@
   var SC = 1;
   function card(x, l, t, w, h, r) {
     x.save();
-    x.shadowColor = "rgba(15,36,68,0.11)";
+    x.shadowColor = NIGHT_ON ? "rgba(0,0,0,0.35)" : "rgba(15,36,68,0.11)";
     x.shadowBlur = 26 * SC; x.shadowOffsetY = 8 * SC;
     x.fillStyle = C.card; rr(x, l, t, w, h, r); x.fill();
     x.restore();
@@ -683,6 +684,7 @@
   var OVER = 44;
   var HANDLE = "© @Cigarbutthunte7";
   function header(x, d, g, draw, over) {
+    if (NIGHT_ON) { return nightHeader(x, d, g, draw); }
     var W = g.W, cw = g.inner - 16, ts = 44, lines;
     for (;;) {
       x.font = F(700, ts, SERIF);
@@ -749,6 +751,7 @@
   // אריחי סיכום: סמל בעיגול צבעוני ותווית, מספר, ושורת הקשר. עד ארבעה בשורה;
   // חמישה ומעלה — בשתי שורות, כי אריח צר מכווץ את המספר עד שאינו נקרא.
   function statsBlock(x, b, g, draw) {
+    if (NIGHT_ON) { return nightStats(x, b, g, draw); }
     var items = b.items || [];
     if (!items.length) { return 0; }
     // ברוחב הצר: עד שלושה בשורה; ארבעה — שניים ושניים, כדי שהמספר לא יתכווץ.
@@ -857,7 +860,12 @@
 
   // עיקרי התקופה: משפטים מחושבים, כל אחד בנקודה משלו, והמספרים בהם מודגשים.
   function notesBlock(x, b, g, draw) {
-    var items = (b.items || []).filter(function (t) { return t; });
+    var raw = (b.items || []).filter(function (t) { return t; });
+    // כרטיסי תובנה ({big, text}) — בערכת הלילה כרטיסים; אחרת משפט אחד לכל כרטיס.
+    if (NIGHT_ON && raw.some(function (t) { return typeof t === "object" && t.big; })) {
+      return nightCards(x, raw.filter(function (t) { return typeof t === "object" && t.big; }), g, draw);
+    }
+    var items = raw.map(function (t) { return typeof t === "object" ? (t.big + " " + (t.text || "")) : t; });
     if (!items.length) { return 0; }
     var P = 22, PT = 22, LH = 32, BUL = 22;
     var fonts = { "": F(400, 20), hi: F(700, 20) };
@@ -1268,7 +1276,7 @@
         x.globalAlpha = 1;
       } else {
         var hh2 = Math.max(2, bot - yv);
-        x.fillStyle = last ? CAT[0] : "#c4d8f3";
+        x.fillStyle = last ? CAT[0] : C.barSoft;
         barPath(x, cx - bw / 2, bot - hh2, bw, hh2, 4, "top"); x.fill();
       }
       if (i % 3 === (n - 1) % 3) {
@@ -1883,6 +1891,8 @@
     rank: 26, dumbbell: 26, curves: 22 };
   var RADIUS = 16;
   function runBlock(x, b, g, draw) {
+    // בערכת הלילה טבלה עם פס היקף היא דירוג בלוח משלו, כותרתו בתוכו.
+    if (NIGHT_ON && b.type === "table" && rankable(b)) { return nightTable(x, b, g, draw); }
     var fn = BLOCKS[b.type];
     if (!Object.prototype.hasOwnProperty.call(FRAME, b.type)) { return fn(x, b, g, draw); }
     var p = FRAME[b.type], th = b.title ? SECTION_H : 0;
@@ -1906,6 +1916,7 @@
   // פס כהה לכל הרוחב: מקור והסתייגות מימין, החתימה והתאריך משמאל. בלי כתובת
   // האתר — יואב, 21/10/2026: "רק זכויות יוצרים שלי".
   function footer(x, d, g, draw) {
+    if (NIGHT_ON) { return nightFooter(x, d, g, draw); }
     x.font = F(400, 17);
     var src = wrap(x, d.source || SRC_TASE, g.inner - 220);
     var h = 36 + src.length * 25 + 30 + 22;
@@ -1934,14 +1945,596 @@
   }
 
   function background(x, W, H) {
+    if (NIGHT_ON) { nightBackground(x, W, H); return; }
     var g = x.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, C.page); g.addColorStop(1, C.page2);
     x.fillStyle = g; x.fillRect(0, 0, W, H);
   }
 
+  // ---------------------------------------------------------------- ערכת לילה
+  //
+  // **עמוד מחוץ לבורסה, בעיצוב הפוסטים שיואב בנה ב-Claude Design (05/11/2026).**
+  // הקנבס "עסקאות מחוץ לבורסה · פוסטים": כחול-לילה וזהב, Heebo לטקסט ופרנק־ריהל
+  // לכותרות ולמספרים הגדולים, כותרת גדולה עם התאריך בזהב וסמל עגול בטבעת זהב,
+  // לוח סיכום עם פס החלוקה בין מחוץ לבורסה למתואמות, כרטיסי תובנה, ודירוג
+  // בשתי עמודות עם פס מוערם קטן לכל נייר. רוחב 1200, כמו שם.
+  //
+  // **הסמל הוא טבעת זהב וסיגר, ולא הלוגו שבקנבס.** בלוגו יש דיוקן של אדם
+  // אמיתי, וזה לא נכנס לתמונות של האתר (ראה ההערה בראש הקובץ).
+  //
+  // הערכה נבחרת לפי payload.theme === "night": otc.card מסמן כך את כרטיסי העמוד,
+  // וסחורות ורכב (share.card) נשארים בערכה הבהירה. הגושים הכלליים (עמודות, דירוג,
+  // דיווחים וטבלה בלי פס היקף) מצוירים בפלטת הלילה במבנה שלהם.
+  var LIGHT = C, CAT_LIGHT = CAT, SANS_LIGHT = SANS, MONO_LIGHT = MONO, SPARK_LIGHT = SPARK;
+  LIGHT.barSoft = "#c4d8f3";
+  var NIGHT = {
+    page: "#0A111F", page2: "#0A111F", navy: "#0A111F", navy2: "#14213A",
+    card: "#121C30", edge: "rgba(255,255,255,0.07)", zebra: "rgba(255,255,255,0.025)",
+    track: "rgba(255,255,255,0.07)",
+    ink: "#F3EEE4", muted: "#B7C0CE", faint: "#9AA6B8",
+    hair: "rgba(255,255,255,0.06)", line: "rgba(227,176,75,0.22)",
+    accent: "#E3B04B", accent2: "#F2CD7A", soft: "rgba(227,176,75,0.12)", pale: "rgba(227,176,75,0.3)",
+    up: "#5FD39B", down: "#F2826F", warn: "#E3B04B",
+    upBg: "rgba(95,211,155,0.14)", downBg: "rgba(242,130,111,0.15)", warnBg: "rgba(227,176,75,0.14)",
+    onNavy: "#F3EEE4", onNavy2: "#B7C0CE", onNavy3: "#8592A6", brand: "#E3B04B",
+    upOn: "#8FE3B5", downOn: "#F8B3A8", gold: "#E3B04B", gold2: "#F2CD7A",
+    barSoft: "rgba(94,169,223,0.35)", body: "#D5DBE4", foot: "#8592A6", otcHi: "#8CC4EC"
+  };
+  // מחוץ לבורסה בכחול ומתואמות בזהב, כמו בקנבס. השניים נבדלים גם בבהירות.
+  var CAT_NIGHT = ["#5EA9DF", "#E3B04B", "#4FC3A1", "#E07A3F"];
+  var HEEBO = "Heebo, Assistant, 'Segoe UI', Arial, sans-serif";
+  var NIGHT_ON = false;
+
+  function setTheme(t) {
+    NIGHT_ON = t === "night";
+    C = NIGHT_ON ? NIGHT : LIGHT;
+    CAT = NIGHT_ON ? CAT_NIGHT : CAT_LIGHT;
+    SANS = NIGHT_ON ? HEEBO : SANS_LIGHT;
+    // בקנבס אין ספרות טבלאיות, והעמודות מיושרות לקצה ממילא. Heebo הוא גם גופן
+    // המספרים בקנבס של יואב.
+    MONO = NIGHT_ON ? HEEBO : MONO_LIGHT;
+    SPARK = NIGHT_ON ? "#C9A35A" : SPARK_LIGHT;
+    W0 = WMAX = NIGHT_ON ? 1200 : 760;
+    PAD = NIGHT_ON ? 56 : 32;
+    GAP = NIGHT_ON ? 24 : 26;
+    FOOT_GAP = NIGHT_ON ? 28 : 22;
+    // קבועים שחושבו בטעינה מהגופן ומהפלטה — מחושבים מחדש לערכה שנבחרה.
+    CHIP_L = F(500, 16); CHIP_V = F(700, 17);
+    DIR_COLOR = { "חיובי": C.up, "שלילי": C.down, "מעורב": C.warn };
+    MET_L = F(500, 16); MET_V = { w: 700, s: 18, uw: 500, us: 0.8, fam: SANS };
+  }
+
+  // Heebo אינו בגופני העמוד, ולכן נטען כשמייצאים כרטיס לילה ראשון. אותה מגבלת
+  // זמן כמו בשאר הגופנים: אחריה מציירים בכל מקרה, בגופן החלופי.
+  var nightFontsP = null;
+  function nightFonts() {
+    if (nightFontsP) { return nightFontsP; }
+    var css = new Promise(function (res) {
+      if (document.querySelector("link[data-night-fonts]")) { res(); return; }
+      var l = document.createElement("link");
+      l.rel = "stylesheet"; l.setAttribute("data-night-fonts", "1");
+      l.href = "https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&display=swap";
+      l.onload = l.onerror = function () { res(); };
+      document.head.appendChild(l);
+    });
+    var he = "אבגדהוזחטיכלמנסעפצקרשת", num = "0123456789.,%+-₪", lat = "@Cigarbutthunte7";
+    nightFontsP = Promise.race([css.then(function () {
+      if (!document.fonts || !document.fonts.load) { return null; }
+      return Promise.all([[400, he + num], [500, he + num], [700, he + num + lat], [800, he + num]]
+        .map(function (w) {
+          return document.fonts.load(w[0] + " 20px Heebo", w[1]).catch(function () { return null; });
+        }));
+    }), new Promise(function (r) { setTimeout(r, 3500); })]);
+    return nightFontsP;
+  }
+
+  function nightBackground(x, W, H) {
+    x.fillStyle = C.page; x.fillRect(0, 0, W, H);
+    var top = Math.min(H, 760);
+    var fade = x.createLinearGradient(0, 0, 0, top);
+    fade.addColorStop(0, "#14213A"); fade.addColorStop(1, "#0A111F");
+    x.fillStyle = fade; x.fillRect(0, 0, W, top);
+    // קווי סיכה אלכסוניים בזהב שקוף, ומאחורי הסמל זוהר זהב — כמו בקנבס
+    x.save();
+    x.beginPath(); x.rect(0, 0, W, top); x.clip();
+    x.strokeStyle = "rgba(227,176,75,0.045)"; x.lineWidth = 1;
+    var a = 35 * Math.PI / 180, tn = Math.tan(a), s = 14 / Math.cos(a);
+    for (var k = 0; k * s < W + top * tn; k++) {
+      x.beginPath(); x.moveTo(k * s, 0); x.lineTo(k * s - top * tn, top); x.stroke();
+    }
+    x.translate(W * 0.22, top * 0.32); x.scale(1, top / W);
+    var glow = x.createRadialGradient(0, 0, 0, 0, 0, W * 0.55);
+    glow.addColorStop(0, "rgba(227,176,75,0.16)"); glow.addColorStop(0.5, "rgba(227,176,75,0.04)");
+    glow.addColorStop(1, "rgba(227,176,75,0)");
+    x.fillStyle = glow; x.fillRect(-W, -W, W * 2.4, W * 2.4);
+    x.restore();
+  }
+
+  // הסמל: הילה, טבעת מנוקדת, טבעת זהב ויהלומים — ובתוך הדיסק הסיגר הדולק.
+  function emblem(x, cx, cy) {
+    var halo = x.createRadialGradient(cx, cy, 0, cx, cy, 170);
+    halo.addColorStop(0, "rgba(227,176,75,0.34)"); halo.addColorStop(0.6, "rgba(227,176,75,0.08)");
+    halo.addColorStop(1, "rgba(227,176,75,0)");
+    x.fillStyle = halo; x.beginPath(); x.arc(cx, cy, 170, 0, Math.PI * 2); x.fill();
+    x.save();
+    x.setLineDash([2, 7]); x.strokeStyle = "rgba(227,176,75,0.22)"; x.lineWidth = 1;
+    x.beginPath(); x.arc(cx, cy, 156, 0, Math.PI * 2); x.stroke();
+    x.restore();
+    var ring = x.createLinearGradient(cx - 142, cy - 142, cx + 142, cy + 142);
+    ring.addColorStop(0, "#F7E2A6"); ring.addColorStop(0.45, "#C99636"); ring.addColorStop(1, "#7A5212");
+    x.strokeStyle = ring; x.lineWidth = 5;
+    x.beginPath(); x.arc(cx, cy, 142, 0, Math.PI * 2); x.stroke();
+    x.strokeStyle = "rgba(227,176,75,0.5)"; x.lineWidth = 1;
+    x.beginPath(); x.arc(cx, cy, 133, 0, Math.PI * 2); x.stroke();
+    x.fillStyle = "rgba(227,176,75,0.8)";
+    [cy - 149, cy + 149].forEach(function (py) {
+      x.beginPath(); x.moveTo(cx, py - 7); x.lineTo(cx + 7, py); x.lineTo(cx, py + 7); x.lineTo(cx - 7, py);
+      x.closePath(); x.fill();
+    });
+    x.save();
+    x.strokeStyle = "rgba(227,176,75,0.7)"; x.lineWidth = 2; x.lineCap = "round";
+    x.beginPath(); x.moveTo(cx - 150, cy); x.lineTo(cx - 174, cy); x.moveTo(cx + 150, cy); x.lineTo(cx + 174, cy);
+    x.stroke();
+    x.restore();
+    x.save();
+    x.shadowColor = "rgba(0,0,0,0.6)"; x.shadowBlur = 52 * SC; x.shadowOffsetY = 20 * SC;
+    x.fillStyle = "#0A111F"; x.beginPath(); x.arc(cx, cy, 134, 0, Math.PI * 2); x.fill();
+    x.restore();
+    var disc = x.createRadialGradient(cx - 40, cy - 50, 8, cx, cy, 131);
+    disc.addColorStop(0, "#2A3E63"); disc.addColorStop(0.55, "#16243F"); disc.addColorStop(1, "#0C1526");
+    x.fillStyle = disc; x.beginPath(); x.arc(cx, cy, 131, 0, Math.PI * 2); x.fill();
+    x.save();
+    x.beginPath(); x.arc(cx, cy, 130, 0, Math.PI * 2); x.clip();
+    cigar(x, cx + 14, cy + 34, 236, -0.38, 1);
+    x.restore();
+    // עשן מחוץ לטבעת, למעלה מימין, כמו בקנבס
+    var ox = cx - 210, oy = cy - 170;
+    [[[344, 72, 360, 52, 334, 36, 352, 14], 0.28, 5], [[356, 84, 378, 62, 350, 42, 374, 22], 0.16, 3]]
+      .forEach(function (sm) {
+        var p = sm[0];
+        x.save();
+        x.strokeStyle = "rgba(243,238,228," + sm[1] + ")"; x.lineWidth = sm[2]; x.lineCap = "round";
+        if ("filter" in x) { x.filter = "blur(" + (3 * SC) + "px)"; }
+        x.beginPath(); x.moveTo(ox + p[0], oy + p[1]);
+        x.bezierCurveTo(ox + p[2], oy + p[3], ox + p[4], oy + p[5], ox + p[6], oy + p[7]);
+        x.stroke();
+        x.restore();
+      });
+  }
+
+  // הכותרת מתוך title של הכרטיס: "היום · 04/11/2026" → "היום בשוק" ו-"4.11.2026".
+  // "היום" הוא יום פתוח בכל העמוד (otc.periods, jumbo.periods_*), ולכן גם התווית.
+  function heroParts(d) {
+    var t = String(d.title || ""), i = t.indexOf(" · ");
+    var head = i >= 0 ? t.slice(0, i) : t, tail = i >= 0 ? t.slice(i + 3) : "";
+    var partial = d.partial != null ? !!d.partial : head === "היום";
+    if (head === "היום") { head = "היום בשוק"; }
+    var m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(tail);
+    if (m) { tail = (+m[1]) + "." + (+m[2]) + "." + m[3]; }
+    return { head: head, date: tail, partial: partial };
+  }
+
+  var HERO_H = 340, EMB_W = 420, PILL = "חתך חלקי · לפני נעילת המסחר";
+  function nightHeader(x, d, g, draw) {
+    var hp = heroParts(d), top = 48, colW = g.inner - EMB_W - 32, R = g.right;
+    var ts = 80, lines;
+    for (; ts >= 56; ts -= 2) {
+      x.font = F(900, ts, SERIF);
+      lines = wrap(x, bidi(hp.head), colW);
+      if (lines.length === 1) { break; }
+    }
+    if (lines.length > 1) {
+      ts = 64; x.font = F(900, ts, SERIF); lines = wrap(x, bidi(hp.head), colW);
+      if (lines.length > 2) { ts = 52; x.font = F(900, ts, SERIF); lines = wrap(x, bidi(hp.head), colW); }
+    }
+    var ds = 58;
+    x.font = F(700, ds, SERIF);
+    while (hp.date && ds > 34 && x.measureText(hp.date).width > colW) { ds -= 2; x.font = F(700, ds, SERIF); }
+    x.font = F(400, 21);
+    var lede = d.sub ? wrap(x, bidi(d.sub), Math.min(colW, 560)) : [];
+    var TLH = Math.round(ts * 1.06), LLH = 31;
+    var colH = (hp.partial ? 34 + 16 : 0) + lines.length * TLH + (hp.date ? 16 + ds : 0) +
+      (lede.length ? 18 + lede.length * LLH - 8 : 0);
+    var rowTop = top + 28 + 24, rowH = Math.max(HERO_H, colH + 20);
+    var divY = rowTop + rowH + 24;
+    var end = divY + 14 + 30;
+    if (!draw) { return end; }
+
+    // שורה עליונה: נקודת זהב ותווית מימין, החתימה משמאל (LTR)
+    x.fillStyle = C.accent; x.beginPath(); x.arc(R - 5, top + 14, 5, 0, Math.PI * 2); x.fill();
+    x.direction = "rtl"; x.textAlign = "right"; x.fillStyle = C.faint; x.font = F(400, 18);
+    x.fillText(d.kicker || "", R - 22, top + 20);
+    x.direction = "ltr"; x.textAlign = "left"; x.fillStyle = C.ink; x.font = F(700, 20);
+    x.fillText(HANDLE, g.left, top + 21);
+
+    emblem(x, g.left + EMB_W / 2, rowTop + rowH / 2);
+
+    var y = rowTop + (rowH - colH) / 2;
+    x.direction = "rtl"; x.textAlign = "right";
+    if (hp.partial) {
+      x.font = F(700, 17);
+      var pw = x.measureText(PILL).width + 14 + 9 + 10 + 16;
+      x.fillStyle = "rgba(240,128,112,0.10)"; rr(x, R - pw, y, pw, 34, 17); x.fill();
+      x.strokeStyle = "rgba(240,128,112,0.45)"; x.lineWidth = 1; rr(x, R - pw + 0.5, y + 0.5, pw - 1, 33, 16.5); x.stroke();
+      x.fillStyle = "rgba(240,127,110,0.22)"; x.beginPath(); x.arc(R - 18.5, y + 17, 8.5, 0, Math.PI * 2); x.fill();
+      x.fillStyle = "#F07F6E"; x.beginPath(); x.arc(R - 18.5, y + 17, 4.5, 0, Math.PI * 2); x.fill();
+      x.fillStyle = "#F8B3A8"; x.fillText(PILL, R - 33, y + 23);
+      y += 34 + 16;
+    }
+    x.fillStyle = C.ink; x.font = F(900, ts, SERIF);
+    lines.forEach(function (ln, k) { x.fillText(ln, R, y + Math.round(ts * 0.82) + k * TLH); });
+    y += lines.length * TLH;
+    if (hp.date) {
+      x.direction = "ltr"; x.textAlign = "right";
+      x.fillStyle = C.accent; x.font = F(700, ds, SERIF);
+      x.fillText(hp.date, R, y + 16 + Math.round(ds * 0.8));
+      x.direction = "rtl";
+      y += 16 + ds;
+    }
+    if (lede.length) {
+      x.fillStyle = C.muted; x.font = F(400, 21);
+      lede.forEach(function (ln, k) { x.fillText(ln, R, y + 18 + 22 + k * LLH - 8); });
+    }
+
+    // מפריד: שני קווי זהב ויהלום באמצע
+    var mid = g.W / 2;
+    x.fillStyle = "rgba(227,176,75,0.3)";
+    x.fillRect(g.left, divY + 7, mid - 16 - g.left, 1);
+    x.fillRect(mid + 16, divY + 7, g.right - mid - 16, 1);
+    x.fillStyle = C.accent;
+    x.beginPath(); x.moveTo(mid, divY); x.lineTo(mid + 7, divY + 7); x.lineTo(mid, divY + 14); x.lineTo(mid - 7, divY + 7);
+    x.closePath(); x.fill();
+    return end;
+  }
+
+  function isOtcLabel(l) { return /מחוץ לבורסה/.test(l || ""); }
+  function isJumboLabel(l) { return /מתואמ/.test(l || ""); }
+
+  // קטעים מימין לשמאל: [{t, f גופן, c צבע, ltr}] — מחזיר את הרוחב, ומצייר כש-draw.
+  function runRTL(x, parts, right, y, draw) {
+    var cx = right;
+    parts.forEach(function (p, i) {
+      x.font = p.f;
+      var w = x.measureText(p.t).width;
+      if (draw) {
+        x.direction = p.ltr ? "ltr" : "rtl"; x.textAlign = "right"; x.fillStyle = p.c;
+        x.fillText(p.t, cx, y);
+      }
+      cx -= w + (i < parts.length - 1 ? 7 : 0);
+    });
+    return right - cx;
+  }
+
+  // לוח הסיכום: עד שלושה תאים בשורה עם מפרידים, מספר גדול ויחידה קטנה, ושורת הקשר.
+  // כשיש בו גם מחוץ לבורסה וגם מתואמות — פס החלוקה ביניהם, כמו בקנבס.
+  function nightStats(x, b, g, draw) {
+    var items = b.items || [];
+    if (!items.length) { return 0; }
+    var n = items.length, per = n <= 3 ? n : n === 4 ? 2 : 3, rowsN = Math.ceil(n / per);
+    var PX = 30, PT = 26, PB = 26, inner = g.inner - PX * 2, cw = inner / per;
+    var oi = -1, ji = -1;
+    items.forEach(function (it, i) {
+      if (oi < 0 && isOtcLabel(it.label)) { oi = i; }
+      if (ji < 0 && isJumboLabel(it.label)) { ji = i; }
+    });
+    var ov = oi >= 0 ? parseNum(items[oi].value) : null, jv = ji >= 0 ? parseNum(items[ji].value) : null;
+    var split = ov != null && jv != null && ov + jv > 0;
+    var capF = F(400, 17);
+    var lay = items.map(function (it, i) {
+      var r = Math.floor(i / per), c = i - r * per;
+      var tw = cw - (c === 0 || c === per - 1 ? 24 : 48);
+      x.font = F(500, 19);
+      var lab = wrap(x, bidi(it.label || ""), tw - (isOtcLabel(it.label) || isJumboLabel(it.label) ? 18 : 0));
+      var caps = (Array.isArray(it.cap) ? it.cap : [it.cap]).filter(function (q) { return q; });
+      x.font = capF;
+      var capL = [].concat.apply([], caps.map(function (q) { return wrap(x, bidi(q), tw); }));
+      var v = String(it.value == null ? "—" : it.value), s = 64;
+      var o = { w: 800, s: s, us: 0.36, uw: 400, fam: SANS };
+      while (s > 34 && valWidth(x, v, o) > tw) { s -= 2; o.s = s; o.us = 22 / s; }
+      var chips = chipRows(x, it.deltas || [], tw);
+      var spark = (it.spark || []).filter(function (q) { return typeof q === "number"; }).length >= 5;
+      return { r: r, c: c, tw: tw, lab: lab, cap: capL, v: v, o: o, chips: chips, spark: spark };
+    });
+    var rowH = [];
+    for (var r = 0; r < rowsN; r++) {
+      var L = lay.slice(r * per, r * per + per);
+      rowH.push(Math.max.apply(null, L.map(function (l) {
+        return l.lab.length * 26 + 8 + 66 + (l.chips.length ? 8 + l.chips.length * 36 : 0) +
+          (l.cap.length ? 6 + l.cap.length * 24 : 0) + (l.spark ? 12 + 34 : 0);
+      })));
+    }
+    var SPLIT_H = split ? 24 + 14 + 12 + 22 : 0;
+    var h = PT + sum(rowH) + 20 * (rowsN - 1) + SPLIT_H + PB;
+    if (!draw) { return h; }
+
+    var top = g.top, L0 = g.left, R0 = g.right;
+    var bg = x.createLinearGradient(0, top, 0, top + h);
+    bg.addColorStop(0, "#17243D"); bg.addColorStop(1, "#121C30");
+    x.fillStyle = bg; rr(x, L0, top, g.inner, h, 24); x.fill();
+    x.strokeStyle = "rgba(227,176,75,0.22)"; x.lineWidth = 1; rr(x, L0 + 0.5, top + 0.5, g.inner - 1, h - 1, 24); x.stroke();
+    var y = top + PT;
+    for (var rr2 = 0; rr2 < rowsN; rr2++) {
+      lay.slice(rr2 * per, rr2 * per + per).forEach(function (l, k) {
+        var it = items[rr2 * per + k];
+        var cellR = R0 - PX - l.c * cw, cellL = cellR - cw;
+        var right = cellR - (l.c === 0 ? 0 : 24);
+        if (l.c < per - 1) { x.fillStyle = "rgba(255,255,255,0.08)"; x.fillRect(cellL, y, 1, rowH[rr2]); }
+        var otcI = isOtcLabel(it.label), jI = isJumboLabel(it.label);
+        var cy = y;
+        x.direction = "rtl"; x.textAlign = "right"; x.font = F(500, 19); x.fillStyle = C.faint;
+        l.lab.forEach(function (ln, q) {
+          var lx = right;
+          if (q === 0 && (otcI || jI)) {
+            x.fillStyle = otcI ? CAT_NIGHT[0] : CAT_NIGHT[1]; rr(x, right - 10, cy + 6, 10, 10, 3); x.fill();
+            x.fillStyle = C.faint; lx = right - 18;
+          }
+          x.fillText(ln, lx, cy + 19 + q * 26);
+        });
+        cy += l.lab.length * 26 + 8;
+        l.o.color = it.tone === "up" ? C.up : it.tone === "down" ? C.down : otcI ? C.otcHi : jI ? C.accent : C.ink;
+        l.o.ucolor = C.muted;
+        drawVal(x, l.v, right, cy + 54, l.o);
+        cy += 66;
+        if (l.chips.length) {
+          cy += 8;
+          l.chips.forEach(function (row) { drawChips(x, row, right, cy); cy += 36; });
+        }
+        if (l.cap.length) {
+          cy += 6;
+          x.direction = "rtl"; x.textAlign = "right"; x.font = capF; x.fillStyle = C.faint;
+          l.cap.forEach(function (ln, q) { x.fillText(ln, right, cy + 18 + q * 24); });
+          cy += l.cap.length * 24;
+        }
+        if (l.spark) { sparkline(x, it.spark, cellL + (l.c === per - 1 ? 0 : 24), cy + 12, l.tw, 34); }
+      });
+      y += rowH[rr2] + 20;
+    }
+    y -= 20;
+    if (split) {
+      var tot = ov + jv, op = ov / tot, bw = g.inner - PX * 2, by = y + 24;
+      var ow = Math.round((bw - 3) * op), jw = bw - 3 - ow;
+      x.save(); rr(x, L0 + PX, by, bw, 14, 7); x.clip();
+      x.fillStyle = CAT_NIGHT[0]; x.fillRect(R0 - PX - ow, by, ow, 14);
+      x.fillStyle = CAT_NIGHT[1]; x.fillRect(L0 + PX, by, jw, 14);
+      x.restore();
+      var ly = by + 14 + 12 + 16, opct = Math.round(op * 100) + "%", jpct = (100 - Math.round(op * 100)) + "%";
+      runRTL(x, [{ t: items[oi].label, f: F(400, 16), c: C.muted },
+        { t: opct, f: F(800, 16), c: C.otcHi, ltr: true }], R0 - PX, ly, true);
+      var jparts = [{ t: items[ji].label, f: F(400, 16), c: C.muted },
+        { t: jpct, f: F(800, 16), c: C.accent, ltr: true }, { t: "מההיקף", f: F(400, 16), c: C.muted }];
+      var jw2 = runRTL(x, jparts, 0, ly, false);
+      runRTL(x, jparts, L0 + PX + jw2, ly, true);
+    }
+    return h;
+  }
+
+  // כרטיסי תובנה: מספר גדול בזהב ומשפט קצר, עד שלושה בשורה.
+  function nightCards(x, cards, g, draw) {
+    var n = cards.length, per = n <= 3 ? n : n === 4 ? 2 : 3, gap = 20, P = 22, PX = 24;
+    var cw = (g.inner - gap * (per - 1)) / per, tw = cw - PX * 2, tf = F(400, 18), LH = 27;
+    var lay = cards.map(function (c) {
+      var bs = 50;
+      x.font = F(900, bs, SERIF);
+      while (bs > 30 && x.measureText(String(c.big)).width > tw) { bs -= 2; x.font = F(900, bs, SERIF); }
+      x.font = tf;
+      return { big: String(c.big), bs: bs, lines: wrap(x, bidi(c.text || ""), tw) };
+    });
+    var rowsN = Math.ceil(n / per), rowH = [];
+    for (var r = 0; r < rowsN; r++) {
+      rowH.push(P + 52 + 10 + Math.max.apply(null, lay.slice(r * per, r * per + per)
+        .map(function (l) { return l.lines.length; })) * LH + P - 4);
+    }
+    var h = sum(rowH) + gap * (rowsN - 1);
+    if (!draw) { return h; }
+    var y = g.top;
+    rowH.forEach(function (rh, r) {
+      for (var c = 0; c < per; c++) {
+        var i = r * per + c;
+        if (i >= n) { break; }
+        var L = lay[i], right = g.right - c * (cw + gap), left = right - cw;
+        x.strokeStyle = "rgba(227,176,75,0.28)"; x.lineWidth = 1;
+        rr(x, left + 0.5, y + 0.5, cw - 1, rh - 1, 20); x.stroke();
+        x.direction = "ltr"; x.textAlign = "right";
+        x.fillStyle = C.accent; x.font = F(900, L.bs, SERIF);
+        x.fillText(L.big, right - PX, y + P + 44);
+        x.direction = "rtl"; x.textAlign = "right"; x.fillStyle = C.body; x.font = tf;
+        L.lines.forEach(function (ln, k) { x.fillText(ln, right - PX, y + P + 52 + 10 + 19 + k * LH); });
+      }
+      y += rh + gap;
+    });
+    return h;
+  }
+
+  // **טבלה עם פס היקף → דירוג, כמו "30 הגדולים לפי נייר" בקנבס.** שתי עמודות כשיש
+  // יותר משמונה שורות; לכל נייר מקום, שם, סכום, שבב (שינוי משער הבסיס או הסטייה
+  // של העסקה ממנו), שורת משנה ופס קטן — מוערם לפי הערוצים, או פס היקף אחד.
+  // **שום שם אינו מקוצר**: הגופן קטן עד 17, ואחר כך השם נשבר לשתי שורות.
+  function rankable(b) {
+    return (b.cols || []).some(function (c) { var v = colOpt(c).viz; return v === "stack" || v === "bar"; });
+  }
+  var CUR_KICKER = "";
+  function nightTable(x, b, g, draw) {
+    var cols = b.cols || [], rows = b.rows || [];
+    if (!rows.length) { return 0; }
+    var nameC = cols[0], subKey = colOpt(nameC).sub;
+    var totC = cols.filter(function (c) { var v = colOpt(c).viz; return v === "stack" || v === "bar"; })[0];
+    var chipC = cols.filter(function (c) { return colOpt(c).viz === "chip"; })[0] ||
+      cols.filter(function (c) { return colOpt(c).viz === "div"; })[0];
+    var parts = colOpt(totC).viz === "stack" ? (colOpt(totC).parts || []) : null;
+    var single = CAT[0];
+    // המקרא של השבב רק כשיש שבב באחת השורות לפחות — ביום פתוח אין עדיין שער בסיס.
+    if (chipC && !rows.some(function (r) { var v = r[chipC[1]]; return v != null && v !== "" && v !== "—"; })) {
+      chipC = null;
+    }
+    var PX = 28, PT = 24, PB = 24, inner = g.inner - PX * 2;
+    var two = rows.length > 8, colGap = 40, cw = two ? (inner - colGap) / 2 : inner;
+    var perCol = two ? Math.ceil(rows.length / 2) : rows.length;
+    var RK = 36, BW = 150, TOT = { w: 800, s: 23, us: 14 / 23, uw: 500, fam: SANS };
+    var chipF = F(700, 16);
+    var mx = Math.max.apply(null, rows.map(function (r) { return parseNum(r[totC[1]]) || 0; })) || 1;
+    var lay = rows.map(function (r) {
+      var cwid = cw - RK - 14, t = String(r[totC[1]] == null ? "" : r[totC[1]]);
+      var tw = valWidth(x, t, TOT);
+      var ct = chipC ? String(r[chipC[1]] == null ? "" : r[chipC[1]]) : "";
+      if (ct === "—") { ct = ""; }
+      x.font = chipF;
+      var chw = ct ? x.measureText(ct).width + 16 : 0;
+      var room = cwid - tw - (chw ? chw + 10 : 0) - 16, ns = 21, nm;
+      for (;;) {
+        x.font = F(700, ns);
+        nm = wrap(x, bidi(r[nameC[1]] || ""), room);
+        if (nm.length === 1 || ns <= 17) { break; }
+        ns -= 1;
+      }
+      x.font = F(400, 16);
+      var det = r.detail || (subKey ? r[subKey] : "") || "";
+      var dl = det ? wrap(x, bidi(det), cwid - BW - 14) : [];
+      var h = 12 + nm.length * 27 + 4 + Math.max(1, dl.length) * 22 + 12;
+      return { t: t, tw: tw, ct: ct, chw: chw, ns: ns, nm: nm, dl: dl, h: h,
+        v: parseNum(r[totC[1]]) || 0, parts: parts ? parts.map(function (k) { return Math.max(0, parseNum(r[k]) || 0); }) : null };
+    });
+    var colsH = [0, 0];
+    lay.forEach(function (l, i) { colsH[two && i >= perCol ? 1 : 0] += l.h; });
+    var HEAD = 52;
+    var tr = b.totalRow || {}, totT = tr[totC[1]] ? String(tr[totC[1]]) : "";
+    x.font = F(400, 18);
+    var more = b.moreText ? wrap(x, bidi(b.moreText), inner - 44 - (totT ? 300 : 0)) : [];
+    var FOOT = (more.length || totT) ? 16 + Math.max(62, 30 + more.length * 26) : 0;
+    var h = PT + HEAD + Math.max(colsH[0], colsH[1]) + FOOT + PB;
+    if (!draw) { return h; }
+
+    var top = g.top, L0 = g.left, R0 = g.right;
+    x.fillStyle = "#111A2C"; rr(x, L0, top, g.inner, h, 24); x.fill();
+    x.strokeStyle = "rgba(255,255,255,0.07)"; x.lineWidth = 1; rr(x, L0 + 0.5, top + 0.5, g.inner - 1, h - 1, 24); x.stroke();
+    // כותרת ומקרא
+    var title = b.title || "";
+    if (title === "לפי נייר") { title = b.moreText ? rows.length + " הגדולים לפי נייר" : "כל הניירות, לפי היקף"; }
+    x.direction = "rtl"; x.textAlign = "right"; x.fillStyle = C.ink; x.font = F(700, 30, SERIF);
+    x.fillText(bidi(title), R0 - PX, top + PT + 30);
+    var lx = L0 + PX, lyy = top + PT + 24;
+    var leg = [];
+    if (parts) { (b.legend || []).forEach(function (nm, k) { leg.push({ sw: CAT[k % CAT.length], t: nm }); }); }
+    if (chipC) { leg.push({ chip: true, t: chipC[0] }); }
+    leg.reverse().forEach(function (it) {
+      x.font = F(400, 16);
+      var w = x.measureText(it.t).width;
+      x.direction = "rtl"; x.textAlign = "left"; x.fillStyle = C.muted;
+      x.fillText(it.t, lx, lyy);
+      lx += w + 8;
+      if (it.chip) {
+        x.fillStyle = C.upBg; rr(x, lx, lyy - 15, 26, 20, 6); x.fill();
+        x.direction = "ltr"; x.textAlign = "center"; x.fillStyle = C.up; x.font = F(700, 16);
+        x.fillText("±", lx + 13, lyy);
+        lx += 26 + 22;
+      } else {
+        x.fillStyle = it.sw; rr(x, lx, lyy - 10, 22, 8, 4); x.fill();
+        lx += 22 + 22;
+      }
+    });
+    // שורות
+    var y0 = top + PT + HEAD;
+    var cy = [y0, y0];
+    lay.forEach(function (l, i) {
+      var r = rows[i], col = two && i >= perCol ? 1 : 0;
+      var colR = R0 - PX - col * (cw + colGap), colL = colR - cw, y = cy[col];
+      // מקום: שלושת הראשונים בזהב
+      var rcx = colR - RK / 2, rcy = y + l.h / 2;
+      if (i < 3) {
+        var gr = x.createLinearGradient(rcx - RK / 2, rcy - RK / 2, rcx + RK / 2, rcy + RK / 2);
+        gr.addColorStop(0, "#F7E2A6"); gr.addColorStop(0.55, C.accent); gr.addColorStop(1, "#8A5E14");
+        x.fillStyle = "rgba(227,176,75,0.18)"; x.beginPath(); x.arc(rcx, rcy, RK / 2 + 3, 0, Math.PI * 2); x.fill();
+        x.fillStyle = gr;
+      } else {
+        x.fillStyle = "rgba(255,255,255,0.06)";
+      }
+      x.beginPath(); x.arc(rcx, rcy, RK / 2, 0, Math.PI * 2); x.fill();
+      x.direction = "ltr"; x.textAlign = "center"; x.font = F(800, 16);
+      x.fillStyle = i < 3 ? "#0A111F" : C.muted;
+      x.fillText(String(i + 1), rcx, rcy + 6);
+      var cr = colR - RK - 14;
+      // שורה ראשונה: שם מימין; סכום משמאל, והשבב לצידו
+      x.direction = "rtl"; x.textAlign = "right"; x.fillStyle = C.ink; x.font = F(700, l.ns);
+      l.nm.forEach(function (ln, k) { x.fillText(ln, cr, y + 12 + 21 + k * 27); });
+      TOT.color = C.ink; TOT.ucolor = C.faint;
+      drawVal(x, l.t, colL + l.tw, y + 12 + 22, TOT);
+      if (l.ct) {
+        var v = parseNum(l.ct), fg = v > 0 ? C.up : v < 0 ? C.down : C.muted, bgc = v > 0 ? C.upBg : v < 0 ? C.downBg : C.track;
+        var chx = colL + l.tw + 10;
+        x.fillStyle = bgc; rr(x, chx, y + 12 + 3, l.chw, 26, 7); x.fill();
+        x.direction = "ltr"; x.textAlign = "center"; x.fillStyle = fg; x.font = chipF;
+        x.fillText(l.ct, chx + l.chw / 2, y + 12 + 22);
+      }
+      // שורה שנייה: פירוט מימין, פס קטן משמאל
+      var dy = y + 12 + l.nm.length * 27 + 4;
+      x.direction = "rtl"; x.textAlign = "right"; x.fillStyle = C.faint; x.font = F(400, 16);
+      l.dl.forEach(function (ln, k) { x.fillText(ln, cr, dy + 16 + k * 22); });
+      var by = dy + 7;
+      x.fillStyle = "rgba(255,255,255,0.06)"; rr(x, colL, by, BW, 8, 4); x.fill();
+      var full = Math.max(3, Math.round(l.v / mx * BW));
+      x.save(); rr(x, colL, by, BW, 8, 4); x.clip();
+      if (l.parts) {
+        var tot = sum(l.parts) || 1, cx = colL + BW;
+        l.parts.forEach(function (p, k) {
+          if (p <= 0) { return; }
+          var w = Math.max(3, Math.round(full * p / tot));
+          x.fillStyle = CAT[k % CAT.length]; x.fillRect(cx - w, by, w, 8);
+          cx -= w;
+        });
+      } else {
+        x.fillStyle = single; x.fillRect(colL + BW - full, by, full, 8);
+      }
+      x.restore();
+      x.fillStyle = "rgba(255,255,255,0.06)"; x.fillRect(colL, y + l.h - 1, cw, 1);
+      cy[col] += l.h;
+    });
+    // שורת "ועוד" והסך
+    if (FOOT) {
+      var fy = y0 + Math.max(colsH[0], colsH[1]) + 16, fh = FOOT - 16;
+      x.fillStyle = C.page; rr(x, L0 + PX, fy, inner, fh, 16); x.fill();
+      x.strokeStyle = "rgba(227,176,75,0.22)"; rr(x, L0 + PX + 0.5, fy + 0.5, inner - 1, fh - 1, 16); x.stroke();
+      x.direction = "rtl"; x.textAlign = "right"; x.fillStyle = C.muted; x.font = F(400, 18);
+      more.forEach(function (ln, k) { x.fillText(ln, R0 - PX - 22, fy + fh / 2 + 7 - (more.length - 1) * 13 + k * 26); });
+      if (totT) {
+        var TT = { w: 800, s: 30, us: 17 / 30, uw: 400, fam: SANS, color: C.accent, ucolor: C.muted };
+        var tw2 = valWidth(x, totT, TT), ty = fy + fh / 2 + 10;
+        drawVal(x, totT, L0 + PX + 22 + tw2, ty, TT);
+        x.direction = "rtl"; x.textAlign = "right"; x.fillStyle = C.muted; x.font = F(400, 19);
+        x.fillText(tr[nameC[1]] || "סך הכל", L0 + PX + 22 + tw2 + 12 + x.measureText(tr[nameC[1]] || "סך הכל").width, ty);
+      }
+    }
+    return h;
+  }
+
+  // תחתית: מקור והסתייגות מימין, החתימה משמאל — בלי פס, כמו בקנבס.
+  function nightFooter(x, d, g, draw) {
+    x.font = F(700, 18);
+    var hw = x.measureText(HANDLE).width;
+    var src = (d.source || SRC_TASE) + "." + (heroParts(d).partial ? " חתך חלקי של יום המסחר." : "") +
+      " מידע ונתונים בלבד, אינו המלצת השקעה.";
+    x.font = F(400, 16);
+    var lines = wrap(x, bidi(src), g.inner - hw - 40);
+    var h = 22 + lines.length * 24 + 40;
+    if (!draw) { return h; }
+    var y = g.top;
+    x.fillStyle = "rgba(227,176,75,0.22)"; x.fillRect(g.left, y, g.inner, 1);
+    x.direction = "rtl"; x.textAlign = "right"; x.fillStyle = C.foot; x.font = F(400, 16);
+    lines.forEach(function (ln, k) { x.fillText(ln, g.right, y + 22 + 18 + k * 24); });
+    x.direction = "ltr"; x.textAlign = "left"; x.fillStyle = C.muted; x.font = F(700, 18);
+    x.fillText(HANDLE, g.left, y + 22 + 18);
+    return h;
+  }
+
   // ---------------------------------------------------------------- כרטיס
 
   function render(d) {
+    setTheme(d.theme);
+    CUR_KICKER = d.kicker || "";
+    // **כרטיס של מתואמות בלבד — בזהב.** הצבע שייך לסדרה: מתואמות זהובות בכל כרטיס,
+    // ולכן כשהן הסדרה היחידה (עמודות היום, הגדולות, פס ההיקף) הסדרה הראשונה זהובה.
+    if (NIGHT_ON && CUR_KICKER === "עסקאות מתואמות") {
+      CAT = [CAT_NIGHT[1], CAT_NIGHT[0], CAT_NIGHT[2], CAT_NIGHT[3]];
+      C = Object.assign({}, NIGHT, { barSoft: "rgba(227,176,75,0.32)" });
+    }
     var probe = document.createElement("canvas").getContext("2d");
     var blocks = (d.blocks || []).filter(function (b) { return BLOCKS[b.type]; });
     // **רוחב קבוע.** הקנבס כבר אינו מתרחב לטבלה רחבה: טבלה של 1680 פיקסלים
@@ -1950,7 +2543,8 @@
     var inner = W0 - PAD * 2;
     var W = inner + PAD * 2;
     var g = { left: PAD, right: W - PAD, inner: inner, top: 0, W: W };
-    var over = blocks.length > 0 && blocks[0].type === "stats" && (blocks[0].items || []).length > 0;
+    var over = !NIGHT_ON && blocks.length > 0 && blocks[0].type === "stats" &&
+      (blocks[0].items || []).length > 0;
 
     var H = header(probe, d, g, false, over);
     blocks.forEach(function (b) {
@@ -2100,7 +2694,9 @@
         : "הדיווחים במאיה על עסקאות מחוץ לבורסה שבוצעו בחודש — סיכום, עיקרים, והדיווחים עם החלק הגדול מהון החברה.",
       blocks: blocks,
       source: SRC_MAYA,
-      file: "tlv-offex-" + key
+      file: "tlv-offex-" + key,
+      // עמוד מחוץ לבורסה כולו בעיצוב הלילה, גם הדיווחים שנבנים כאן בדפדפן.
+      theme: "night"
     };
   }
 
@@ -2145,8 +2741,9 @@
         label(b, text);
         setTimeout(function () { label(b, was); b.disabled = false; }, 2400);
       }
-      fontsReady().then(function () {
-        var d = cardFor(b);
+      var d0 = cardFor(b);
+      fontsReady(d0 && d0.theme).then(function () {
+        var d = d0;
         if (!d) { reset("אין נתונים"); return; }
         save(render(d), (d.file || "tlv-otc") + ".png", function () {
           if (window.console) { console.error("otc export: toBlob returned null"); }

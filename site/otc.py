@@ -184,10 +184,64 @@ def png_button(text: str = "ייצוא לתמונה", cls: str = "", **data) -> 
 
 
 def card(title: str, sub: str, blocks: list[dict], file: str,
-         kicker: str = KICKER, source: str = SRC_TASE) -> dict:
-    """מטען לכרטיס תמונה: כותרת ורצף גושים (ראה site/export_card.js)."""
-    return {"kicker": kicker, "title": title, "sub": sub,
-            "blocks": [b for b in blocks if b], "source": source, "file": file}
+         kicker: str = KICKER, source: str = SRC_TASE, theme: str = "night") -> dict:
+    """מטען לכרטיס תמונה: כותרת ורצף גושים (ראה site/export_card.js).
+
+    **theme="night"** הוא עיצוב הפוסטים שיואב בנה ב-Claude Design לעסקאות מחוץ לבורסה
+    (05/11/2026), וברירת המחדל כאן כי כל כרטיסי העמוד הזה עוברים דרך הפונקציה. סחורות
+    ורכב (share.card) מעבירים theme="" ונשארים בערכה הבהירה.
+    """
+    d = {"kicker": kicker, "title": title, "sub": sub,
+         "blocks": [b for b in blocks if b], "source": source, "file": file}
+    if theme:
+        d["theme"] = theme
+    return d
+
+
+def short(v) -> str:
+    """סכום בלי "₪", ברווחים לא שבירים, לשורת משנה צפופה בתמונה: "16.1 מ׳", "407 א׳"."""
+    return nb(money(v).replace("₪", "").strip())
+
+
+def insights(agg: list[dict], total: float, fld: str = "median_prem",
+             scope: str = "בתקופה", estimated: bool = False) -> list[dict]:
+    """עד שלושה כרטיסי תובנה לתמונה: מספר גדול ומשפט קצר, כמו בפוסטים של Claude Design.
+
+    אותן עובדות כמו review_bits, בצורה של כרטיס ולא של פסקה. הסקירה בעמוד נשארת
+    המשפטים המלאים. מעקה 5 חל: עובדה מחושבת, בלי המלצה.
+    """
+    out = []
+    if len(agg) >= 3 and total:
+        top3 = sum(e["value"] for e in agg[:3]) / total * 100
+        out.append({"big": f"{top3:.0f}%",
+                    "text": f"מההיקף ב-3 הניירות הגדולים. {agg[0]['name']} לבדה: "
+                            f"{agg[0]['value'] / total * 100:.0f}%."})
+    withcap = [e for e in agg if e.get("pct_capital")]
+    if withcap:
+        big = max(withcap, key=lambda e: e["pct_capital"])
+        out.append({"big": f"{big['pct_capital']:.2f}%",
+                    "text": f"מהון {big['name']} עבר ידיים, השיעור הגבוה {scope}"
+                            + (" (משוער)." if estimated else ".")})
+    prem = [e[fld] for e in agg if e.get(fld) is not None]
+    if prem:
+        med = statistics.median(prem)
+        below = sum(1 for p in prem if p < -0.005)
+        above = sum(1 for p in prem if p > 0.005)
+        if abs(med) < 0.005:
+            out.append({"big": "0.00%", "text": f"חציון הסטייה של העסקאות משער הבסיס: "
+                                                f"{above} ניירות מעליו ו-{below} מתחתיו."})
+        else:
+            side, n_side = ("מתחת", below) if med < 0 else ("מעל", above)
+            out.append({"big": f"{med:+.2f}%",
+                        "text": f"חציון הסטייה של העסקאות משער הבסיס. {n_side} מתוך "
+                                f"{len(prem)} ניירות נסחרו {side} לו."})
+    rec = [e for e in agg if e.get("days", 0) >= 3]
+    if rec:
+        r = max(rec, key=lambda e: e["days"])
+        out.append({"big": str(len(rec)),
+                    "text": f"ניירות חזרו בשלושה ימים או יותר. החוזר: {r['name']}, "
+                            f"{r['days']} ימים."})
+    return out[:3]
 
 
 def embed(key: str, payload: dict) -> str:
@@ -610,8 +664,11 @@ def period_table(title: str, sub: str, rows: list[dict],
             {"label": "היקף", "value": money(total)},
             {"label": "עסקאות", "value": f'{sum(e["n"] for e in agg):,}'},
             {"label": "ניירות", "value": str(len(agg))}]},
-        # המשפט הראשון בסקירה חוזר על שלושת המספרים שמעליו, ולכן אינו בתמונה.
-        {"type": "notes", "title": "עיקרי התקופה", "items": bits[1:]} if len(bits) > 1 else None,
+        # המשפט הראשון בסקירה חוזר על שלושת המספרים שמעליו, ולכן אינו בתמונה. בתמונה
+        # העיקרים הם כרטיסי תובנה (insights) — מספר גדול ומשפט קצר.
+        {"type": "notes", "title": "עיקרי התקופה",
+         "items": insights(agg, total, fld, "ביום" if stat == "mean" else "בתקופה")
+         or bits[1:]} if len(bits) > 1 else None,
         # **בתמונה שלוש עמודות.** העסקאות, הימים והחלק מההון עוברים לשורה מתחת
         # לשם — ברוחב הקריא שש עמודות היו נדחסות לטקסט של חמישה פיקסלים בטלפון.
         {"type": "table", "title": "לפי נייר",
