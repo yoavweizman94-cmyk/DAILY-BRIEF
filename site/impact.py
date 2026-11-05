@@ -71,9 +71,46 @@ def load() -> dict:
             if r.get("id") and r.get("companies"):
                 by_id[r["id"]] = r
     since = (now - timedelta(days=PAGE_DAYS)).isoformat(timespec="seconds")
-    items = sorted((r for r in by_id.values() if (r.get("ts") or "") >= since),
-                   key=lambda r: r.get("ts") or "", reverse=True)
+    items = dedupe([r for r in by_id.values() if (r.get("ts") or "") >= since])
     return {"state": state, "items": items, "profiles": profiles}
+
+
+# **אותו סיפור — כרטיס אחד** (כמו analyze_impact.same_story): חברה משותפת ושלוש מילים
+# משותפות בכותרת, בהפרש של עד יומיים. נשאר הכרטיס בעוצמה הגבוהה, ואז ממקור מוסמך (דיווח
+# החברה לפני ידיעה עליו), ואז החדש. רשת ביטחון לכפילויות שכבר נכתבו.
+_PFX = re.compile(r"^[והבלמשכ](?=[א-ת]{3,})")
+_STOP = {"אחרי", "לפני", "בגלל", "מול", "כמו", "עוד", "יותר", "פחות", "מיליון", "מיליארד", "דולר",
+         "שקל", "ש״ח", "אחוז", "חברה", "החברה", "שנה", "השנה", "רבעון", "ברבעון", "the", "and",
+         "for", "with", "from", "that", "this", "after", "over", "its", "new"}
+_RANK = {"maya": 3, "gov": 3, "cbs": 2, "call": 2, "news": 1, "price": 1, "mail": 0}
+
+
+def _words(text: str) -> set[str]:
+    out = set()
+    for w in re.findall(r"[א-ת״׳\"']+|[a-z0-9]+", (text or "").lower()):
+        w = _PFX.sub("", w.strip("\"'״׳"))
+        if len(w) >= 3 and w not in _STOP:
+            out.add(w)
+    return out
+
+
+def dedupe(rows: list[dict]) -> list[dict]:
+    best = sorted(rows, key=lambda r: (int(r.get("sig") or 1), _RANK.get(r.get("kind"), 0),
+                                       r.get("ts") or ""), reverse=True)
+    kept: list[tuple[dict, set, set, datetime | None]] = []
+    for r in best:
+        cos = {c.get("name") for c in r.get("companies") or []}
+        ws = _words(r.get("headline"))
+        t = _local(r.get("ts"))
+        twin = next((k for k, kc, kw, kt in kept
+                     if cos & kc and len(ws & kw) >= 3
+                     and (not t or not kt or abs(t - kt) <= timedelta(days=2))), None)
+        if twin is not None:
+            # הקישור מהכותרת או מהדיווח שהוסר מוביל לכרטיס שנשאר
+            twin.setdefault("_alias", []).append(r.get("src"))
+            continue
+        kept.append((r, cos, ws, t))
+    return sorted((k[0] for k in kept), key=lambda r: r.get("ts") or "", reverse=True)
 
 
 def anchor(src: str) -> str:
@@ -82,7 +119,13 @@ def anchor(src: str) -> str:
 
 def links(data: dict) -> dict[str, str]:
     """מזהה המקור (כותרת, דיווח, פרסום) → העוגן שלו בעמוד — לקישורים מהעמודים האחרים."""
-    return {r["src"]: anchor(r["src"]) for r in data.get("items") or [] if r.get("src")}
+    out = {}
+    for r in data.get("items") or []:
+        if r.get("src"):
+            for s in [r["src"], *(r.get("_alias") or [])]:
+                if s:
+                    out[s] = anchor(r["src"])
+    return out
 
 
 def _cap(m) -> str:

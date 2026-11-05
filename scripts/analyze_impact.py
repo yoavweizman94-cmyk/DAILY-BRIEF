@@ -682,6 +682,31 @@ def _key(title: str) -> str:
     return re.sub(r"[\W_]+", "", (title or "").lower())[:60]
 
 
+# --- אותו סיפור, ממקור אחר -------------------------------------------------------
+# **המיון אינו אמין כאן לבדו.** ב-05/11/2026 חוות השרתים של בזק ואדגר נותחה שלוש פעמים —
+# מכותרת, מדיווח במאיה ומגלובס — אף שההוראה אומרת "ask רק לאחד". הכלל הדטרמיניסטי: חברה
+# משותפת ושלוש מילים משותפות בכותרת (אחרי הסרת אות שימוש). שני סיפורים שונים על אותה
+# חברה חולקים לרוב מילה אחת — את שמה.
+_PFX = re.compile(r"^[והבלמשכ](?=[א-ת]{3,})")
+_STOP = {"אחרי", "לפני", "בגלל", "מול", "כמו", "עוד", "יותר", "פחות", "מיליון", "מיליארד", "דולר",
+         "שקל", "ש״ח", "אחוז", "חברה", "החברה", "שנה", "השנה", "רבעון", "ברבעון", "the", "and",
+         "for", "with", "from", "that", "this", "after", "over", "its", "new"}
+KIND_RANK = {"maya": 3, "gov": 3, "cbs": 2, "call": 2, "news": 1, "price": 1, "mail": 0}
+
+
+def words(text: str) -> set[str]:
+    out = set()
+    for w in re.findall(r"[א-ת״׳\"']+|[a-z0-9]+", (text or "").lower()):
+        w = _PFX.sub("", w.strip("\"'״׳"))
+        if len(w) >= 3 and w not in _STOP:
+            out.add(w)
+    return out
+
+
+def same_story(a_title: str, a_cos, b_title: str, b_cos) -> bool:
+    return bool(set(a_cos) & set(b_cos)) and len(words(a_title) & words(b_title)) >= 3
+
+
 def candidates(now: datetime, names: set[str], mail: list[dict] | None = None) -> list[dict]:
     since = (now - timedelta(hours=WINDOW_H)).isoformat(timespec="seconds")
     days = _days(now, 2)
@@ -929,17 +954,27 @@ def main() -> int:
     # 2. ניתוח — לפי עדיפות, ואז החדש קודם
     queue = [c for c in cands if (t := tri.get(c["cid"])) and t.get("ask") and not t.get("done")
              and int(t.get("tries") or 0) < TRIES]
-    queue.sort(key=lambda c: (int(tri[c["cid"]].get("priority") or 0), c["ts_utc"]), reverse=True)
+    # עדיפות, ואז המקור המוסמך (דיווח החברה לפני ידיעה עליו), ואז החדש
+    queue.sort(key=lambda c: (int(tri[c["cid"]].get("priority") or 0), KIND_RANK.get(c["kind"], 0),
+                              c["ts_utc"]), reverse=True)
+    seen_stories = [(r.get("headline") or "", [x.get("name") for x in r.get("companies") or []])
+                    for r in analyzed(now)]
     batch, low = [], 0
     for c in queue:
         if len(batch) >= max(0, args.max):
             break
         t = tri[c["cid"]]
+        cos = list(t.get("companies") or [])
+        if any(same_story(c["title"], cos, h, pc) for h, pc in seen_stories):
+            t["done"], t["dup"] = True, True
+            entry["dups"] = entry.get("dups", 0) + 1
+            continue
         if int(t.get("priority") or 0) <= 1:
             if low >= LOW_MAX:
                 continue
             low += 1
-        batch.append({**c, "companies": list(t.get("companies") or []), "reason": t.get("reason")})
+        seen_stories.append((c["title"], cos))
+        batch.append({**c, "companies": cos, "reason": t.get("reason")})
     written = 0
     if batch and spent + entry["usd"] < cap:
         res, usd = analyze(batch, model)
