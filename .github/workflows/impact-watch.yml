@@ -61,22 +61,15 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # **הניוזלטרים מהמייל** (config/sources.yaml → gmail: FT, WSJ, Bloomberg, רויטרס, Economist,
-      # NYT, כלכליסט, TheMarker...) — אותה משיכה כמו בברייף, בהרשאת קריאה בלבד (gmail.readonly).
-      # הקובץ נשאר על מכונת הריצה ואינו נשמר בשום ריפו. מצב "נראה" ב-state.sqlite משתנה כאן
-      # רק בעותק של הריצה ואינו נשמר, ולכן אינו נוגע בברייף. כשל — העמוד ממשיך בלי המייל.
-      - name: Pull newsletters
-        env:
-          GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS }}
-        run: |
-          python ingest/gmail_pull.py || echo "::warning title=הניוזלטרים לא נמשכו::עמוד ההשפעה על מניות ממשיך בלי מקור המייל בריצה הזו."
-
       # כישלון אינו מפיל את הריצה: מה שלא נותח נשאר בחלון של 36 שעות לריצה הבאה,
       # והמיון שכבר שולם נשמר. הלוג ציבורי — הסקריפט מדפיס מספרים בלבד.
+      # GMAIL_CREDENTIALS — הניוזלטרים (FT, WSJ, Bloomberg, רויטרס...), בהרשאת קריאה בלבד ורק
+      # הודעות חדשות: מכסת Gmail לדקה משותפת לברייף (ראה pull_mail). התוכן אינו נשמר בשום ריפו.
       - name: Triage and analyze
         id: analyze
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS }}
           IMPACT_MAX: ${{ inputs.max }}
           IMPACT_RESET: ${{ inputs.reset }}
         run: |

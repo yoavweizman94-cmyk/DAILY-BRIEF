@@ -22,10 +22,10 @@
 · output/gov/ — פרסומי רגולטורים שסומנו מהותיים וסוקרו (scripts/analyze_gov.py).
 · output/cbs/analyses/ — פרסומי הלמ"ס והניתוח שלהם, כולל ההשלכות לפי ענף.
 · output/calls/transcripts_<שנה>.jsonl — סיכומי שיחות המשקיעים (globes_calls).
-· data/raw/<היום>/gmail.jsonl — הניוזלטרים מהמייל (FT, WSJ, Bloomberg, רויטרס, Economist,
-  NYT, כלכליסט, TheMarker, Industry Dive...), מ-ingest/gmail_pull.py באותה ריצה, בקטעים
-  של סיפור או שניים. **הקובץ אינו נשמר בשום ריפו**, ולכרטיס אין קישור — הכתובת היא של
-  תיבת הדואר של יואב — רק שם הניוזלטר. התראות "סוכן חכם" של מאיה מדולגות: מאיה כבר מקור.
+· הניוזלטרים מהמייל (FT, WSJ, Bloomberg, רויטרס, Economist, NYT, כלכליסט, TheMarker,
+  Industry Dive...) — pull_mail, ישירות מ-Gmail בהרשאת קריאה, רק הודעות חדשות, בקטעים של
+  סיפור או שניים. **התוכן אינו נכתב לשום קובץ**, ולכרטיס אין קישור — הכתובת היא של תיבת
+  הדואר של יואב — רק שם הניוזלטר. התראות "סוכן חכם" של מאיה מדולגות: מאיה כבר מקור.
 אותו סיפור מכמה מקורות נספר פעם אחת (כתובת וכותרת), והמקור העשיר יותר נשאר.
 
 **שני שלבים, כדי לא לשלם על ניתוח של כל ידיעה:**
@@ -57,6 +57,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -79,17 +80,20 @@ COMMOD_PRICES = CONTENT / "commodities" / "prices"
 AUTO_ITEMS = CONTENT / "auto" / "items"
 CBS_AN = CONTENT / "cbs" / "analyses"
 CALLS = CONTENT / "calls"
-RAW = ROOT / "data" / "raw"
+SOURCES = ROOT / "config" / "sources.yaml"
 OUT = CONTENT / "impact"
 COMPANIES = ROOT / "config" / "companies.yaml"
 GOV_CFG = ROOT / "config" / "gov.yaml"
 
 WINDOW_H = 36          # פריט ותיק מזה כבר אינו "מה זה עושה היום"
 # כל המקורות יחד הם 500–700 פריטים ביום. ריצה כל שעתיים רואה כ-60–90 חדשים.
-TRIAGE_MAX = 100       # פריטים בקריאת מיון אחת; השאר לריצה הבאה
+# עם הניוזלטרים — כ-800 פריטים ביום, ותשע ריצות: 150 בקריאה עומדים בקצב (05/11/2026).
+TRIAGE_MAX = 150       # פריטים בקריאת מיון אחת; השאר לריצה הבאה
 ANALYZE_MAX = 8        # אירועים לניתוח בריצה
 PX_DAY, PX_WEEK = 3.0, 8.0     # % — מכאן תזוזת מחיר סחורה היא אירוע
-MAIL_CHUNKS = 12       # קטעים לניוזלטר — הסיפורים הראשונים הם הראשיים
+MAIL_CHUNKS = 10       # קטעים לניוזלטר — הסיפורים הראשונים הם הראשיים
+MAIL_FETCH_MAX = 40    # הודעות חדשות שנמשכות בריצה; השאר בריצה הבאה
+MAIL_PAUSE = 0.5       # שניות בין הודעה להודעה — מכסת Gmail לדקה משותפת לברייף
 # **עדיפות 1 — "השאלה עולה, אבל סביר שההשפעה קטנה" — אחד בריצה.** בשתי הריצות
 # הראשונות (05/11/2026) המיון סימן כמחצית מהפריטים, ורובם בעדיפות 1. ניתוח של כולם
 # היה ממלא את "נבדק — כנראה לא משנה" בעשרות ביום ומכלה את התקרה היומית. האזור לא
@@ -121,7 +125,18 @@ MAIL_SKIP = re.compile(r"mailtase\.co\.il", re.I)   # "סוכן חכם" של מ�
 MAIL_BOILER = re.compile(r"unsubscribe|view (?:this|it|in) (?:email )?(?:in )?(?:your )?browser|"
                          r"privacy (?:policy|notice)|manage (?:your )?(?:preferences|subscriptions?|"
                          r"email)|all rights reserved|©|copyright|להסרה|הסר(?:ת)? (?:מ|את)|"
-                         r"לצפייה בדפדפן|terms of (?:use|service)|sign up|subscribe to", re.I)
+                         r"לצפייה בדפדפן|terms of (?:use|service)|sign up|subscribe to|"
+                         r"update your profile|view online|media kit|want to reach|advertis|sponsored|"
+                         r"forwarded (?:this|to you)|follow us|download the app|in your browser|"
+                         r"received this (?:email|newsletter|message)|you are receiving|signed up (?:for|from)",
+                         re.I)
+# **ריפוד בלתי נראה בניוזלטרים.** Bloomberg ואחרים מוסיפים אחרי שורת הפתיחה מאות תווי
+# ZWNJ (U+200C) ו-CGJ (U+034F) עם רווחים, כדי לשלוט בתקציר שמוצג בתיבת הדואר. נמדד
+# 05/11/2026: 61 קטעים ראשונים היו ברובם ריפוד, והמיון לא מצא באף אחד מהם דבר. עם קישורי
+# המעקב (link.<אתר>.com/click/...) הם רעש בלבד.
+MAIL_INVIS = re.compile("[­͏؜ᅟᅠ឴឵᠎​-‏"
+                        "‪-‮⁠-⁤⁪-⁯ㅤ﻿ﾠ]")
+MAIL_URL = re.compile(r"https?://\S+|www\.\S+")
 DIRECTIONS = ("חיובי", "שלילי", "מעורב", "ניטרלי")
 LEVELS = ("גבוהה", "בינונית", "נמוכה")
 
@@ -560,7 +575,7 @@ def _chunks(body: str) -> list[str]:
     (תפריטים, "קרא עוד") ושורות של הסרה ופרטיות — בחוץ."""
     out, cur = [], ""
     for line in (body or "").splitlines():
-        line = " ".join(line.split())
+        line = " ".join(MAIL_URL.sub(" ", MAIL_INVIS.sub(" ", line)).split())
         if len(line) < 35 or MAIL_BOILER.search(line):
             continue
         # 450 ולא יותר: פסקת ניוזלטר היא 200–400 תווים, וקטע גדול מזה מערבב סיפורים זרים
@@ -575,24 +590,91 @@ def _chunks(body: str) -> list[str]:
     return out
 
 
-def _mail(days: list[str]) -> list[dict]:
-    """הניוזלטרים של היום מ-data/raw/<היום>/gmail.jsonl (ingest/gmail_pull.py, באותה ריצה).
-    בלי קישור: הכתובת היא של תיבת הדואר של יואב, ולמנויים אין בה דבר."""
-    out = []
-    for d in days[:1]:
-        for r in _jsonl(RAW / d / "gmail.jsonl"):
-            sender = str(r.get("source") or "")
-            if MAIL_SKIP.search(sender) or not r.get("id"):
+def _get_msg(svc, mid: str) -> dict:
+    """הודעה אחת, עם המתנה כשהמכסה לדקה מוצתה — ובלי לנסות בלי סוף."""
+    for i in range(3):
+        try:
+            return svc.users().messages().get(userId="me", id=mid, format="full").execute()
+        except Exception as e:  # noqa: BLE001 — HttpError של googleapiclient
+            if not re.search(r"rateLimitExceeded|Quota exceeded|429", str(e)):
+                raise
+            time.sleep(20 * (i + 1))
+    raise RuntimeError("מכסת Gmail לדקה מוצתה")
+
+
+def pull_mail(state: dict, run: str) -> tuple[list[dict], dict]:
+    """הניוזלטרים של 24 השעות האחרונות, ישירות מ-Gmail בהרשאת קריאה בלבד.
+
+    **רק הודעות שעוד לא מוינו במלואן.** משיכה מלאה בכל ריצה — כ-100 הודעות כל שעתיים —
+    מיצתה ב-05/11/2026 את מכסת Gmail לדקה ("Total Query Cost"), ואותה מכסה משרתת את
+    הברייף: התנגשות הייתה משאירה אותו בלי ניוזלטרים. state["mail"] שומר לכל הודעה את מספר
+    הקטעים שלה (מזהה בלבד, בלי תוכן); הודעה שכל הקטעים שלה במצב המיון אינה נמשכת שוב.
+    ההודעות עצמן אינן נכתבות לשום קובץ."""
+    if not (os.environ.get("GMAIL_CREDENTIALS") or (ROOT / "token.json").exists()):
+        return [], {"mail": "off"}
+    sys.path.insert(0, str(ROOT / "ingest"))
+    known: dict = state.setdefault("mail", {})
+    tri = state.get("triage") or {}
+    cut = datetime.now(timezone.utc) - timedelta(hours=24)
+    rows, fetched = [], 0
+    try:
+        import gmail_pull as G
+        cfg = (yaml.safe_load(SOURCES.read_text(encoding="utf-8")) or {}).get("gmail") or {}
+        skip = tuple(cfg.get("skip_subject_prefixes") or [])
+        svc = G.get_service()
+        queries = [{"labelIds": [G.find_label_id(svc, cfg.get("label") or "ברייף")], "q": "newer_than:2d"}]
+        senders = " OR ".join(f"from:{s}" for s in cfg.get("senders") or [] if s)
+        if senders:
+            queries.append({"q": f"newer_than:2d ({senders})"})
+        ids: list[str] = []
+        for kw in queries:
+            for m in svc.users().messages().list(userId="me", maxResults=150, **kw).execute().get("messages", []):
+                if m["id"] not in ids:
+                    ids.append(m["id"])
+        for mid in ids:
+            k = known.get(mid)
+            if k and (k.get("skip") or all(f"mail:{mid}:{i}" in tri for i in range(int(k.get("n") or 0)))):
                 continue
-            name = _mail_name(sender)
-            region = "il" if name in MAIL_IL else _region(_clean(r.get("title")))
-            for i, chunk in enumerate(_chunks(r.get("body") or "")):
-                first = re.split(r"(?<=[.!?])\s", chunk, 1)[0][:140]
-                out.append({"cid": f"mail:{r['id']}:{i}", "kind": "mail", "region": region,
-                            "ts": r.get("ts") or "", "title": first,
-                            "text": f"ניוזלטר: {name} — {_clean(r.get('title'))}\nקטע: {chunk}",
-                            "hint": [], "headline_only": False,
-                            "links": [{"name": name, "url": "", "title": ""}]})
+            if fetched >= MAIL_FETCH_MAX:
+                break
+            msg = _get_msg(svc, mid)
+            fetched += 1
+            time.sleep(MAIL_PAUSE)
+            ts = datetime.fromtimestamp(int(msg["internalDate"]) / 1000, tz=timezone.utc)
+            h = {x["name"].lower(): x["value"] for x in (msg.get("payload") or {}).get("headers", [])}
+            sender, subject = h.get("from", ""), h.get("subject", "")
+            if ts < cut or MAIL_SKIP.search(sender) or (skip and subject.strip().startswith(skip)):
+                known[mid] = {"skip": True, "at": run}
+                continue
+            body = G.extract_body(msg.get("payload") or {})
+            known[mid] = {"n": len(_chunks(body)), "at": run}
+            rows.append({"id": mid, "ts": ts.isoformat(timespec="seconds"), "title": subject,
+                         "body": body, "source": "gmail:" + sender})
+    except BaseException as e:  # noqa: BLE001 — SystemExit מ-find_label_id, HttpError, רשת
+        if isinstance(e, KeyboardInterrupt):
+            raise
+        return rows, {"mail_error": type(e).__name__, "mail_fetched": fetched}
+    return rows, {"mail_fetched": fetched}
+
+
+def _mail(rows: list[dict]) -> list[dict]:
+    """הניוזלטרים לקטעים. בלי קישור: הכתובת היא של תיבת הדואר של יואב, ולמנויים אין בה דבר."""
+    out = []
+    for r in rows:
+        sender = str(r.get("source") or "")
+        if MAIL_SKIP.search(sender) or not r.get("id"):
+            continue
+        name = _mail_name(sender)
+        region = "il" if name in MAIL_IL else _region(_clean(r.get("title")))
+        for i, chunk in enumerate(_chunks(r.get("body") or "")):
+            first = re.split(r"(?<=[.!?])\s", chunk, 1)[0][:140]
+            if len(first) < 40:      # קטע שנפתח באמצע משפט — "sources." אינו כותרת
+                first = chunk[:140]
+            out.append({"cid": f"mail:{r['id']}:{i}", "kind": "mail", "region": region,
+                        "ts": r.get("ts") or "", "title": first,
+                        "text": f"ניוזלטר: {name} — {_clean(r.get('title'))}\nקטע: {chunk}",
+                        "hint": [], "headline_only": False,
+                        "links": [{"name": name, "url": "", "title": ""}]})
     return out
 
 
@@ -600,14 +682,14 @@ def _key(title: str) -> str:
     return re.sub(r"[\W_]+", "", (title or "").lower())[:60]
 
 
-def candidates(now: datetime, names: set[str]) -> list[dict]:
+def candidates(now: datetime, names: set[str], mail: list[dict] | None = None) -> list[dict]:
     since = (now - timedelta(hours=WINDOW_H)).isoformat(timespec="seconds")
     days = _days(now, 2)
     # **הסדר הוא העדפה בכפילות**: אותו סיפור מכמה מקורות נשאר פעם אחת, מהעשיר ביותר —
     # דיווח החברה, הרגולטור והלמ"ס קודם; עמוד הכותרות (עם תמצית) לפני הפידים (כותרת).
     rows = (_maya(days, names) + _gov(since, names) + _cbs(since, names) + _calls(days, names)
             + _prices(days) + _news(days, names) + _items(COMMOD_ITEMS, days, "cm", names)
-            + _items(AUTO_ITEMS, days, "au", names) + _items(NEWS, days, "nw", names) + _mail(days))
+            + _items(AUTO_ITEMS, days, "au", names) + _items(NEWS, days, "nw", names) + _mail(mail or []))
     out, keys, urls = [], set(), set()
     for c in rows:
         try:
@@ -654,7 +736,7 @@ def _cand_block(n: int, c: dict) -> str:
     if c["kind"] == "maya" and c.get("materiality"):
         head += f" · מהותיות לפי סיכום הדיווח: {c['materiality']}"
     hint = f"\nחברות שנקבו בפריט או בסיכום שלו: {', '.join(c['hint'])}" if c["hint"] else ""
-    return f"{head}\nכותרת: {c['title']}{hint}\n{c['text'][:500]}"
+    return f"{head}\nכותרת: {c['title']}{hint}\n{c['text'][:450]}"
 
 
 def triage(batch: list[dict], done: list[dict], names: set[str],
@@ -816,10 +898,11 @@ def main() -> int:
     state = _load(OUT / "state.json", {})
     tri: dict[str, dict] = state.get("triage") or {}
     names, sector = coverage()
-    cands = candidates(now, names)
+    mail, mstats = pull_mail(state, run)
+    cands = candidates(now, names, mail)
     by_cid = {c["cid"]: c for c in cands}
     entry = {"at": run, "ok": True, "candidates": len(cands), "new": 0, "asked": 0,
-             "analyzed": 0, "published": 0, "rejected": 0, "fixed": 0, "usd": 0.0}
+             "analyzed": 0, "published": 0, "rejected": 0, "fixed": 0, "usd": 0.0, **mstats}
 
     spent = spent_today()
     if spent >= cap:
@@ -912,6 +995,7 @@ def waiting(tri: dict, now: datetime) -> int:
 def _finish(state: dict, tri: dict, entry: dict, now: datetime, written: int, dry: bool) -> int:
     cut = (now - timedelta(days=KEEP_DAYS)).isoformat(timespec="seconds")
     tri = {k: v for k, v in tri.items() if (v.get("at") or "") >= cut}
+    state["mail"] = {k: v for k, v in (state.get("mail") or {}).items() if (v.get("at") or "") >= cut}
     entry["usd"] = round(entry["usd"], 3)
     state["triage"] = tri
     if entry["ok"]:
@@ -922,7 +1006,9 @@ def _finish(state: dict, tri: dict, entry: dict, now: datetime, written: int, dr
     print(f"::notice title=השפעה על מניות::{entry['candidates']} פריטים בחלון, {entry['new']} חדשים "
           f"למיון, {entry['asked']} מעוררים את השאלה, נותחו {entry['analyzed']} ופורסמו "
           f"{entry['published']}, נפסלו {entry['rejected']}, תוקנו {entry['fixed']} שדות, "
-          f"ממתינים {pending}, ${entry['usd']}")
+          f"ממתינים {pending}, ${entry['usd']}"
+          + (f" · ניוזלטרים: נמשכו {entry['mail_fetched']} הודעות חדשות" if "mail_fetched" in entry else "")
+          + (f" (נעצר: {entry['mail_error']})" if entry.get("mail_error") else ""))
     if dry:
         return 0 if entry["ok"] else 1
     (OUT / "state.json").write_text(json.dumps(state, ensure_ascii=False, indent=1), encoding="utf-8")
