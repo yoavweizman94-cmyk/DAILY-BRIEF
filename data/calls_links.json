@@ -369,5 +369,44 @@
   "others": [
    "http://www.sec.gov/"
   ]
+ },
+ "1779200": {
+  "link": "https://malamteam.zoom.us/webinar/register/WN_JnGfr06QRDS3QYJ6CqhkbA",
+  "certain": true,
+  "known": [
+   "https://malamteam.zoom.us/webinar/register/WN_JnGfr06QRDS3QYJ6CqhkbA"
+  ],
+  "others": []
+ },
+ "1779202": {
+  "link": "https://www.veidan-conferencing.com/isracard",
+  "certain": true,
+  "known": [
+   "https://www.veidan-conferencing.com/isracard"
+  ],
+  "others": [
+   "http://digital.isracard.co.il",
+   "https://marketing.isracard.co.il/pages/investor-relations/"
+  ]
+ },
+ "1778918": {
+  "link": "https://us02web.zoom.us/j/83704376039",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/j/83704376039"
+  ],
+  "others": []
+ },
+ "1779115": {
+  "link": "https://www.veidan-conferencing.com/bank-hapoalim",
+  "certain": true,
+  "known": [
+   "https://www.veidan-conferencing.com/bank-hapoalim"
+  ],
+  "others": [
+   "http://www.bankhapoalim.co.il",
+   "http://www.bankhapoalim.co.il/",
+   "http://www.bankhapoalim.com/"
+  ]
  }
 }
