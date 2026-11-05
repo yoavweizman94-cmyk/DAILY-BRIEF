@@ -182,7 +182,7 @@
 | כתובת | התנהגות |
 |-------|----------|
 | `tlvtaseview.com` | 302 למסך התחברות של Cloudflare Access |
-| `forest-brief.pages.dev` | 301 לדומיין המוגן — לא מגיש תוכן |
+| `forest-brief.pages.dev` | 301 לדומיין המוגן — לא מגיש תוכן (מ-05/11/2026: כתובת חלופית מאחורי אותו שער, ראו docs/manual.md) |
 
 הסטת ה-pages.dev נעשית ב-`site/functions/_middleware.js`, קוד שרץ לפני כל
 בקשה. נבחר על פני אפליקציית Access שנייה כי הוא נפרס יחד עם האתר ואינו

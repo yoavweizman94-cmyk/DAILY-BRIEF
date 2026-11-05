@@ -149,12 +149,19 @@ jobs:
           note "api/oauth/token בלי לקוח → $c"
           [ "$c" = "401" ] || bad "$APP/api/oauth/token השיב $c בלי לקוח (צפוי 401)"
 
-          # --- pages.dev: חייב להפנות לדומיין ולא להגיש בעצמו ---
+          # --- pages.dev: הכתובת החלופית (site/functions/_lib/alt.js) ---
+          # מאז 05/11/2026 היא מגישה את האפליקציה מאחורי אותו שער, לפי מתג
+          # הבעלים: "off" מפנה לאפליקציה, ושני המצבים האחרים מפנים בלי סשן
+          # לכניסה באותה כתובת. מה שאסור בכל מצב הוא תוכן בלי סשן.
           echo "=== forest-brief.pages.dev ==="
-          rd=$(curl -s -o /dev/null --max-time 25 -w '%{redirect_url}' "https://forest-brief.pages.dev/" || true)
-          note "הפניה: ${rd:-אין}"
-          echo "$rd" | grep -q 'app\.tlvtaseview\.com' || \
-            bad "pages.dev אינו מפנה ל-app.tlvtaseview.com (קיבלנו: ${rd:-אין})"
+          for p in / /cbs.html /meetings.html; do
+            out=$(curl -s -o /dev/null --max-time 25 -w '%{http_code} %{redirect_url}' "https://forest-brief.pages.dev$p" || true)
+            note "$p → ${out:-אין תשובה}"
+            case "$out" in
+              "301 https://app.tlvtaseview.com"*|"302 https://forest-brief.pages.dev/login"*) ;;
+              *) bad "forest-brief.pages.dev$p בלי סשן השיב '${out:-אין}' — צפויה הפניה לכניסה או לאפליקציה" ;;
+            esac
+          done
 
           echo
           [ "$fail" = "0" ] && echo "כל הבדיקות עברו." || echo "יש כשלים — ראו ::error:: למעלה."

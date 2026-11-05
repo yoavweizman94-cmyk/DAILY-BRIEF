@@ -25,6 +25,21 @@
   <p class="pend-when" id="pendfoot" hidden></p>
 </section>
 
+<!-- לבעלים בלבד: מי נכנס בכתובת החלופית. לכל משתמש אחר הנתיב מחזיר 403 והסעיף נשאר מוסתר. -->
+<section class="auth pend" id="alt" hidden>
+  <h2>כתובת חלופית</h2>
+  <p class="auth-sub">האתר זמין גם בכתובת <a href="https://forest-brief.pages.dev/">forest-brief.pages.dev</a>.
+  היא אינה תלויה בדומיין, ולכן נפתחת מכל מחשב, גם ברשת שחוסמת אותו. הכניסה בה היא באותו מייל ובאותה
+  סיסמה של האתר.</p>
+  <fieldset class="alt-modes">
+    <legend>מי יכול להיכנס בכתובת הזו</legend>
+    <label><input type="radio" name="altm" value="owner"> רק אני</label>
+    <label><input type="radio" name="altm" value="users"> כל המשתמשים המאושרים</label>
+    <label><input type="radio" name="altm" value="off"> אף אחד, והכתובת מפנה לאתר הרגיל</label>
+  </fieldset>
+  <div id="altmsg" class="msg" role="status" aria-live="polite"></div>
+</section>
+
 <script>
 (function () {
   "use strict";
@@ -192,6 +207,54 @@
   ptimer = setInterval(load, 45000);
   document.addEventListener("visibilitychange", function () {
     if (!document.hidden) load();
+  });
+
+  // **הכתובת החלופית** (forest-brief.pages.dev): מי נכנס בה. לבעלים בלבד —
+  // לכל אחר הנתיב מחזיר 401 או 403 והסעיף נשאר מוסתר. השער ב-_middleware.js.
+  var alt = document.getElementById("alt"), amsg = document.getElementById("altmsg"),
+      aradios = document.querySelectorAll('input[name="altm"]'), acur = null, ahost = "";
+
+  function asay(t, c) { amsg.className = "msg " + (c || ""); amsg.textContent = t; }
+  function aset(mode) {
+    Array.prototype.forEach.call(aradios, function (r) { r.checked = r.value === mode; });
+  }
+  function alock(on) {
+    Array.prototype.forEach.call(aradios, function (r) { r.disabled = on; });
+  }
+
+  fetch("/api/altaccess", { headers: { "Accept": "application/json" } })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d || !d.mode) return;
+      acur = d.mode; ahost = d.host || ""; aset(d.mode); alt.hidden = false;
+    })
+    .catch(function () {});
+
+  Array.prototype.forEach.call(aradios, function (r) {
+    r.addEventListener("change", function () {
+      if (!r.checked) return;
+      var want = r.value;
+      // מי שנמצא עכשיו בכתובת החלופית ומכבה אותה, מנתק את עצמו ממנה. אם
+      // הוא שם כי האתר הרגיל חסום אצלו, הוא לא יוכל להדליק אותה מחדש משם.
+      if (want === "off" && location.hostname === ahost &&
+          !window.confirm("אתה גולש עכשיו בכתובת החלופית. כיבוי שלה ינתק אותך ממנה, ותוכל להדליק אותה מחדש רק מהאתר הרגיל. לכבות?")) {
+        aset(acur);
+        return;
+      }
+      alock(true);
+      asay("שומר…", "wait");
+      fetch("/api/altaccess", { method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ mode: want }) })
+        .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, d: d }; }); })
+        .then(function (res) {
+          if (!res.ok) throw new Error((res.d && res.d.error) || "השמירה נכשלה");
+          acur = res.d.mode;
+          asay("נשמר. השינוי חל בכל המקומות תוך כדקה.", "ok");
+        })
+        .catch(function (err) { aset(acur); asay(err.message, "err"); })
+        .then(function () { alock(false); });
+    });
   });
 
   f.addEventListener("submit", function (e) {

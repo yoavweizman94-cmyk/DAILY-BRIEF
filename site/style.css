@@ -1485,6 +1485,23 @@ button.pend-go {
   border: 0; cursor: pointer; font-family: inherit; line-height: 1.5;
 }
 button.pend-go:disabled { opacity: 0.55; cursor: default; }
+
+/* --- כתובת חלופית (בעלים בלבד) --------------------------------------- */
+.alt-modes {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  margin: 0; padding: 0; border: 0; min-width: 0;
+}
+.alt-modes legend {
+  padding: 0; margin-bottom: 0.45rem;
+  font-size: 0.78rem; color: var(--muted); font-weight: 600;
+}
+.auth .alt-modes label {
+  flex-direction: row; align-items: center; gap: 0.55rem;
+  font-size: 0.92rem; color: var(--fg); font-weight: 500; cursor: pointer;
+}
+.auth .alt-modes input {
+  margin: 0; padding: 0; border: 0; background: none; accent-color: var(--accent);
+}
 button.pend-go:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }

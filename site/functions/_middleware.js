@@ -3,9 +3,13 @@
 // אותו פרויקט Pages מגיש שלושה דברים שונים, והפרדה ביניהם היא מה שמאפשר
 // לעמוד הנחיתה להיות ציבורי בעוד התוכן מוגן:
 //
-//   tlvtaseview.com       → עמוד הנחיתה. ציבורי.
-//   app.tlvtaseview.com   → הדשבורד והחיפושים. דורש סשן מחובר.
-//   *.pages.dev           → מוסט, כדי שלא ישמש כניסה עוקפת לתוכן.
+//   tlvtaseview.com         → עמוד הנחיתה. ציבורי.
+//   app.tlvtaseview.com     → הדשבורד והחיפושים. דורש סשן מחובר.
+//   forest-brief.pages.dev  → הכתובת החלופית (_lib/alt.js): אותו שער כמו
+//                             באפליקציה, ומעליו מתג הבעלים — רק הוא, כל
+//                             המשתמשים, או הפניה לאפליקציה.
+//   *.pages.dev אחר         → מוסט. אלה תצוגות מקדימות של פריסות קודמות,
+//                             ואסור שישמשו כניסה עוקפת לתוכן.
 //
 // ההגנה עברה מ-Cloudflare Access לאימות עצמי עם שם משתמש וסיסמה, כי
 // Access יודע לזהות רק מול ספק זהות או בקוד חד-פעמי — ולא בסיסמה.
@@ -15,6 +19,7 @@
 // שמפילה את השער פתוח היא בדיוק הכשל שאסור שיקרה כאן.
 import { readCookie, readSession, normEmail, COOKIE } from "./_lib/auth.js";
 import { wellKnown } from "./_lib/oauth.js";
+import { ALT, altMode } from "./_lib/alt.js";
 
 const APEX = "tlvtaseview.com";
 const APP = "app.tlvtaseview.com";
@@ -52,10 +57,25 @@ function ownerOnly(pathname) {
 // 404 ולא 403: מי שאינו הבעלים לא אמור לדעת שהעמוד קיים.
 const notFound = () => new Response("Not found", { status: 404 });
 
-function toLogin(url) {
+// הכניסה נשארת באותה כתובת: עוגיית הסשן שייכת למארח שבו נכנסו, ומי שנכנס
+// דרך הכתובת החלופית לא היה מגיע לאפליקציה — היא חסומה אצלו, ולכן הוא שם.
+function toLogin(url, host) {
   const next = url.pathname + url.search;
   const q = next && next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
-  return Response.redirect(`https://${APP}/login${q}`, 302);
+  return Response.redirect(`https://${host}/login${q}`, 302);
+}
+
+// מצב "רק אני" בכתובת החלופית, למשתמש מחובר שאינו הבעלים. 403 עם הסבר ולא
+// 404: הוא הגיע לכאן מקישור שקיבל, והתשובה צריכה לומר לו לאן ללכת.
+function altDenied() {
+  return new Response(
+    `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width, initial-scale=1"><title>TLV TASE View</title></head>` +
+    `<body style="font-family:system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem;line-height:1.6">` +
+    `<h1 style="font-size:1.25rem">הכתובת הזו פתוחה כרגע לבעלים בלבד</h1>` +
+    `<p>האתר זמין בכתובת <a href="https://${APP}/">${APP}</a>, באותו מייל ובאותה סיסמה.</p>` +
+    `</body></html>`,
+    { status: 403, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
 export async function onRequest(context) {
@@ -63,7 +83,16 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const host = url.hostname;
 
-  if (host.endsWith(".pages.dev")) {
+  // **הכתובת החלופית עוברת את אותו שער כמו האפליקציה, ולא את הנפילה בסוף.**
+  // מארח שאינו מוכר כאן ממשיך בלי סשן, וזו בדיוק הסיבה ש-*.pages.dev הוסט
+  // מלכתחילה. כל מארח אחר תחת pages.dev ממשיך להיות מוסט.
+  let alt = null;
+  if (host === ALT) {
+    alt = await altMode(env);
+    if (alt === "off") {
+      return Response.redirect(`https://${APP}${url.pathname}${url.search}`, 301);
+    }
+  } else if (host.endsWith(".pages.dev")) {
     return Response.redirect(`https://${APP}${url.pathname}${url.search}`, 301);
   }
 
@@ -79,10 +108,11 @@ export async function onRequest(context) {
     return next();
   }
 
-  if (host === APP) {
+  if (host === APP || alt) {
     // מטא-דאטה של OAuth לשרת ה-MCP (site/functions/_lib/oauth.js). ציבורית
     // מעצם הגדרתה — ממנה המחבר ב-claude.ai מוצא את דף ההרשאה — ולכן לפני השער.
-    if (url.pathname.startsWith("/.well-known/")) {
+    // באפליקציה בלבד: המחבר רשום על הכתובת שלה.
+    if (host === APP && url.pathname.startsWith("/.well-known/")) {
       const meta = wellKnown(request, url.pathname);
       if (meta) return meta;
     }
@@ -98,18 +128,18 @@ export async function onRequest(context) {
     }
     let s;
     try {
-      if (!env.SESSION_SECRET) return toLogin(url);
+      if (!env.SESSION_SECRET) return toLogin(url, host);
       s = await readSession(readCookie(request, COOKIE), env.SESSION_SECRET);
-      if (!s) return toLogin(url);
+      if (!s) return toLogin(url, host);
     } catch (e) {
       console.log("session gate error", String(e));
-      return toLogin(url);
+      return toLogin(url, host);
     }
-    // נכשל סגור: בלי OWNER_EMAIL אין לאיש גישה.
-    if (ownerOnly(url.pathname)) {
-      const owner = normEmail(env.OWNER_EMAIL || "");
-      if (!owner || normEmail(s.e) !== owner) return notFound();
-    }
+    // נכשל סגור: בלי OWNER_EMAIL אין לאיש גישה למה שלבעלים בלבד.
+    const owner = normEmail(env.OWNER_EMAIL || "");
+    const isOwner = Boolean(owner) && normEmail(s.e) === owner;
+    if (alt === "owner" && !isOwner) return altDenied();
+    if (ownerOnly(url.pathname) && !isOwner) return notFound();
     return next();
   }
 
