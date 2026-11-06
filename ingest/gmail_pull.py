@@ -103,9 +103,11 @@ def extract_body(payload: dict) -> str:
             plain = text
         elif mime == "text/html" and html is None:
             html = text
+    # גוף המייל מגיע רק למודל — הברייף ו-analyze_impact — ואינו מוצג באתר, ולכן
+    # גם סימני הכיווניות בחוץ, לפני החיתוך ב-8,000 תווים.
     if plain and plain.strip():
-        return clean_html(plain)              # מנקה גם ישויות HTML בטקסט
-    return clean_html(html or "")
+        return clean_html(plain, strip_bidi=True)   # גם ישויות HTML בטקסט
+    return clean_html(html or "", strip_bidi=True)
 
 
 def main() -> int:

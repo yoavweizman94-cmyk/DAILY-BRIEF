@@ -65,10 +65,12 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(1, str(Path(__file__).resolve().parents[1] / "ingest"))
 import _api  # noqa: E402
 import _cli  # noqa: E402
 import _profiles  # noqa: E402
 from analyze_gov import bad_numbers  # noqa: E402
+from _text import BIDI, INVISIBLE  # noqa: E402
 
 CONTENT = ROOT / "output"
 DIGEST = CONTENT / "digest"
@@ -134,8 +136,9 @@ MAIL_BOILER = re.compile(r"unsubscribe|view (?:this|it|in) (?:email )?(?:in )?(?
 # ZWNJ (U+200C) ו-CGJ (U+034F) עם רווחים, כדי לשלוט בתקציר שמוצג בתיבת הדואר. נמדד
 # 05/11/2026: 61 קטעים ראשונים היו ברובם ריפוד, והמיון לא מצא באף אחד מהם דבר. עם קישורי
 # המעקב (link.<אתר>.com/click/...) הם רעש בלבד.
-MAIL_INVIS = re.compile("[­͏؜ᅟᅠ឴឵᠎​-‏"
-                        "‪-‮⁠-⁤⁪-⁯ㅤ﻿ﾠ]")
+# הסט עצמו — INVISIBLE ו-BIDI מ-ingest/_text.py, שמוחק אותם כבר מגוף המייל לפני החיתוך
+# ב-8,000 תווים. כאן הוא נשאר כהגנה על הקטעים, באותו סט ולא בהעתק.
+MAIL_INVIS = re.compile(f"[{re.escape(INVISIBLE + BIDI)}]")
 MAIL_URL = re.compile(r"https?://\S+|www\.\S+")
 DIRECTIONS = ("חיובי", "שלילי", "מעורב", "ניטרלי")
 LEVELS = ("גבוהה", "בינונית", "נמוכה")
