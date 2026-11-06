@@ -1,1 +1,1 @@
-{"topics_only": 1, "edition": "close", "reason": "ריענון כולל: עמודי הסקטור והחדשות, בלי לכתוב ברייף מחדש (היום ב-$29 מתוך $30)", "at": "2026-11-06T16:45:56", "by": "claude-code"}
+{"if_missing": true, "reason": "הסרת topics_only אחרי הריענון הכולל", "at": "2026-11-06T16:55:17", "by": "claude-code"}
