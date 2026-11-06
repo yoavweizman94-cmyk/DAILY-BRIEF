@@ -408,5 +408,15 @@
    "http://www.bankhapoalim.co.il/",
    "http://www.bankhapoalim.com/"
   ]
+ },
+ "1779636": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_3Gv3YE9mRmS-SF2MN4MTbQ",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_3Gv3YE9mRmS-SF2MN4MTbQ"
+  ],
+  "others": [
+   "https://www.paz.co.il/he-IL/home"
+  ]
  }
 }
