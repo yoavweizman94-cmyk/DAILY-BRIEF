@@ -43,6 +43,25 @@ _DROP = str.maketrans("", "", INVISIBLE)
 _DROP_BIDI = str.maketrans("", "", INVISIBLE + BIDI)
 _LINE_BREAK = re.compile(r"\r\n?|[" + _chars(0x2028, 0x2029) + "]")
 
+# **קישורי מעקב — רק ב-drop_urls=True.** בגרסת הטקסט של ניוזלטר כל קישור עובר
+# דרך שרת המעקב של שירות ההפצה (click.e.economist.com, link.<אתר>.com/click/...),
+# 80–570 תווים לקישור. נמדד 06/11/2026: 80% מגוף ניוזלטר של FT ו-44% מזה של
+# The Economist היו קישורים כאלה. הכתובת אינה מקור שאפשר לצטט — היא עוברת דרך
+# המנוי של יואב ופגה. קישור קנוני וקצר (stratechery.com/2026/..., maya.tase.co.il)
+# נשאר: הוא כן מקור.
+_URL = re.compile(r'[<(\[]?(?:https?://|www\.)[^\s<>"\])]+[>)\]]?', re.I)
+_TRACK_HOST = re.compile(r"(?:links?|clicks?|emails?|trk|track|tracking|lnk)\.", re.I)
+_TRACK_PATH = re.compile(r"(?:clicks?|ls|wf|track|trk|redirect|e3t)\b", re.I)
+_TRACK_LEN = 150      # מעל זה — אסימון מקודד של הפניה; קישור קנוני כמעט אף פעם לא
+
+
+def _tracking(m: re.Match) -> str:
+    url = m.group(0).strip("<>()[]")
+    host, _, path = url.split("://", 1)[-1].partition("/")
+    if len(url) > _TRACK_LEN or _TRACK_HOST.match(host) or _TRACK_PATH.match(path):
+        return " "
+    return m.group(0)
+
 
 class _Extractor(HTMLParser):
     def __init__(self):
@@ -67,11 +86,13 @@ class _Extractor(HTMLParser):
             self.parts.append(data)
 
 
-def clean_html(html: str, max_chars: int = 8000, *, strip_bidi: bool = False) -> str:
+def clean_html(html: str, max_chars: int = 8000, *, strip_bidi: bool = False,
+               drop_urls: bool = False) -> str:
     """טקסט קריא, שורה לכל בלוק, עד max_chars תווים.
 
     כל הניקוי נעשה לפני החיתוך, כדי שהתקציב ייספר על טקסט ולא על ריפוד.
     strip_bidi — גם סימני הכיווניות (BIDI); רק לטקסט שמגיע למודל ואינו מוצג.
+    drop_urls — גם קישורי מעקב גלויים בטקסט (_tracking); קישור קנוני נשאר.
     """
     if not html:
         return ""
@@ -87,6 +108,8 @@ def clean_html(html: str, max_chars: int = 8000, *, strip_bidi: bool = False) ->
         else:
             text = "".join(ex.parts)
     text = text.translate(_DROP_BIDI if strip_bidi else _DROP)
+    if drop_urls:
+        text = _URL.sub(_tracking, text)
     text = _LINE_BREAK.sub("\n", text)
     text = re.sub(r"[^\S\n]+", " ", text)     # כל רווח אופקי (NBSP, U+2007, טאב) — לרווח אחד
     text = re.sub(r" ?\n[ \n]*", "\n", text).strip()   # בלי שורות ריקות ובלי רווח בקצה שורה
