@@ -11,15 +11,22 @@
 בו בעוצמה נמוכה מרוכז בסוף היום, מקופל, כדי שהעמוד ייקרא קודם כרשימת מה שמשנה.
 
 **הסינון בדפדפן הוא תוספת.** בלי JS כל הכרטיסים מוצגים, וסרגל הסינון מוסתר.
+
+**תקציר לציוץ** (מ-10/11/2026, לבקשת יואב) — טיוטה לחשבון שלו ב-X לכל כרטיס, מתוך
+tweets.json של analyze_impact. כמו השרשור בעמוד "דוח ושיחה", הוא מוצג רק לבעלים
+(data-owner). זו הסתרה בתצוגה ולא שער: הטקסט ממילא נועד להתפרסם. המקור והקישור
+לאתר מתווספים כאן, עד 280 בספירה של X (share.tweet).
 """
 from __future__ import annotations
 
 import json
 import re
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from html import escape
 from pathlib import Path
 
+import share
 from autonews import IL, _local, _stamp, _txt
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -72,7 +79,12 @@ def load() -> dict:
                 by_id[r["id"]] = r
     since = (now - timedelta(days=PAGE_DAYS)).isoformat(timespec="seconds")
     items = dedupe([r for r in by_id.values() if (r.get("ts") or "") >= since])
-    return {"state": state, "items": items, "profiles": profiles}
+    try:
+        raw = json.loads((OUT / "tweets.json").read_text(encoding="utf-8"))
+        tweets = {k: v["text"] for k, v in raw.items() if isinstance(v, dict) and v.get("text")}
+    except (OSError, ValueError, AttributeError):
+        tweets = {}
+    return {"state": state, "items": items, "profiles": profiles, "tweets": tweets}
 
 
 # **אותו סיפור — כרטיס אחד** (כמו analyze_impact.same_story): חברה משותפת ושלוש מילים
@@ -224,7 +236,29 @@ def region(r: dict) -> str:
     return "il" if _IL.search(probe) else "world"
 
 
-def _card(r: dict, profiles: dict, latest: str | None, today) -> str:
+def _tweet(r: dict, text: str | None) -> str:
+    """תקציר לציוץ: הטקסט, ספירה כמו של X, העתקה, ופתיחה בחלון הכתיבה של X."""
+    if not text:
+        return ""
+    names = []
+    for s in r.get("links") or []:
+        n = " ".join(str(s.get("name") or "").split())
+        if n and n not in names:
+            names.append(n)
+    full = share.tweet(text, [], share.source_line(names[:2]))
+    n = share.weighted_len(full)
+    key = "tw-" + anchor(r.get("src") or r["id"])
+    intent = "https://x.com/intent/post?text=" + urllib.parse.quote(full)
+    return (f'<details class="sh-tw im-tw" data-owner hidden><summary>תקציר לציוץ</summary>'
+            f'<div class="otc-tweet"><pre id="{key}">{escape(full, quote=False)}</pre></div>'
+            f'<div class="im-tw-bar"><span class="cr-cnt{" over" if n > share.LIMIT else ""}" '
+            f'title="כפי ש-X סופר: אות עברית 1, חץ ו-₪ 2, קישור 23">{n}/{share.LIMIT}</span>'
+            f'<button type="button" class="otc-copy im-copy" data-src="{key}">העתקת התקציר</button>'
+            f'<a href="{escape(intent)}" target="_blank" rel="noopener">פתיחה ב-<bdi>X</bdi></a></div>'
+            '</details>')
+
+
+def _card(r: dict, profiles: dict, latest: str | None, today, tweets: dict | None = None) -> str:
     sig = int(r.get("sig") or 1)
     kind = r.get("kind") or "news"
     reg = region(r)
@@ -247,6 +281,7 @@ def _card(r: dict, profiles: dict, latest: str | None, today) -> str:
             + (f'<p class="im-verdict"><b>השורה התחתונה:</b> {_txt(r["verdict"])}</p>' if r.get("verdict") else "")
             + (f'<p class="au-conf"><b>מה יאשר או יפריך:</b> {_txt(r["watch"])}</p>' if r.get("watch") else "")
             + (f'<p class="dg-src">{src}</p>' if src else "")
+            + _tweet(r, (tweets or {}).get(r["id"]))
             + _related(r, today)
             + "</article>")
 
@@ -335,6 +370,37 @@ SCRIPT = r"""<script>
   input.addEventListener("input", apply);
   apply();
 })();
+(function () {
+  function fallback(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (err) { /* אין גישה ללוח */ }
+    document.body.removeChild(ta);
+  }
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".im-copy");
+    if (!btn) { return; }
+    var el = document.getElementById(btn.getAttribute("data-src"));
+    if (!el) { return; }
+    var text = el.textContent;
+    function done() {
+      var was = btn.textContent;
+      btn.textContent = "הועתק";
+      setTimeout(function () { btn.textContent = was; }, 1500);
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(text); done(); });
+    } else {
+      fallback(text);
+      done();
+    }
+  });
+})();
 </script>"""
 
 
@@ -392,13 +458,14 @@ def page(data: dict) -> str:
         rows = sorted(by_day[d], key=lambda r: (int(r.get("sig") or 1), r.get("ts") or ""), reverse=True)
         main = [r for r in rows if int(r.get("sig") or 1) >= 2]
         low = [r for r in rows if int(r.get("sig") or 1) < 2]
-        body = "".join(_card(r, profiles, latest, today) for r in main)
+        tw = data.get("tweets") or {}
+        body = "".join(_card(r, profiles, latest, today, tw) for r in main)
         if low:
             body += (f'<details class="im-low"><summary>נבדק — כנראה לא משנה '
                      f'<span class="au-cnt">{len(low)}</span></summary>'
                      '<p class="cbs-sub">אירועים שעוררו את השאלה, ושהתשובה עליהם היא שההשפעה קטנה או לא ודאית — '
                      'ולמה.</p>'
-                     + "".join(_card(r, profiles, latest, today) for r in low) + "</details>")
+                     + "".join(_card(r, profiles, latest, today, tw) for r in low) + "</details>")
         secs.append(f'<section class="im-day" id="im-d-{d.isoformat()}"><h2>{_day_title(d, today)} '
                     f'<span class="au-cnt">{len(rows)}</span></h2>{body}</section>')
 

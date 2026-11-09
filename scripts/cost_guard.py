@@ -35,8 +35,8 @@ CHEAP = "claude-sonnet-5"
 # הדוחות. ההוצאה שלו חסומה בתקרה שלו (CALL_REVIEWS_MAX_USD), לא בבלם הזה.
 #
 # **ועמוד ההשפעה על מניות** (scripts/analyze_impact.py, מ-05/11/2026) — רץ כל שעתיים
-# לאורך היום, ובתקרה יומית משלו (IMPACT_MAX_USD).
-OWN_CAP = ("call-reviews", "impact-triage", "impact")
+# לאורך היום, ובתקרה יומית משלו (IMPACT_MAX_USD), שכוללת גם את תקצירי הציוץ שלו.
+OWN_CAP = ("call-reviews", "impact-triage", "impact", "impact-tweets")
 
 
 def spent(day: str) -> tuple[float, int]:
