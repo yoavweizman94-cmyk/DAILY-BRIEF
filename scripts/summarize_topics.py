@@ -222,10 +222,35 @@ def main() -> int:
     out_dir = ROOT / "output" / "topics"
     out_dir.mkdir(parents=True, exist_ok=True)
     day = date.today().isoformat()
-    (out_dir / f"{day}.json").write_text(
+    path = out_dir / f"{day}.json"
+
+    # **ריצה חוזרת באותו יום אינה דורסת נושא עשיר בדל.** רענון עמודי הסקטור
+    # (TOPICS_ONLY) כותב את הקובץ של היום מחדש, והעמוד טוען רק את הקובץ האחרון.
+    # ב-09/11/2026 הרענון של 12:51 החזיר 6 נושאים ו-10 אייטמים במקום 10 ו-27 של
+    # הבוקר, מאותו קלט ויותר: ארבעה עמודים נשארו בלי סיכום ושניים בלי אייטמים.
+    # נושא שלריצה הזו יש בו פחות אייטמים מלקודמת — או שאינו בה כלל — נשאר כפי
+    # שהיה; בשוויון נכתבת הגרסה החדשה, שקראה קלט טרי יותר. TOPICS_REPLACE=1
+    # כותב את הריצה הזו כמות שהיא — למשל אחרי תיקון בסיווג, כשהדל הוא הנכון.
+    try:
+        prev = (json.loads(path.read_text(encoding="utf-8")).get("summaries") or {}
+                if path.exists() and os.environ.get("TOPICS_REPLACE") != "1" else {})
+    except (OSError, json.JSONDecodeError):
+        prev = {}
+    kept = []
+    for slug, old in prev.items():
+        if slug in topics and isinstance(old, dict) and \
+                len(old.get("items") or []) > len((data.get(slug) or {}).get("items") or []):
+            data[slug] = old
+            kept.append(slug)
+    if kept:
+        print("::notice title=סיכומי נושא — נשמרו מהריצה הקודמת היום::"
+              + ", ".join(kept) + " — בריצה הזו היו בהם פחות אייטמים, או שלא חזרו כלל")
+
+    path.write_text(
         json.dumps({"date": day, "summaries": data}, ensure_ascii=False, indent=1),
         encoding="utf-8")
-    print(f"נכתבו סיכומי נושא: {len(data)} מתוך {len(blocks)} נושאים עם אייטמים")
+    print(f"נכתבו סיכומי נושא: {len(data) - len(kept)} מתוך {len(blocks)} נושאים עם אייטמים"
+          + (f", ועוד {len(kept)} שנשמרו מהריצה הקודמת היום" if kept else ""))
     return 0
 
 
