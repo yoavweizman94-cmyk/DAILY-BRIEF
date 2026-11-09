@@ -33,6 +33,11 @@ $Triggers = @(
   (New-ScheduledTaskTrigger -Daily -At "12:00"),
   (New-ScheduledTaskTrigger -Daily -At "17:30")
 )
+# **שעון מקומי ולא רגע מוחלט.** New-ScheduledTaskTrigger כותב את StartBoundary עם
+# היסט UTC, וטריגר יומי כזה זז שעה במעבר בין שעון קיץ לחורף. כך זז 00:05 של רשת
+# הביטחון (scripts/ensure_task.ps1) ל-23:05 בחורף 2026. בלי היסט, השעה נקראת כשעון
+# מקומי בכל עונה: 12:00 ו-17:30 גם אחרי המעבר לשעון קיץ.
+foreach ($t in $Triggers) { $t.StartBoundary = ([datetime]$t.StartBoundary).ToString("s") }
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
     -ExecutionTimeLimit (New-TimeSpan -Hours 2) -MultipleInstances IgnoreNew
 $Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited

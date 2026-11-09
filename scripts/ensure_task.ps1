@@ -39,6 +39,15 @@ $Triggers = @(
   (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Friday -At "14:35"),
   (New-ScheduledTaskTrigger -Daily -At "00:05")
 )
+# **שעון מקומי ולא רגע מוחלט.** New-ScheduledTaskTrigger כותב את StartBoundary עם
+# היסט UTC ("...T00:05:00+03:00"), כלומר "סנכרון בין אזורי זמן", וטריגר יומי כזה
+# נורה כל 24 שעות מאותו רגע מוחלט. במעבר לשעון חורף (25/10/2026) הוא זז שעה אחורה:
+# 00:05 נורה ב-23:05 ו-06:50 ב-05:50. ב-23:05 המהדורה שבזמן היא לילה בתאריך של
+# היום, שכבר נכתב אחרי חצות של אמש, ולכן כל החורף רשת הביטחון לא כיסתה את מהדורת
+# הלילה. וכשהלילה של אמש נפל (09/11, יתרה) היא הייתה כותבת לילה בתאריך של היום,
+# בכפילות עם זה שאחרי חצות. בלי היסט, Task Scheduler מפרש את השעה כשעון מקומי בכל
+# עונה. הטריגרים השבועיים לא זזו, אבל אותו כלל חל על כולם.
+foreach ($t in $Triggers) { $t.StartBoundary = ([datetime]$t.StartBoundary).ToString("s") }
 $Settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -MultipleInstances IgnoreNew
 $Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
