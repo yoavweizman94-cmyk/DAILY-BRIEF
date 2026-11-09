@@ -289,7 +289,7 @@ TWEET_BATCH = 15
 TWEET_MAX = 120        # כרטיסים בריצה: מכסה בריצה אחת את כל שבעת הימים שבעמוד
 TWEET_DAYS = 8
 TWEET_TRIES = 2        # ציוץ שנפסל בבדיקה — עוד ניסיון אחד, ואז הכרטיס נשאר בלי ציוץ
-TWEET_CHARS = 210
+TWEET_CHARS = 190      # בהוראה; בפועל המודל חורג (10/11: חציון 197 מול 210, שיא 275)
 TWEET_SCHEMA = _obj({"items": {"type": "array", "items": _obj({"id": _S, "tweet": _S})}})
 TWEET_PROMPT = """אתה כותב את הציוצים של TLV TASE View ב-X, שירות מחקר על הבורסה בתל אביב. לפניך
 כרטיסים מהעמוד "השפעה על מניות". כל כרטיס עונה על השאלה "מה זה עושה למניה?": הכותרת, "בפשטות",
@@ -959,6 +959,21 @@ def _card_text(r: dict) -> str:
     return " ".join(parts)
 
 
+def x_len(text: str) -> int:
+    """אורך כפי ש-X סופר (twitter-text v3, כמו site/share.weighted_len): עברית ולטינית 1,
+    כל השאר — חצים, ₪, מינוס טיפוגרפי — 2."""
+    n = 0
+    for ch in text:
+        o = ord(ch)
+        n += 1 if (o <= 0x10FF or 0x2000 <= o <= 0x200D or 0x2010 <= o <= 0x201F
+                   or 0x2032 <= o <= 0x2037) else 2
+    return n
+
+
+# הקישור לאתר נספר 23 ושורה חדשה לפניו — מה שנשאר לטקסט כשהמקור יורד בבנייה
+TWEET_HARD = 280 - 24
+
+
 def tweets(now: datetime, run: str, dry: bool) -> tuple[int, int, float]:
     """תקציר לציוץ לכל כרטיס בחלון העמוד שאין לו עדיין: (נכתבו, נפסלו, עלות)."""
     path = OUT / "tweets.json"
@@ -971,9 +986,14 @@ def tweets(now: datetime, run: str, dry: bool) -> tuple[int, int, float]:
         for r in _jsonl(OUT / f"{d}.jsonl"):
             if r.get("id") and r.get("companies") and (r.get("ts") or "") >= since:
                 cards[r["id"]] = r          # הרשומה האחרונה גוברת, כמו בעמוד
+    def missing(i: str) -> bool:
+        s = store.get(i) or {}
+        text = s.get("text") or ""
+        # ציוץ שנשמר לפני תקרת האורך ונחתך בבנייה — נכתב מחדש
+        return (not text or x_len(text) > TWEET_HARD) and int(s.get("tries") or 0) < TWEET_TRIES
+
     todo = [r for r in sorted(cards.values(), key=lambda r: r.get("ts") or "", reverse=True)
-            if not (store.get(r["id"]) or {}).get("text")
-            and int((store.get(r["id"]) or {}).get("tries") or 0) < TWEET_TRIES][:TWEET_MAX]
+            if missing(r["id"])][:TWEET_MAX]
     written = rejected = 0
     spent = 0.0
     for i in range(0, len(todo), TWEET_BATCH):
@@ -992,9 +1012,12 @@ def tweets(now: datetime, run: str, dry: bool) -> tuple[int, int, float]:
             if not r or not text:
                 continue
             prev = store.get(r["id"]) or {}
+            # ארוך מדי גם בלי שורת המקור — היה נחתך באמצע התובנה; נכתב מחדש בריצה הבאה
             if bad_numbers(text, _card_text(r), _years({"ts": str(r.get("ts") or "")})) \
-                    or ADVICE.search(text):
-                store[r["id"]] = {"text": "", "tries": int(prev.get("tries") or 0) + 1,
+                    or ADVICE.search(text) or x_len(text) > TWEET_HARD:
+                # ציוץ קודם, אם היה (ארוך אך שמיש), נשאר עד שייכתב טוב ממנו
+                store[r["id"]] = {"text": prev.get("text") or "",
+                                  "tries": int(prev.get("tries") or 0) + 1,
                                   "ts": r.get("ts"), "at": run}
                 rejected += 1
                 continue

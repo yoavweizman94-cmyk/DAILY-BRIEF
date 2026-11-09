@@ -246,6 +246,11 @@ def _tweet(r: dict, text: str | None) -> str:
         if n and n not in names:
             names.append(n)
     full = share.tweet(text, [], share.source_line(names[:2]))
+    # **התובנה לפני שורת המקור.** share.tweet מקצר את הפתיח כדי שהמקור והקישור ייכנסו,
+    # ובציוץ כאן הפתיח הוא כל התוכן — והמשפט האחרון, שנחתך ראשון, הוא לרוב "ולמה דווקא
+    # לה". כשהמקור דוחק את הטקסט, הוא יורד והקישור לאתר נשאר.
+    if full.split("\n", 1)[0] != share.maqaf(" ".join(text.split())):
+        full = share.tweet(text, [], "")
     n = share.weighted_len(full)
     key = "tw-" + anchor(r.get("src") or r["id"])
     intent = "https://x.com/intent/post?text=" + urllib.parse.quote(full)
