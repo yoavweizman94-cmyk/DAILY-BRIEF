@@ -334,6 +334,11 @@
           '<div class="rv-body">' + html + "</div>" +
           '<p class="rv-note">סקירה שנכתבה מגוף הדוח בלבד. אינה ייעוץ ואינה ' +
           'המלצה. במקרה של פער מול הדוח — הדוח קובע.</p>';
+        // השרשור ל-X שבסוף הסקירה מוצג לבעלים בלבד. החשיפה בתחתית העמוד רצה בטעינה,
+        // לפני שהסקירה הוכנסה — כאן היא חלה על מה שנכנס עכשיו.
+        if (window.__owner) {
+          box.querySelectorAll("[data-owner]").forEach(function (el) { el.hidden = false; });
+        }
         var x = box.querySelector(".rv-x");
         if (x) x.onclick = function () { toggleReview(btn); };
       })

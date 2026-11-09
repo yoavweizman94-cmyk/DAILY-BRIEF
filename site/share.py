@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import re
+import urllib.parse
 from html import escape
 
 import otc
@@ -152,3 +153,58 @@ def controls(key: str, payload: dict, tweet_text: str, label: str = "ייצוא 
 
 def js() -> str:
     return otc.export_js()
+
+
+def thread_tweets(thread: list[str], names: list[str]) -> list[str]:
+    """הציוצים כפי שיפורסמו: המקור והקישור לאתר בסוף הציוץ האחרון, ואם אין שם מקום —
+    ציוץ משלהם. הטקסט עצמו אינו נחתך: כל ציוץ נבדק עד 275 כשנכתב (scripts/x_threads.py)."""
+    src = source_line([n for n in names if n][:2])
+    tail = f"{src}\n{SITE}" if src else SITE
+    out = [maqaf(" ".join(str(t).split())) for t in thread if str(t).strip()]
+    if not out:
+        return []
+    if weighted_len(f"{out[-1]}\n{tail}") <= LIMIT:
+        out[-1] = f"{out[-1]}\n{tail}"
+    else:
+        out.append(tail)
+    return out
+
+
+def thread_block(key: str, thread: list[str] | None, names: list[str]) -> str:
+    """שרשור ל-X, לבעלים בלבד (data-owner): כל ציוץ עם ספירה כמו של X והעתקה, העתקת
+    השרשור כולו, ופתיחת הציוץ הראשון בחלון הכתיבה של X. ההעתקה — במאזין המשותף
+    שבתחתית כל עמוד (build.py), ולכן עובדת גם בסקירה שנטענת לעמוד אחרי הטעינה."""
+    tws = thread_tweets(thread or [], names)
+    if not tws:
+        return ""
+    boxes = []
+    for i, t in enumerate(tws):
+        n = weighted_len(t)
+        boxes.append(
+            f'<div class="cr-tw"><div class="cr-tw-t" id="{key}-{i}">{escape(t, quote=False)}</div>'
+            f'<div class="cr-tw-bar"><span class="cr-cnt{" over" if n > LIMIT else ""}" '
+            f'title="כפי ש-X סופר: אות עברית 1, חץ ו-₪ 2, קישור 23">{n}/{LIMIT}</span>'
+            f'<button type="button" class="cr-copy im-copy" data-src="{key}-{i}">העתק</button></div></div>')
+    intent = "https://x.com/intent/post?text=" + urllib.parse.quote(tws[0])
+    label = "ציוץ" if len(tws) == 1 else f"{len(tws)} ציוצים"
+    return (f'<details class="sh-tw im-tw" data-owner hidden><summary>שרשור ל-<bdi>X</bdi> · {label}'
+            f'</summary><div class="im-thread" id="{key}">{"".join(boxes)}</div>'
+            f'<div class="im-tw-bar"><button type="button" class="otc-copy im-copy" data-thread="{key}">'
+            f'העתקת השרשור</button><a href="{escape(intent)}" target="_blank" rel="noopener">'
+            f'פתיחת הציוץ הראשון ב-<bdi>X</bdi></a></div></details>')
+
+
+def load_threads(path) -> dict[str, list[str]]:
+    """{id: [ציוצים]} מקובץ של scripts/x_threads.py; לרשומה בלי שרשור — הציוץ הבודד שלה."""
+    import json  # noqa: PLC0415
+    out: dict[str, list[str]] = {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return out
+    for k, v in (raw.items() if isinstance(raw, dict) else []):
+        if isinstance(v, dict):
+            th = v.get("thread") or ([v["text"]] if v.get("text") else [])
+            if th:
+                out[str(k)] = th
+    return out

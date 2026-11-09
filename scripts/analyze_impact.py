@@ -69,6 +69,7 @@ sys.path.insert(1, str(Path(__file__).resolve().parents[1] / "ingest"))
 import _api  # noqa: E402
 import _cli  # noqa: E402
 import _profiles  # noqa: E402
+import x_threads  # noqa: E402
 from analyze_gov import bad_numbers  # noqa: E402
 from _text import BIDI, INVISIBLE  # noqa: E402
 
@@ -292,11 +293,7 @@ TWEET_MODEL = "claude-sonnet-5"
 TWEET_BATCH = 8
 TWEET_MAX = 120        # כרטיסים בריצה: מכסה בריצה אחת את כל שבעת הימים שבעמוד
 TWEET_DAYS = 8
-TWEET_TRIES = 2        # שרשור שנפסל בבדיקה — עוד ניסיון אחד, ואז נשאר הקודם (או כלום)
-TWEET_CHARS = 250      # לכל ציוץ, בהוראה; הבדיקה מקבלת עד TWEET_ONE
-TWEET_ONE = 275
-TWEET_SCHEMA = _obj({"items": {"type": "array", "items": _obj({
-    "id": _S, "thread": {"type": "array", "items": _S}})}})
+TWEET_CHARS = 250      # לכל ציוץ, בהוראה; הבדיקה (x_threads.TWEET_ONE) מקבלת עד 275
 TWEET_PROMPT = """אתה כותב את השרשורים של TLV TASE View ב-X, שירות מחקר על הבורסה בתל אביב. לפניך
 כרטיסים מהעמוד "השפעה על מניות", שעונה לכל אירוע על השאלה "מה זה עושה למניה?". בכל כרטיס:
 הכותרת, "בפשטות", "מה קרה", השורה התחתונה ומה יאשר או יפריך, ולכל חברה — הכיוון, העוצמה,
@@ -983,73 +980,23 @@ def _card_text(r: dict) -> str:
     return " ".join(parts)
 
 
-def x_len(text: str) -> int:
-    """אורך כפי ש-X סופר (twitter-text v3, כמו site/share.weighted_len): עברית ולטינית 1,
-    כל השאר — חצים, ₪, מינוס טיפוגרפי — 2."""
-    n = 0
-    for ch in text:
-        o = ord(ch)
-        n += 1 if (o <= 0x10FF or 0x2000 <= o <= 0x200D or 0x2010 <= o <= 0x201F
-                   or 0x2032 <= o <= 0x2037) else 2
-    return n
-
-
 def tweets(now: datetime, run: str, dry: bool) -> tuple[int, int, float]:
-    """שרשור ל-X לכל כרטיס בחלון העמוד שאין לו עדיין: (נכתבו, נפסלו, עלות)."""
-    path = OUT / "tweets.json"
-    store: dict[str, dict] = _load(path, {})
-    cut = (now - timedelta(days=TWEET_DAYS + 2)).isoformat(timespec="seconds")
-    store = {k: v for k, v in store.items() if (v.get("ts") or v.get("at") or "") >= cut}
+    """שרשור ל-X לכל כרטיס בחלון העמוד שאין לו עדיין: (נכתבו, נפסלו, עלות).
+    הכתיבה, הבדיקות והשמירה — scripts/x_threads.write, אותו מנגנון כמו בסקירות הדוחות
+    ובשיחות המשקיעים."""
     since = (now - timedelta(days=TWEET_DAYS)).isoformat(timespec="seconds")
     cards: dict[str, dict] = {}
     for d in _days(now, TWEET_DAYS + 1):
         for r in _jsonl(OUT / f"{d}.jsonl"):
             if r.get("id") and r.get("companies") and (r.get("ts") or "") >= since:
                 cards[r["id"]] = r          # הרשומה האחרונה גוברת, כמו בעמוד
-    def missing(i: str) -> bool:
-        s = store.get(i) or {}
-        # הציוץ הבודד של הגרסה הראשונה (בלי thread) נכתב מחדש כשרשור, וניסיונות
-        # שנפסלו בגרסה ההיא אינם נספרים לו
-        tries = int(s.get("tries") or 0) if s.get("v") == 2 else 0
-        return not s.get("thread") and tries < TWEET_TRIES
-
-    todo = [r for r in sorted(cards.values(), key=lambda r: r.get("ts") or "", reverse=True)
-            if missing(r["id"])][:TWEET_MAX]
-    written = rejected = 0
-    spent = 0.0
-    for i in range(0, len(todo), TWEET_BATCH):
-        batch = {r["id"]: r for r in todo[i:i + TWEET_BATCH]}
-        res, err, usd = _api.ask_json(TWEET_PROMPT.format(chars=TWEET_CHARS, rules=RULES),
-                                      "\n\n".join(_tweet_card(r) for r in batch.values()),
-                                      TWEET_SCHEMA, job="impact-tweets", model=TWEET_MODEL,
-                                      max_tokens=16000, max_usd=1.0)
-        spent += usd
-        if err:
-            _fail("השרשור ל-X", err)
-            break
-        for x in res.get("items") or []:
-            r = batch.get(str(x.get("id")))
-            thread = [t for t in (_clean(s) for s in x.get("thread") or []) if t]
-            if not r or not thread:
-                continue
-            prev = store.get(r["id"]) or {}
-            joined = " ".join(thread)
-            # כל ציוץ עד 280 גם אחרי הבנייה: ציוץ ארוך מזה היה נחתך באמצע
-            if (bad_numbers(joined, _card_text(r), _years({"ts": str(r.get("ts") or "")}))
-                    or ADVICE.search(joined) or not 2 <= len(thread) <= 7
-                    or any(x_len(t) > TWEET_ONE for t in thread)):
-                # מה שנכתב קודם, אם היה, נשאר עד שייכתב טוב ממנו
-                store[r["id"]] = {**{k: prev[k] for k in ("text", "thread") if prev.get(k)},
-                                  "v": 2, "ts": r.get("ts"), "at": run,
-                                  "tries": (int(prev.get("tries") or 0) if prev.get("v") == 2 else 0) + 1}
-                rejected += 1
-                continue
-            store[r["id"]] = {"v": 2, "thread": thread, "ts": r.get("ts"), "at": run,
-                              "model": TWEET_MODEL}
-            written += 1
-    if not dry and (written or rejected):
-        path.write_text(json.dumps(store, ensure_ascii=False, indent=1), encoding="utf-8")
-    return written, rejected, spent
+    items = [{"id": r["id"], "ts": r.get("ts"), "input": _tweet_card(r), "check": _card_text(r)}
+             for r in cards.values()]
+    return x_threads.write(OUT / "tweets.json", items,
+                           TWEET_PROMPT.format(chars=TWEET_CHARS, rules=RULES),
+                           job="impact-tweets", model=TWEET_MODEL, batch=TWEET_BATCH,
+                           max_items=TWEET_MAX, max_usd=1.0, min_n=2, max_n=7,
+                           keep_days=TWEET_DAYS + 2, dry=dry, now=now)
 
 
 def spent_today() -> float:

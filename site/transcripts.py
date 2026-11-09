@@ -112,6 +112,22 @@ def anchor_heads(html: str) -> str:
 
 
 # ── עמוד השיחה ────────────────────────────────────────────────────────
+_THREADS: dict | None = None
+
+
+def _thread(rec: dict) -> str:
+    """שרשור ל-X לבעלים (scripts/x_threads.py), מתחת לסיכום ולפני התמליל המלא."""
+    global _THREADS
+    if _THREADS is None:
+        import share  # noqa: PLC0415 — רק כשנבנה עמוד שיחה
+        _THREADS = share.load_threads(ROOT / "output" / "x" / "transcripts.json")
+    th = _THREADS.get(str(rec.get("did")))
+    if not th:
+        return ""
+    import share  # noqa: PLC0415
+    return share.thread_block(f"xt-{rec.get('did')}", th, ["שיחת המשקיעים, גלובס"])
+
+
 def detail(rec: dict, rows: list[dict], render, combined: set | None = None) -> str:
     md = rec.get("summary") or ""
     body = anchor_heads(render(md))
@@ -148,6 +164,7 @@ def detail(rec: dict, rows: list[dict], render, combined: set | None = None) -> 
         + other
         + summary_toc(body)
         + f'<div class="tr-body tr-full">{body}</div>'
+        + _thread(rec)
         + '<details class="tr-raw"><summary>התמליל המלא</summary>'
         + f'<div class="tr-text">{transcript_html(rec.get("text") or "")}</div>'
         + '</details>')

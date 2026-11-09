@@ -33,6 +33,7 @@ import callreviews
 import meetings
 import mcp_data
 import impact
+import share
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "site" / "dist"
@@ -85,8 +86,49 @@ PAGE = """<!DOCTYPE html>
    הבעלים ונפתח ממנו, והסתרה בתצוגה אינה מגינה על דבר ממילא: התוכן כבר בקובץ. */
 (location.protocol === "file:" ? Promise.resolve({{owner: true}})
   : fetch("/api/me", {{credentials: "same-origin"}}).then(function (r) {{ return r.ok ? r.json() : null; }}))
-  .then(function (j) {{ if (j && j.owner) document.querySelectorAll("[data-owner]").forEach(function (e) {{ e.hidden = false; }}); }})
+  .then(function (j) {{ if (j && j.owner) {{ window.__owner = true; document.querySelectorAll("[data-owner]").forEach(function (e) {{ e.hidden = false; }}); }} }})
   .catch(function () {{}});
+/* העתקת השרשורים ל-X (share.thread_block) — מאזין אחד לכל העמודים, כולל סקירה שנטענת
+   לעמוד הדוחות אחרי הטעינה. data-src: ציוץ אחד; data-thread: השרשור כולו. */
+(function () {{
+  function fallback(text) {{
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try {{ document.execCommand("copy"); }} catch (err) {{ /* אין גישה ללוח */ }}
+    document.body.removeChild(ta);
+  }}
+  document.addEventListener("click", function (e) {{
+    var btn = e.target.closest ? e.target.closest(".im-copy") : null;
+    if (!btn) {{ return; }}
+    var text = "";
+    if (btn.hasAttribute("data-thread")) {{
+      var box = document.getElementById(btn.getAttribute("data-thread"));
+      if (!box) {{ return; }}
+      text = Array.prototype.map.call(box.querySelectorAll(".cr-tw-t"),
+        function (el) {{ return el.textContent; }}).join("\\n\\n");
+    }} else {{
+      var one = document.getElementById(btn.getAttribute("data-src"));
+      if (!one) {{ return; }}
+      text = one.textContent;
+    }}
+    function done() {{
+      var was = btn.textContent;
+      btn.textContent = "הועתק";
+      setTimeout(function () {{ btn.textContent = was; }}, 1500);
+    }}
+    if (navigator.clipboard && window.isSecureContext) {{
+      navigator.clipboard.writeText(text).then(done, function () {{ fallback(text); done(); }});
+    }} else {{
+      fallback(text);
+      done();
+    }}
+  }});
+}})();
 /* פס שמסמן את העותק המקומי ואת שעת הבנייה שלו: מועד השינוי של הקובץ הוא שעת הבנייה. */
 if (location.protocol === "file:") {{
   var lc = document.createElement("div");
@@ -1199,16 +1241,21 @@ def main() -> int:
 
         rev = OUT / "filings" / "reviews"
         if rev.is_dir():
-            n = 0
+            n = nx = 0
+            # שרשור ל-X לבעלים בסוף הסקירה (scripts/x_threads.py). הסקירה נטענת לעמוד
+            # הדוחות בלחיצה, ולכן החשיפה לבעלים נעשית שם אחרי ההכנסה (pages/filings.html)
+            threads = share.load_threads(ROOT / "output" / "x" / "filings.json")
             for md in rev.glob("*.md"):
                 body = md.read_text(encoding="utf-8")
                 # שורת המטא הראשונה היא הערת HTML ואינה חלק מהסקירה
                 if body.startswith("<!--"):
                     body = body.split("-->", 1)[-1].lstrip()
-                md.with_suffix(".html").write_text(render(body), encoding="utf-8")
+                thread = share.thread_block(f"xf-{md.stem}", threads.get(md.stem), ["הדוח במאיה"])
+                nx += bool(thread)
+                md.with_suffix(".html").write_text(render(body) + thread, encoding="utf-8")
                 md.unlink()
                 n += 1
-            print(f"  סקירות דוחות: {n}")
+            print(f"  סקירות דוחות: {n}, מהן עם שרשור ל-X: {nx}")
 
     frag = PAGES / "landing.html"
     if frag.exists():

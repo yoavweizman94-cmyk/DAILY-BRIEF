@@ -80,17 +80,8 @@ def load() -> dict:
                 by_id[r["id"]] = r
     since = (now - timedelta(days=PAGE_DAYS)).isoformat(timespec="seconds")
     items = dedupe([r for r in by_id.values() if (r.get("ts") or "") >= since])
-    tweets: dict[str, list[str]] = {}
-    try:
-        raw = json.loads((OUT / "tweets.json").read_text(encoding="utf-8"))
-        for k, v in raw.items():
-            # שרשור; ולכרטיס שעוד לא נכתב לו שרשור — הציוץ הבודד של הגרסה הראשונה
-            th = (v.get("thread") or ([v["text"]] if v.get("text") else [])) if isinstance(v, dict) else []
-            if th:
-                tweets[k] = th
-    except (OSError, ValueError, AttributeError):
-        pass
-    return {"state": state, "items": items, "profiles": profiles, "tweets": tweets}
+    return {"state": state, "items": items, "profiles": profiles,
+            "tweets": share.load_threads(OUT / "tweets.json")}
 
 
 # **אותו סיפור — כרטיס אחד** (כמו analyze_impact.same_story): חברה משותפת ושלוש מילים
@@ -242,46 +233,14 @@ def region(r: dict) -> str:
     return "il" if _IL.search(probe) else "world"
 
 
-def _thread(r: dict) -> list[str]:
-    """הציוצים כפי שיפורסמו: המקור והקישור לאתר בסוף הציוץ האחרון, ואם אין שם מקום —
-    ציוץ משלהם. הטקסט עצמו אינו נחתך: כל ציוץ נבדק עד 275 כשנכתב."""
+def _tweet(r: dict, thread: list[str] | None) -> str:
+    """שרשור ל-X של הכרטיס (share.thread_block), עם שמות המקורות שלו."""
     names = []
     for s in r.get("links") or []:
         n = " ".join(str(s.get("name") or "").split())
         if n and n not in names:
             names.append(n)
-    src = share.source_line(names[:2])
-    tail = f"{src}\n{share.SITE}" if src else share.SITE
-    out = [share.maqaf(" ".join(t.split())) for t in r["_thread"]]
-    if share.weighted_len(f"{out[-1]}\n{tail}") <= share.LIMIT:
-        out[-1] = f"{out[-1]}\n{tail}"
-    else:
-        out.append(tail)
-    return out
-
-
-def _tweet(r: dict, thread: list[str] | None) -> str:
-    """שרשור ל-X: כל ציוץ עם ספירה כמו של X והעתקה, העתקת השרשור כולו, ופתיחת הציוץ
-    הראשון בחלון הכתיבה של X."""
-    if not thread:
-        return ""
-    tws = _thread({**r, "_thread": thread})
-    key = "tw-" + anchor(r.get("src") or r["id"])
-    boxes = []
-    for i, t in enumerate(tws):
-        n = share.weighted_len(t)
-        boxes.append(
-            f'<div class="cr-tw"><div class="cr-tw-t" id="{key}-{i}">{escape(t, quote=False)}</div>'
-            f'<div class="cr-tw-bar"><span class="cr-cnt{" over" if n > share.LIMIT else ""}" '
-            f'title="כפי ש-X סופר: אות עברית 1, חץ ו-₪ 2, קישור 23">{n}/{share.LIMIT}</span>'
-            f'<button type="button" class="cr-copy im-copy" data-src="{key}-{i}">העתק</button></div></div>')
-    intent = "https://x.com/intent/post?text=" + urllib.parse.quote(tws[0])
-    label = "ציוץ" if len(tws) == 1 else f"{len(tws)} ציוצים"
-    return (f'<details class="sh-tw im-tw" data-owner hidden><summary>שרשור ל-<bdi>X</bdi> · {label}'
-            f'</summary><div class="im-thread" id="{key}">{"".join(boxes)}</div>'
-            f'<div class="im-tw-bar"><button type="button" class="otc-copy im-copy" data-thread="{key}">'
-            f'העתקת השרשור</button><a href="{escape(intent)}" target="_blank" rel="noopener">'
-            f'פתיחת הציוץ הראשון ב-<bdi>X</bdi></a></div></details>')
+    return share.thread_block("tw-" + anchor(r.get("src") or r["id"]), thread, names)
 
 
 def _card(r: dict, profiles: dict, latest: str | None, today, tweets: dict | None = None) -> str:
@@ -396,46 +355,8 @@ SCRIPT = r"""<script>
   input.addEventListener("input", apply);
   apply();
 })();
-(function () {
-  function fallback(text) {
-    var ta = document.createElement("textarea");
-    ta.value = text;
-    ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    try { document.execCommand("copy"); } catch (err) { /* אין גישה ללוח */ }
-    document.body.removeChild(ta);
-  }
-  document.addEventListener("click", function (e) {
-    var btn = e.target.closest(".im-copy");
-    if (!btn) { return; }
-    var text;
-    if (btn.hasAttribute("data-thread")) {
-      var box = document.getElementById(btn.getAttribute("data-thread"));
-      if (!box) { return; }
-      text = Array.prototype.map.call(box.querySelectorAll(".cr-tw-t"),
-        function (el) { return el.textContent; }).join("\n\n");
-    } else {
-      var el = document.getElementById(btn.getAttribute("data-src"));
-      if (!el) { return; }
-      text = el.textContent;
-    }
-    function done() {
-      var was = btn.textContent;
-      btn.textContent = "הועתק";
-      setTimeout(function () { btn.textContent = was; }, 1500);
-    }
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(text).then(done, function () { fallback(text); done(); });
-    } else {
-      fallback(text);
-      done();
-    }
-  });
-})();
 </script>"""
+# העתקת השרשורים ל-X — במאזין המשותף שבתחתית כל עמוד (build.py), לא כאן
 
 
 def _day_title(d, today) -> str:

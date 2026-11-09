@@ -83,34 +83,45 @@ jobs:
           fi
           exit 0
 
+      # **שרשורים ל-X לסקירות הדוחות ולשיחות המשקיעים** (scripts/x_threads.py, מ-10/11/2026).
+      # כאן ולא בצנרות שכותבות את הסקירות: הצנרת הזו רצה כל שעתיים, מושכת את ריפו התוכן
+      # ופורסת. סקירה חדשה מקבלת שרשור תוך שעתיים, בתקרה יומית משלה. כשל אינו מפיל את
+      # הריצה, והלוג ציבורי — הסקריפט מדפיס מספרים בלבד.
+      - name: X threads for filing reviews and calls
+        id: threads
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python scripts/x_threads.py || echo "::warning title=השרשורים ל-X לא נכתבו::ייכתבו בריצה הבאה."
+
       # המצב נשמר גם כשלא פורסם דבר: המיון שולם, ופריט שמוין לא ימוין שוב.
       - name: Save content
-        if: steps.analyze.outputs.changed == 'yes'
+        if: steps.analyze.outputs.changed == 'yes' || steps.threads.outputs.wrote == 'yes'
         run: CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push impact
 
       # התוכן נמשך שוב לפני הבנייה: צנרת אחרת עשויה הייתה לדחוף מאז, ובנייה על
       # עותק ישן הייתה דורסת באתר תוכן חדש יותר.
       - name: Refresh content before build
-        if: steps.analyze.outputs.published == 'yes'
+        if: steps.analyze.outputs.published == 'yes' || steps.threads.outputs.wrote == 'yes'
         env:
           CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
         run: bash scripts/content_repo.sh pull
 
       - name: Build site
-        if: steps.analyze.outputs.published == 'yes'
+        if: steps.analyze.outputs.published == 'yes' || steps.threads.outputs.wrote == 'yes'
         run: python site/build.py
 
       - uses: actions/setup-node@v7
-        if: steps.analyze.outputs.published == 'yes'
+        if: steps.analyze.outputs.published == 'yes' || steps.threads.outputs.wrote == 'yes'
         with:
           node-version: "20"
 
       - name: Check inline JS
-        if: steps.analyze.outputs.published == 'yes'
+        if: steps.analyze.outputs.published == 'yes' || steps.threads.outputs.wrote == 'yes'
         run: python scripts/check_inline_js.py
 
       - name: Deploy to Cloudflare Pages
-        if: steps.analyze.outputs.published == 'yes'
+        if: steps.analyze.outputs.published == 'yes' || steps.threads.outputs.wrote == 'yes'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
