@@ -632,8 +632,10 @@ details.sh-tw[open] > summary { margin-bottom: 0.35rem; }
   margin: 0; font-family: inherit; font-size: 0.86rem; line-height: 1.6;
   white-space: pre-wrap; word-break: break-word;
 }
-/* תקציר לציוץ בכרטיס של עמוד ההשפעה (site/impact.py) — לבעלים בלבד */
+/* שרשור ל-X בכרטיס של עמוד ההשפעה (site/impact.py) — לבעלים בלבד */
 details.im-tw { margin: 0.6rem 0 0.2rem; }
+.im-thread { margin-top: 0.4rem; }
+.im-thread .cr-tw-t { font-size: 0.9rem; }
 .im-tw-bar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem;
   margin-top: 0.4rem; font-size: 0.8rem;

@@ -12,10 +12,11 @@
 
 **הסינון בדפדפן הוא תוספת.** בלי JS כל הכרטיסים מוצגים, וסרגל הסינון מוסתר.
 
-**תקציר לציוץ** (מ-10/11/2026, לבקשת יואב) — טיוטה לחשבון שלו ב-X לכל כרטיס, מתוך
-tweets.json של analyze_impact. כמו השרשור בעמוד "דוח ושיחה", הוא מוצג רק לבעלים
-(data-owner). זו הסתרה בתצוגה ולא שער: הטקסט ממילא נועד להתפרסם. המקור והקישור
-לאתר מתווספים כאן, עד 280 בספירה של X (share.tweet).
+**שרשור ל-X** (מ-10/11/2026, לבקשת יואב) — טיוטה מפורטת לחשבון שלו לכל כרטיס, מתוך
+tweets.json של analyze_impact: פתיחה, ציוץ לכל חברה, מה יכול לבטל, ושורה תחתונה. כמו
+השרשור בעמוד "דוח ושיחה", הוא מוצג רק לבעלים (data-owner). זו הסתרה בתצוגה ולא שער:
+הטקסט ממילא נועד להתפרסם. המקור והקישור לאתר מתווספים כאן, לציוץ האחרון או כציוץ
+משלהם, וכל ציוץ עד 280 בספירה של X.
 """
 from __future__ import annotations
 
@@ -79,11 +80,16 @@ def load() -> dict:
                 by_id[r["id"]] = r
     since = (now - timedelta(days=PAGE_DAYS)).isoformat(timespec="seconds")
     items = dedupe([r for r in by_id.values() if (r.get("ts") or "") >= since])
+    tweets: dict[str, list[str]] = {}
     try:
         raw = json.loads((OUT / "tweets.json").read_text(encoding="utf-8"))
-        tweets = {k: v["text"] for k, v in raw.items() if isinstance(v, dict) and v.get("text")}
+        for k, v in raw.items():
+            # שרשור; ולכרטיס שעוד לא נכתב לו שרשור — הציוץ הבודד של הגרסה הראשונה
+            th = (v.get("thread") or ([v["text"]] if v.get("text") else [])) if isinstance(v, dict) else []
+            if th:
+                tweets[k] = th
     except (OSError, ValueError, AttributeError):
-        tweets = {}
+        pass
     return {"state": state, "items": items, "profiles": profiles, "tweets": tweets}
 
 
@@ -236,31 +242,46 @@ def region(r: dict) -> str:
     return "il" if _IL.search(probe) else "world"
 
 
-def _tweet(r: dict, text: str | None) -> str:
-    """תקציר לציוץ: הטקסט, ספירה כמו של X, העתקה, ופתיחה בחלון הכתיבה של X."""
-    if not text:
-        return ""
+def _thread(r: dict) -> list[str]:
+    """הציוצים כפי שיפורסמו: המקור והקישור לאתר בסוף הציוץ האחרון, ואם אין שם מקום —
+    ציוץ משלהם. הטקסט עצמו אינו נחתך: כל ציוץ נבדק עד 275 כשנכתב."""
     names = []
     for s in r.get("links") or []:
         n = " ".join(str(s.get("name") or "").split())
         if n and n not in names:
             names.append(n)
-    full = share.tweet(text, [], share.source_line(names[:2]))
-    # **התובנה לפני שורת המקור.** share.tweet מקצר את הפתיח כדי שהמקור והקישור ייכנסו,
-    # ובציוץ כאן הפתיח הוא כל התוכן — והמשפט האחרון, שנחתך ראשון, הוא לרוב "ולמה דווקא
-    # לה". כשהמקור דוחק את הטקסט, הוא יורד והקישור לאתר נשאר.
-    if full.split("\n", 1)[0] != share.maqaf(" ".join(text.split())):
-        full = share.tweet(text, [], "")
-    n = share.weighted_len(full)
+    src = share.source_line(names[:2])
+    tail = f"{src}\n{share.SITE}" if src else share.SITE
+    out = [share.maqaf(" ".join(t.split())) for t in r["_thread"]]
+    if share.weighted_len(f"{out[-1]}\n{tail}") <= share.LIMIT:
+        out[-1] = f"{out[-1]}\n{tail}"
+    else:
+        out.append(tail)
+    return out
+
+
+def _tweet(r: dict, thread: list[str] | None) -> str:
+    """שרשור ל-X: כל ציוץ עם ספירה כמו של X והעתקה, העתקת השרשור כולו, ופתיחת הציוץ
+    הראשון בחלון הכתיבה של X."""
+    if not thread:
+        return ""
+    tws = _thread({**r, "_thread": thread})
     key = "tw-" + anchor(r.get("src") or r["id"])
-    intent = "https://x.com/intent/post?text=" + urllib.parse.quote(full)
-    return (f'<details class="sh-tw im-tw" data-owner hidden><summary>תקציר לציוץ</summary>'
-            f'<div class="otc-tweet"><pre id="{key}">{escape(full, quote=False)}</pre></div>'
-            f'<div class="im-tw-bar"><span class="cr-cnt{" over" if n > share.LIMIT else ""}" '
+    boxes = []
+    for i, t in enumerate(tws):
+        n = share.weighted_len(t)
+        boxes.append(
+            f'<div class="cr-tw"><div class="cr-tw-t" id="{key}-{i}">{escape(t, quote=False)}</div>'
+            f'<div class="cr-tw-bar"><span class="cr-cnt{" over" if n > share.LIMIT else ""}" '
             f'title="כפי ש-X סופר: אות עברית 1, חץ ו-₪ 2, קישור 23">{n}/{share.LIMIT}</span>'
-            f'<button type="button" class="otc-copy im-copy" data-src="{key}">העתקת התקציר</button>'
-            f'<a href="{escape(intent)}" target="_blank" rel="noopener">פתיחה ב-<bdi>X</bdi></a></div>'
-            '</details>')
+            f'<button type="button" class="cr-copy im-copy" data-src="{key}-{i}">העתק</button></div></div>')
+    intent = "https://x.com/intent/post?text=" + urllib.parse.quote(tws[0])
+    label = "ציוץ" if len(tws) == 1 else f"{len(tws)} ציוצים"
+    return (f'<details class="sh-tw im-tw" data-owner hidden><summary>שרשור ל-<bdi>X</bdi> · {label}'
+            f'</summary><div class="im-thread" id="{key}">{"".join(boxes)}</div>'
+            f'<div class="im-tw-bar"><button type="button" class="otc-copy im-copy" data-thread="{key}">'
+            f'העתקת השרשור</button><a href="{escape(intent)}" target="_blank" rel="noopener">'
+            f'פתיחת הציוץ הראשון ב-<bdi>X</bdi></a></div></details>')
 
 
 def _card(r: dict, profiles: dict, latest: str | None, today, tweets: dict | None = None) -> str:
@@ -390,9 +411,17 @@ SCRIPT = r"""<script>
   document.addEventListener("click", function (e) {
     var btn = e.target.closest(".im-copy");
     if (!btn) { return; }
-    var el = document.getElementById(btn.getAttribute("data-src"));
-    if (!el) { return; }
-    var text = el.textContent;
+    var text;
+    if (btn.hasAttribute("data-thread")) {
+      var box = document.getElementById(btn.getAttribute("data-thread"));
+      if (!box) { return; }
+      text = Array.prototype.map.call(box.querySelectorAll(".cr-tw-t"),
+        function (el) { return el.textContent; }).join("\n\n");
+    } else {
+      var el = document.getElementById(btn.getAttribute("data-src"));
+      if (!el) { return; }
+      text = el.textContent;
+    }
     function done() {
       var was = btn.textContent;
       btn.textContent = "הועתק";

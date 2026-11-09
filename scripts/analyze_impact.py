@@ -284,29 +284,48 @@ ANALYSIS_PROMPT = """אתה אנליסט המחקר של TLV TASE View, שירו
 # לפני הבקשה, והניתוח עצמו נשאר כפי שהוא. התוצר נשמר בצד (tweets.json, לפי id),
 # כך שרשומות הניתוח אינן נכתבות מחדש. המקור והקישור לאתר מתווספים בבנייה
 # (site/impact.py), עד 280 בספירה של X.
+# **שרשור ולא ציוץ בודד** (יואב, 10/11 בלילה, על הגרסה הראשונה: "הרבה יותר מפורט").
+# 280 תווים מספיקים לעובדה ולכיוון, לא למנגנון ולגודל לכל חברה. ציוץ פתיחה שעומד
+# בפני עצמו, ציוץ לכל חברה, מה יכול לבטל, ושורה תחתונה. כל ציוץ עד 280, ולכן
+# השרשור עובד בכל חשבון. מי שיש לו פוסט ארוך מעתיק את כולו כגוש אחד.
 TWEET_MODEL = "claude-sonnet-5"
-TWEET_BATCH = 15
+TWEET_BATCH = 8
 TWEET_MAX = 120        # כרטיסים בריצה: מכסה בריצה אחת את כל שבעת הימים שבעמוד
 TWEET_DAYS = 8
-TWEET_TRIES = 2        # ציוץ שנפסל בבדיקה — עוד ניסיון אחד, ואז הכרטיס נשאר בלי ציוץ
-TWEET_CHARS = 190      # בהוראה; בפועל המודל חורג (10/11: חציון 197 מול 210, שיא 275)
-TWEET_SCHEMA = _obj({"items": {"type": "array", "items": _obj({"id": _S, "tweet": _S})}})
-TWEET_PROMPT = """אתה כותב את הציוצים של TLV TASE View ב-X, שירות מחקר על הבורסה בתל אביב. לפניך
-כרטיסים מהעמוד "השפעה על מניות". כל כרטיס עונה על השאלה "מה זה עושה למניה?": הכותרת, "בפשטות",
-השורה התחתונה, ולכל חברה הכיוון, העוצמה, השורה בדוח, הצעד האחרון בשרשרת ו"כמה זה גדול".
+TWEET_TRIES = 2        # שרשור שנפסל בבדיקה — עוד ניסיון אחד, ואז נשאר הקודם (או כלום)
+TWEET_CHARS = 250      # לכל ציוץ, בהוראה; הבדיקה מקבלת עד TWEET_ONE
+TWEET_ONE = 275
+TWEET_SCHEMA = _obj({"items": {"type": "array", "items": _obj({
+    "id": _S, "thread": {"type": "array", "items": _S}})}})
+TWEET_PROMPT = """אתה כותב את השרשורים של TLV TASE View ב-X, שירות מחקר על הבורסה בתל אביב. לפניך
+כרטיסים מהעמוד "השפעה על מניות", שעונה לכל אירוע על השאלה "מה זה עושה למניה?". בכל כרטיס:
+הכותרת, "בפשטות", "מה קרה", השורה התחתונה ומה יאשר או יפריך, ולכל חברה — הכיוון, העוצמה,
+השורה בדוח, שרשרת ההשפעה המלאה, כמה זה גדול ומה יכול לבטל את זה.
 
-כתוב לכל כרטיס ציוץ אחד בעברית — **התובנה המשמעותית, לא תקציר של הכרטיס**:
-- משפט קצר על מה שקרה, ואחריו מה זה עושה לחברה (או לשתיים, לא יותר) — המנגנון במילים
-  פשוטות, ולמה דווקא לה. קורא שאינו מכיר את הענף צריך להבין.
-- כשההשפעה קטנה, זו התובנה: כתוב בקצרה למה זה כמעט לא משנה.
-- שם החברה כפי שהוא בכרטיס, ואחריו החץ של הכיוון: ▲ חיובי, ▼ שלילי, ◆ מעורב. בניטרלי — בלי חץ.
-- עד {chars} תווים. בלי האשטגים, בלי אימוג'י, בלי קישור, בלי שם המקור ובלי שם האתר —
-  אלה מתווספים אחר כך.
-- כל מספר, סכום ואחוז — רק מהכרטיס עצמו.
+כתוב לכל כרטיס **שרשור מפורט** של 3 עד 6 ציוצים, כמו אנליסט שמסביר לעוקבים שלו מה האירוע
+עושה לכל חברה, צעד אחר צעד:
+1. **פתיחה שעומדת בפני עצמה:** העובדה עם המספר המרכזי שבכרטיס, והתובנה — מי מושפע ובאיזה
+   כיוון. מי שקורא רק את הציוץ הזה מבין את העיקר.
+2. **ציוץ לכל חברה** (עד שלוש, מהעוצמה הגבוהה לנמוכה): השם ואחריו החץ (▲ חיובי, ▼ שלילי,
+   ◆ מעורב; בניטרלי בלי חץ). דרך מה זה עובר — השורה בדוח והמנגנון מהשרשרת; כמה זה גדול
+   ביחס אליה, עם המספרים שבכרטיס; ולמה דווקא לה — יותר או פחות מלשכנותיה. כשההשפעה קטנה —
+   למה.
+3. **מה יכול לבטל את זה**, או מי בצד השני — ציוץ משלו, כשיש בכרטיס משהו מהותי לומר.
+4. **סיום:** השורה התחתונה, ומה יאשר או יפריך — האירוע או הנתון הקרוב.
+בכרטיס שבו ההשפעה נמוכה לכל החברות — שניים או שלושה ציוצים מספיקים, והתובנה היא למה זה
+כמעט לא משנה.
+
+כללים לכל ציוץ:
+- עד {chars} תווים (X סופר אות עברית 1, חץ ו-₪ 2). משפטים קצרים ועברית פשוטה; מונח מקצועי
+  מקבל הסבר קצר בסוגריים בהופעה הראשונה בשרשור.
+- בלי מספור, בלי האשטגים, בלי אימוג'י, בלי קישור, בלי שם המקור ובלי שם האתר — אלה מתווספים
+  אחר כך.
+- כל מספר, סכום, אחוז ותאריך — רק מהכרטיס עצמו. מה שאינו בכרטיס אינו נכתב.
+- אותה עובדה אינה חוזרת בשני ציוצים.
 
 {rules}
 
-החזר JSON לפי הסכימה: id כפי שניתן בכרטיס, ו-tweet."""
+החזר JSON לפי הסכימה: id כפי שניתן בכרטיס, ו-thread — הציוצים לפי הסדר."""
 
 
 # --- קלט --------------------------------------------------------------------
@@ -938,15 +957,20 @@ def check(c: dict, r: dict, names: set[str]) -> tuple[dict | None, int]:
 
 
 def _tweet_card(r: dict) -> str:
+    """הכרטיס המלא — שרשור מפורט נכתב מכל השרשרת, לא רק מהצעד האחרון."""
     rows = [f"=== id={r['id']} ===", f"כותרת: {r.get('headline') or ''}"]
-    for k, he in (("simple", "בפשטות"), ("verdict", "השורה התחתונה")):
+    for k, he in (("simple", "בפשטות"), ("what", "מה קרה"), ("verdict", "השורה התחתונה"),
+                  ("watch", "מה יאשר או יפריך")):
         if r.get(k):
             rows.append(f"{he}: {r[k]}")
     for c in r.get("companies") or []:
-        last = (c.get("chain") or [""])[-1]
         rows.append(f"- {c.get('name')} · {c.get('direction')} · עוצמה {c.get('significance')} · "
-                    f"{c.get('line') or ''}\n  {last}"
-                    + (f"\n  כמה זה גדול: {c['size']}" if c.get("size") else ""))
+                    f"השורה בדוח: {c.get('line') or ''}")
+        rows += [f"  {k}. {s}" for k, s in enumerate(c.get("chain") or [], 1)]
+        if c.get("size"):
+            rows.append(f"  כמה זה גדול: {c['size']}")
+        if c.get("against"):
+            rows.append(f"  מה יכול לבטל את זה: {c['against']}")
     return "\n".join(rows)
 
 
@@ -970,12 +994,8 @@ def x_len(text: str) -> int:
     return n
 
 
-# הקישור לאתר נספר 23 ושורה חדשה לפניו — מה שנשאר לטקסט כשהמקור יורד בבנייה
-TWEET_HARD = 280 - 24
-
-
 def tweets(now: datetime, run: str, dry: bool) -> tuple[int, int, float]:
-    """תקציר לציוץ לכל כרטיס בחלון העמוד שאין לו עדיין: (נכתבו, נפסלו, עלות)."""
+    """שרשור ל-X לכל כרטיס בחלון העמוד שאין לו עדיין: (נכתבו, נפסלו, עלות)."""
     path = OUT / "tweets.json"
     store: dict[str, dict] = _load(path, {})
     cut = (now - timedelta(days=TWEET_DAYS + 2)).isoformat(timespec="seconds")
@@ -988,9 +1008,10 @@ def tweets(now: datetime, run: str, dry: bool) -> tuple[int, int, float]:
                 cards[r["id"]] = r          # הרשומה האחרונה גוברת, כמו בעמוד
     def missing(i: str) -> bool:
         s = store.get(i) or {}
-        text = s.get("text") or ""
-        # ציוץ שנשמר לפני תקרת האורך ונחתך בבנייה — נכתב מחדש
-        return (not text or x_len(text) > TWEET_HARD) and int(s.get("tries") or 0) < TWEET_TRIES
+        # הציוץ הבודד של הגרסה הראשונה (בלי thread) נכתב מחדש כשרשור, וניסיונות
+        # שנפסלו בגרסה ההיא אינם נספרים לו
+        tries = int(s.get("tries") or 0) if s.get("v") == 2 else 0
+        return not s.get("thread") and tries < TWEET_TRIES
 
     todo = [r for r in sorted(cards.values(), key=lambda r: r.get("ts") or "", reverse=True)
             if missing(r["id"])][:TWEET_MAX]
@@ -1001,27 +1022,30 @@ def tweets(now: datetime, run: str, dry: bool) -> tuple[int, int, float]:
         res, err, usd = _api.ask_json(TWEET_PROMPT.format(chars=TWEET_CHARS, rules=RULES),
                                       "\n\n".join(_tweet_card(r) for r in batch.values()),
                                       TWEET_SCHEMA, job="impact-tweets", model=TWEET_MODEL,
-                                      max_tokens=8000, max_usd=0.5)
+                                      max_tokens=16000, max_usd=1.0)
         spent += usd
         if err:
-            _fail("תקציר הציוץ", err)
+            _fail("השרשור ל-X", err)
             break
         for x in res.get("items") or []:
             r = batch.get(str(x.get("id")))
-            text = _clean(x.get("tweet"))
-            if not r or not text:
+            thread = [t for t in (_clean(s) for s in x.get("thread") or []) if t]
+            if not r or not thread:
                 continue
             prev = store.get(r["id"]) or {}
-            # ארוך מדי גם בלי שורת המקור — היה נחתך באמצע התובנה; נכתב מחדש בריצה הבאה
-            if bad_numbers(text, _card_text(r), _years({"ts": str(r.get("ts") or "")})) \
-                    or ADVICE.search(text) or x_len(text) > TWEET_HARD:
-                # ציוץ קודם, אם היה (ארוך אך שמיש), נשאר עד שייכתב טוב ממנו
-                store[r["id"]] = {"text": prev.get("text") or "",
-                                  "tries": int(prev.get("tries") or 0) + 1,
-                                  "ts": r.get("ts"), "at": run}
+            joined = " ".join(thread)
+            # כל ציוץ עד 280 גם אחרי הבנייה: ציוץ ארוך מזה היה נחתך באמצע
+            if (bad_numbers(joined, _card_text(r), _years({"ts": str(r.get("ts") or "")}))
+                    or ADVICE.search(joined) or not 2 <= len(thread) <= 7
+                    or any(x_len(t) > TWEET_ONE for t in thread)):
+                # מה שנכתב קודם, אם היה, נשאר עד שייכתב טוב ממנו
+                store[r["id"]] = {**{k: prev[k] for k in ("text", "thread") if prev.get(k)},
+                                  "v": 2, "ts": r.get("ts"), "at": run,
+                                  "tries": (int(prev.get("tries") or 0) if prev.get("v") == 2 else 0) + 1}
                 rejected += 1
                 continue
-            store[r["id"]] = {"text": text, "ts": r.get("ts"), "at": run, "model": TWEET_MODEL}
+            store[r["id"]] = {"v": 2, "thread": thread, "ts": r.get("ts"), "at": run,
+                              "model": TWEET_MODEL}
             written += 1
     if not dry and (written or rejected):
         path.write_text(json.dumps(store, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -1189,7 +1213,7 @@ def _finish(state: dict, tri: dict, entry: dict, now: datetime, written: int, dr
           f"למיון, {entry['asked']} מעוררים את השאלה, נותחו {entry['analyzed']} ופורסמו "
           f"{entry['published']}, נפסלו {entry['rejected']}, תוקנו {entry['fixed']} שדות, "
           f"ממתינים {pending}, ${entry['usd']}"
-          + (f" · ציוצים: {entry['tweets']} נכתבו, {entry['tweets_rejected']} נפסלו"
+          + (f" · שרשורים ל-X: {entry['tweets']} נכתבו, {entry['tweets_rejected']} נפסלו"
              if "tweets" in entry else "")
           + (f" · ניוזלטרים: נמשכו {entry['mail_fetched']} הודעות חדשות" if "mail_fetched" in entry else "")
           + (f" (נעצר: {entry['mail_error']})" if entry.get("mail_error") else ""))
