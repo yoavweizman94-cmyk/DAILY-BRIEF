@@ -345,6 +345,10 @@ jobs:
             else
               echo "::warning title=רענון עמוד לא הופעל::$wf — HTTP $code $(head -c 160 resp.txt)"
             fi
+            # **20 שניות בין צנרת לצנרת.** כל אחת פורסת את האתר בסופה, ושמונה פריסות
+            # באותה דקה הפילו שלוש מהן ב-Cloudflare ("Unknown internal error", 06/11/2026
+            # בבוקר). אותו רענון, מדורג, עבר נקי אחר הצהריים. final-deploy מכסה בכל מקרה.
+            sleep 20
           done
           echo "since=$since" >> "$GITHUB_OUTPUT"
           echo "workflows=$ok" >> "$GITHUB_OUTPUT"
