@@ -88,6 +88,14 @@ jobs:
           d = p.with_name("maya_summaries.jsonl")
           if d.exists():
               done = {json.loads(l).get("id") for l in d.read_text(encoding="utf-8").splitlines() if l.strip()}
+          # מה שכבר פורסם היום בריפו התוכן כבר סוכם — ראה published_ids ב-summarize_reports.py.
+          # כשל כאן משאיר את הבדיקה כפי שהייתה; הסיכום עצמו מדלג על אותם מזהים בכל מקרה.
+          try:
+              sys.path.insert(0, "scripts")
+              from summarize_reports import published_ids
+              done |= published_ids(Path("output/reports"), date.today().isoformat())
+          except Exception as e:  # noqa: BLE001
+              print(f"published_ids: {e}", file=sys.stderr)
           sys.exit(0 if [r for r in pending if r["id"] not in done] else 1)
           PY
           then echo "new=yes" >> "$GITHUB_OUTPUT"; else echo "new=no" >> "$GITHUB_OUTPUT"; fi

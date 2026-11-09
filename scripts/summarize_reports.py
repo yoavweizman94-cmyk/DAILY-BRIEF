@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -30,9 +30,11 @@ ROOT = Path(__file__).resolve().parents[1]
 BATCH = 8
 MAX_BODY = 16000   # ניתוח מתחת למספרים דורש את הביאורים ואת תזרים
                    # המזומנים, לא רק את הדוח על הרווח והפסד
-# תקרה למחזור: הניטור רץ כל רבע שעה, וריצה ארוכה מהמחזור תיצור חפיפה.
-# מה שנחתך כאן נאסף במחזור הבא — הדה-דופ ב-state מבטיח שלא יאבד.
-MAX_PER_RUN = 16
+# תקרה למחזור. מה שנחתך כאן נאסף במחזור הבא, כי published_ids (למטה) מדלג רק על
+# מה שכבר סוכם. **32 ולא 16:** ה-cron של maya-watch, כל חצי שעה, מדולל ב-GitHub
+# (09/11/2026: 8 ריצות ביום), ובין ריצה לריצה מצטברים בעונת הדוחות יותר מ-16
+# דיווחים. אותה תקרה חלה גם במחזור שרץ בתוך צנרת הברייף (run_daily.sh).
+MAX_PER_RUN = 32
 
 PROMPT = """אתה אנליסט מחקר של TLV TASE View. לפניך {n} דיווחים שפורסמו במאיה.
 
@@ -171,6 +173,30 @@ def summarize(batch: list[dict], coverage: str) -> list[dict]:
     return [x for x in (res or {}).get("items") or [] if isinstance(x, dict)]
 
 
+def published_ids(reports_dir: Path, day: str) -> set[str]:
+    """מזהי הדיווחים שכבר סוכמו ופורסמו, היום ואתמול, ב-output/reports של ריפו התוכן.
+
+    **מה שכבר סוכם אינו מסוכם שוב.** data/raw אינו בגיט, ולכן בכל ריצה על מכונה
+    חדשה maya_summaries.jsonl של היום ריק. filter_new מחזיר כל דיווח שנראה לראשונה
+    היום, ולכן כל מחזור סיכם מחדש את הוותיקים שבחלון של שש שעות, עד התקרה, והחדשים
+    המתינו. נמדד 09/11/2026: 12 קריאות סיכום ל-63 סיכומים ייחודיים. ב-19:00 המתינו
+    26 דיווחים, והמאוחר שבסיכומים היה מ-16:48. כלומר הדוחות שאחרי הנעילה לא סוכמו.
+    output/reports נמשך בתחילת כל ריצה, ולכן הוא הרשומה של מה שכבר שולם עליו.
+    """
+    ids: set[str] = set()
+    for d in (day, (date.fromisoformat(day) - timedelta(days=1)).isoformat()):
+        p = reports_dir / f"{d}.jsonl"
+        if not p.exists():
+            continue
+        for line in p.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                try:
+                    ids.add(str(json.loads(line).get("id")))
+                except ValueError:
+                    continue
+    return ids
+
+
 def main() -> int:
     day = date.today().isoformat()
     raw_dir = ROOT / "data" / "raw" / day
@@ -185,6 +211,7 @@ def main() -> int:
     if dst.exists():
         done = {json.loads(l).get("id") for l in dst.read_text(encoding="utf-8").splitlines()
                 if l.strip()}
+    done |= published_ids(ROOT / "output" / "reports", day)
 
     todo = [r for r in rows if r.get("summarize") and r["id"] not in done]
     if len(todo) > MAX_PER_RUN:

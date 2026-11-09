@@ -18,6 +18,7 @@
   otc.jsonl        עסקאות מחוץ לבורסה של הימים האחרונים בלבד
   offex.jsonl      דיווחי מאיה על עסקאות בעלי עניין, אותו חלון
   jumbo.jsonl      עסקאות מתואמות, אותו חלון
+  maya_summaries.jsonl  גוף הדיווחים: הסיכום מגוף הדוח לכל דיווח שב-maya.jsonl
   companies.json   רשימת הכיסוי בלי שדות שאינם משמשים לכתיבה
 
 **הדיגסט אינו מקצר את הניתוח, רק את הקריאה.** כל מה ש-CLAUDE.md דורש
@@ -151,6 +152,53 @@ def nadlan_digest() -> dict | None:
     }
 
 
+# **גוף הדיווח, לא רק הכותרת.** maya.jsonl נושא כותרת בלבד, כי הפיד של מאיה אינו
+# מחזיר גוף. במהדורת הנעילה של 09/11/2026 נכתב בתקלות שהגוף ריק בכל 73 הדיווחים,
+# והניתוח נבנה מכותרות. אותה הערה הופיעה ברוב הברייפים מאז 02/11. באותו יום כבר
+# שולם על סיכום מגוף כל דיווח (scripts/summarize_reports.py → output/reports), אבל
+# הסוכן לא הופנה אליו. כאן הסיכומים מוצמדים לדיווחים לפי id.
+# **רק מה שהברייף כותב ממנו.** כותרת, קישור וטופס כבר נמצאים ב-maya.jsonl. דיווח
+# טכני (מהותיות 1) נשאר בכותרת ובסיכום בלבד, כי מקומו בהשמטה או ב"בקצרה".
+SUMMARY_FIELDS = ("headline", "summary", "trend", "analysis", "balance", "flags",
+                  "omissions", "direction", "why", "affected", "affected_why", "watch")
+
+
+def maya_summaries(raw_dir: Path, reports_dir: Path, day: str,
+                   window: int) -> tuple[list[dict], int]:
+    """הסיכומים של הדיווחים שב-maya.jsonl, ומספר הדיווחים שם.
+
+    הסיכום נכתב ליום שבו הדיווח נאסף, ולא בהכרח ליום הברייף: מהדורת לילה
+    שאחרי חצות, או בוקר אחרי סוף שבוע. לכן הסיכומים נחפשים לאורך כל החלון.
+    """
+    ids = list(dict.fromkeys(str(r["id"]) for r in _rows(raw_dir / "maya.jsonl") if r.get("id")))
+    if not ids:
+        return [], 0
+    pool: dict[str, dict] = {}
+    d0 = date.fromisoformat(day)
+    for k in range(window, -1, -1):          # מהישן לחדש, כך שהגרסה האחרונה גוברת
+        for r in _rows(reports_dir / f"{(d0 - timedelta(days=k)).isoformat()}.jsonl"):
+            if r.get("id"):
+                pool[str(r["id"])] = r
+    out = []
+    for i in ids:
+        s = pool.get(i)
+        if not s:
+            continue
+        mat = s.get("materiality")
+        rec = {"id": i, "ts": s.get("ts"), "coverage": s.get("coverage") or [], "materiality": mat}
+        technical = isinstance(mat, int) and mat <= 1
+        for k in (("headline", "summary") if technical else SUMMARY_FIELDS):
+            v = s.get(k)
+            if v not in (None, "", [], "טכני"):
+                rec[k] = v
+        figs = [f"{f['label']}: {f.get('value', '')}" for f in s.get("key_figures") or []
+                if isinstance(f, dict) and f.get("label")]
+        if figs and not technical:
+            rec["key_figures"] = figs
+        out.append(rec)
+    return out, len(ids)
+
+
 def companies_slim() -> str | None:
     """רשימת הכיסוי כטבלת טקסט — הסוכן מזהה בשם, לא ב-id.
 
@@ -239,6 +287,15 @@ def main() -> int:
         saved += src.stat().st_size
         dump(f"{name}.jsonl", keep)
         print(f"  {name}: {len(keep)} מתוך {len(rows)} רשומות מאז {since}")
+
+    # גוף הדיווחים — אין לו מקור שהוא מחליף, ולכן הוא אינו נספר ב"במקום"
+    summ, n_maya = maya_summaries(ROOT / "data" / "raw" / day, ROOT / "output" / "reports",
+                                  day, window)
+    if n_maya:
+        dump("maya_summaries.jsonl", summ)
+        print(f"  סיכומי מאיה: {len(summ)} מתוך {n_maya} דיווחים")
+        print(f"::notice title=סיכומי מאיה בקלט::{len(summ)} מתוך {n_maya} דיווחי הכיסוי "
+              "עם סיכום מגוף הדוח; השאר כותרת בלבד")
 
     comps = companies_slim()
     if comps:
