@@ -426,5 +426,39 @@
    "https://us06web.zoom.us/webinar/register/WN_XgVmprRBRWu-42De0l-SdQ#/registration"
   ],
   "others": []
+ },
+ "1779727": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": [
+   "https://www.mizrahi-tefahot.co.il",
+   "http://www.mizrahi-tefahot.co.il/",
+   "https://www.mizrahi-tefahot.co.il/en/Bank/financial-reports/Pages/Default.aspx"
+  ]
+ },
+ "1778153": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": [
+   "http://www.elbitsystems.com/",
+   "https://twitter.com/ElbitSystemsLtd",
+   "https://www.facebook.com/elbitsystemsltd/",
+   "https://www.youtube.com/channel/UCnHahmwZkl4wddBn5jeHRJQ",
+   "https://www.linkedin.com/company/elbitsystems/"
+  ]
+ },
+ "1778207": {
+  "link": "https://bankleumi-co-il.zoom.us/webinar/register/WN_hPZrAYF3RLuoW8C_6bFOcA",
+  "certain": true,
+  "known": [
+   "https://bankleumi-co-il.zoom.us/webinar/register/WN_hPZrAYF3RLuoW8C_6bFOcA",
+   "https://bankleumi-co-il.zoom.us/webinar/register/WN_CmpUtEj_Snq45ZlHtJzGtw"
+  ],
+  "others": [
+   "http://www.bankleumi.co.il/",
+   "https://www.leumi.co.il/he/Investor-Relations"
+  ]
  }
 }
