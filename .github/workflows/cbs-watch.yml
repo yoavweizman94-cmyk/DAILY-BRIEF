@@ -66,6 +66,13 @@ jobs:
         if: steps.collect.outputs.new != 'yes' && steps.collect.outputs.changed != 'yes'
         run: echo "אין הודעה חדשה ולא השתנה דבר בנתונים — יוצאים בלי מודל ובלי פריסה."
 
+      # **דופק: רק מועד הבדיקה נשמר**, בלי בנייה ובלי פריסה. בלעדיו fetched_at
+      # בריפו התוכן נשאר ממועד השינוי האחרון, ובשבוע שקט בדיקת הטריות של כל
+      # בנייה מתריעה על צנרת שרצה כסדרה. ראה HEARTBEAT_H ב-ingest/cbs_pull.py.
+      - name: Save heartbeat
+        if: steps.collect.outputs.heartbeat == 'yes'
+        run: CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push "cbs heartbeat"
+
       - uses: actions/setup-node@v7
         if: steps.collect.outputs.new == 'yes' || steps.collect.outputs.changed == 'yes'
         with:

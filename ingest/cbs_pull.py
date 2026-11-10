@@ -26,8 +26,10 @@
   output/cbs/snapshot.json        — לוח פרסומים, מדדים, סדרות מחירים, מועד משיכה
 
 ב-GitHub Actions נכתבים ל-GITHUB_OUTPUT:
-  new=yes     — יש הודעה רלוונטית שטרם נותחה
-  changed=yes — משהו בפלט השתנה מאז הריצה הקודמת (ולכן כדאי לבנות ולפרוס)
+  new=yes       — יש הודעה רלוונטית שטרם נותחה
+  changed=yes   — משהו בפלט השתנה מאז הריצה הקודמת (ולכן כדאי לבנות ולפרוס)
+  heartbeat=yes — לא השתנה דבר, אבל ה-snapshot השמור ישן מ-HEARTBEAT_H שעות:
+                  שומרים אותו רק כדי לרשום שהמקור נבדק (בלי בנייה ובלי פריסה)
 """
 from __future__ import annotations
 
@@ -59,6 +61,12 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 WEBS = (("mr", "/he/mediarelease"), ("madad", "/he/mediarelease/madad"))
 
 LOOKBACK_DAYS = 14
+# **בדיקת הטריות בבנייה קוראת את fetched_at מה-snapshot השמור**, וריצה בלי
+# שינוי אינה שומרת דבר. בשבוע שקט — 05/11 עד 10/11/2026, חמישה ימים בלי אף
+# הודעה — היא התריעה "cbs-watch לא רצה" על צנרת שרצה תשע פעמים ותקינה. פעם
+# ב-12 שעות נשמר ה-snapshot גם בלי שינוי, וכך ההתרעה (30 שעות, site/cbsdata.py)
+# עולה רק כשהצנרת באמת לא רצה או נכשלה.
+HEARTBEAT_H = 12
 CAL_BACK_DAYS = 1
 CAL_AHEAD_DAYS = 21
 BODY_MAX = 20000
@@ -642,6 +650,13 @@ def main() -> int:
     everything = stored_releases()
     pending = [r for r in everything.values() if r.get("relevant") and str(r["id"]) not in done]
     changed = body_changed or changed_rows > 0
+    heartbeat = False
+    if not changed and not pending:
+        try:
+            heartbeat = (datetime.now(IL) - datetime.fromisoformat(str(prev.get("fetched_at"))) >
+                         timedelta(hours=HEARTBEAT_H))
+        except (TypeError, ValueError):
+            heartbeat = True   # אין חותמת קריאה — שומרים כדי שתהיה
 
     n_rel = len(releases) if releases is not None else 0
     n_ok = sum(1 for r in (releases or []) if r["relevant"])
@@ -656,6 +671,10 @@ def main() -> int:
         with open(gh, "a", encoding="utf-8") as f:
             f.write(f"new={'yes' if pending else 'no'}\n")
             f.write(f"changed={'yes' if changed else 'no'}\n")
+            f.write(f"heartbeat={'yes' if heartbeat else 'no'}\n")
+    if heartbeat:
+        print(f"דופק: לא השתנה דבר, וה-snapshot השמור מ-{prev.get('fetched_at') or '—'} — "
+              "נשמר רק כדי לרשום שהמקור נבדק")
     return 0
 
 
