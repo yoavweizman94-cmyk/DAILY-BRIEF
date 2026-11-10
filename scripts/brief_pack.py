@@ -19,6 +19,11 @@
   offex.jsonl      דיווחי מאיה על עסקאות בעלי עניין, אותו חלון
   jumbo.jsonl      עסקאות מתואמות, אותו חלון
   maya_summaries.jsonl  גוף הדיווחים: הסיכום מגוף הדוח לכל דיווח שב-maya.jsonl
+  cbs.jsonl        הודעות הלמ"ס הרלוונטיות מ-24 השעות האחרונות עם הניתוח, ולוח השבוע
+  gov.jsonl        פרסומי משרדי הממשלה והרגולטורים שסומנו מהותיים, עם הנימוק
+  call_reviews.jsonl  "דוח ושיחה": סקירת שיחת המשקיעים (תמליל גלובס) וסקירת הדוח
+  impact.jsonl     עמוד ההשפעה על מניות: אירועים בהשפעה בינונית ומעלה, לפי חברה
+  commodities_review.json / auto_review.json  הסקירה האחרונה של עמודי הסחורות והרכב
   companies.json   רשימת הכיסוי בלי שדות שאינם משמשים לכתיבה
 
 **הדיגסט אינו מקצר את הניתוח, רק את הקריאה.** כל מה ש-CLAUDE.md דורש
@@ -32,7 +37,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -199,6 +204,150 @@ def maya_summaries(raw_dir: Path, reports_dir: Path, day: str,
     return out, len(ids)
 
 
+# **מה שצנרות האתר כבר ניתחו — גם לברייף.** עד 10/11/2026 הברייף ראה רק את
+# data/raw ואת מאיה, בעוד האתר מנתח עוד שישה מקורות בצנרות משלו. באותו יום
+# נכתב במהדורת הנעילה "אין פרסום חדש של הלמ"ס — נבדק מול הסקיל", כשבעמוד
+# הלמ"ס כבר עמדה מהבוקר הודעה רלוונטית (פדיון רשתות השיווק) עם ניתוח מלא.
+# הסקיל נשען על שרת MCP שאינו רואה את ההודעות לתקשורת. כאן מוצמד לחבילה מה
+# שהאתר כבר כתב ב-24 השעות האחרונות, בשדות שהברייף כותב מהם בלבד.
+# **החלון מתגלגל ולא יומי.** מהדורת הבוקר צריכה את ערב אתמול, והלילה —
+# שנכתבת אחרי חצות — את היום שהסתיים. כפילות מול מהדורה קודמת נמנעת בברייף
+# עצמו, שקורא את המהדורות הקודמות.
+# **מחוץ לחבילה בכוונה:** meetings (השיחות של הבעלים בלבד), x (טיוטות ציוצים)
+# וכל שדה tweets. הברייף מופץ ללקוחות.
+SITE_HOURS = 24
+IMPACT_MIN_SIG = 2              # 1 = נמוכה; הסף של הברייף משמיט אותה ממילא
+CAL_DAYS_AHEAD = 7
+_DROP = ("model", "effort", "cost_usd", "usd", "through", "prices_at", "window_h",
+         "n_items", "n_il", "n_world", "analyzed_at", "triaged_at", "run", "basis",
+         "page", "tweets", "tweet_len", "x_thread")
+
+
+def _stamp(v) -> datetime | None:
+    """חותמת זמן כ-datetime עם אזור. חותמת בלי אזור היא שעון מקומי — הריצה
+    בענן היא TZ=Asia/Jerusalem, וכך נכתבות החותמות בצנרות."""
+    try:
+        t = datetime.fromisoformat(str(v))
+    except (TypeError, ValueError):
+        return None
+    return t if t.tzinfo else t.astimezone()
+
+
+def _cut(text, n: int):
+    return text if not isinstance(text, str) or len(text) <= n else text[:n].rstrip() + "…"
+
+
+def site_analyses(day: str) -> dict:
+    """מה שהאתר ניתח בחלון, לפי מקור. ריק = אין קובץ."""
+    base = ROOT / "output"
+    now = datetime.now().astimezone()
+    cut = now - timedelta(hours=SITE_HOURS)
+    cut_day = cut.date().isoformat()
+    out: dict = {}
+
+    # הלמ"ס — ההודעות הרלוונטיות עם הניתוח, ולוח הפרסומים של השבוע
+    year = day[:4]
+    ana = {str(a.get("release_id")): a for a in _rows(base / "cbs" / "analyses" / f"{year}.jsonl")}
+    cbs = []
+    for r in _rows(base / "cbs" / "releases" / f"{year}.jsonl"):
+        pub = _stamp(r.get("published"))
+        if not r.get("relevant") or (pub < cut if pub else str(r.get("date") or "") < cut_day):
+            continue
+        a = ana.get(str(r.get("id"))) or {}
+        rec = {"id": r.get("id"), "date": r.get("date"), "published": r.get("published"),
+               "title": r.get("title"), "url": r.get("url"), "topic": r.get("topic_label"),
+               "analyzed": bool(a)}
+        for k in ("headline", "key_figures", "what_happened", "macro", "micro", "caveats",
+                  "watch_next", "terms"):
+            if a.get(k):
+                rec[k] = a[k]
+        if not a:
+            rec["summary"] = _cut(r.get("summary") or "", 1500)
+        cbs.append(rec)
+    snap_p = base / "cbs" / "snapshot.json"
+    if snap_p.exists():
+        try:
+            cal = json.loads(snap_p.read_text(encoding="utf-8")).get("calendar") or []
+        except json.JSONDecodeError:
+            cal = []
+        until = (date.fromisoformat(day) + timedelta(days=CAL_DAYS_AHEAD)).isoformat()
+        out_titles = {str(r.get("title") or "")[:30] for r in cbs}   # שכבר פורסמו — לא שוב כצפויות
+        for c in cal:
+            if (c.get("relevant") and day <= str(c.get("date") or "") <= until
+                    and str(c.get("title") or "")[:30] not in out_titles):
+                cbs.append({"calendar": True, "date": c.get("date"), "time": c.get("time"),
+                            "title": c.get("title"), "type": c.get("type"),
+                            "topic": c.get("topic_label")})
+    out["cbs.jsonl"] = cbs
+
+    # משרדי הממשלה והרגולטורים — רק מה שהמיון סימן כמהותי
+    gov = []
+    gdir = base / "gov"
+    for d in (sorted(p for p in gdir.iterdir() if p.is_dir()) if gdir.exists() else []):
+        items = {str(i.get("id")): i for i in _rows(d / "items.jsonl")}
+        for a in _rows(d / "analyses.jsonl"):
+            it = items.get(str(a.get("id")))
+            if not a.get("material") or not it:
+                continue
+            if str(it.get("date") or "")[:10] < cut_day:
+                continue
+            gov.append({"office": it.get("unit") or d.name, "date": it.get("date"),
+                        "type": it.get("type"), "title": it.get("title"), "url": it.get("url"),
+                        "companies": a.get("companies") or [], "why": a.get("reason")})
+    out["gov.jsonl"] = gov
+
+    # דוח ושיחה — סקירת שיחת המשקיעים מתמליל גלובס, לצד סקירת הדוח
+    calls = []
+    for p in sorted((base / "calls" / "combined").glob("*.json")):
+        try:
+            c = json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        gen = _stamp(c.get("generated"))
+        if c.get("status") != "ok" or not ((gen and gen >= cut)
+                                           or str(c.get("call_date") or "") >= cut_day):
+            continue
+        rep = c.get("report") or {}
+        calls.append({"company": c.get("company"), "period": c.get("period"),
+                      "call_date": c.get("call_date"), "call_url": c.get("call_url"),
+                      "report_id": rep.get("id"), "report_title": rep.get("t"),
+                      "headline": c.get("headline"), "call_review": _cut(c.get("review_md"), 6000),
+                      "report_review": _cut(c.get("report_review"), 2500)})
+    out["call_reviews.jsonl"] = calls
+
+    # ההשפעה על מניות — ניתוח לפי חברה וכיוון, בינונית ומעלה
+    imp, seen = [], set()
+    for k in (1, 0):
+        for r in _rows(base / "impact" / f"{(date.fromisoformat(day) - timedelta(days=k)).isoformat()}.jsonl"):
+            ts = _stamp(r.get("ts"))
+            if (r.get("sig") or 0) < IMPACT_MIN_SIG or not ts or ts < cut or r.get("id") in seen:
+                continue
+            seen.add(r.get("id"))
+            links = [{"name": x.get("name"), "url": x.get("url")} for x in r.get("links") or []
+                     if isinstance(x, dict) and "mail.google" not in str(x.get("url"))][:3]
+            imp.append({"ts": r.get("ts"), "kind": r.get("kind"), "region": r.get("region"),
+                        "sig": r.get("sig"), "headline": r.get("headline"),
+                        "what": _cut(r.get("what"), 900), "verdict": _cut(r.get("verdict"), 600),
+                        "watch": _cut(r.get("watch"), 300), "companies": r.get("companies") or [],
+                        "links": links})
+    out["impact.jsonl"] = imp
+
+    # הסקירה האחרונה של עמודי הסחורות והרכב, אם נכתבה בחלון
+    for name, sub in (("commodities_review.json", "commodities"), ("auto_review.json", "auto")):
+        rows = _rows(base / sub / "analyses" / f"{day[:7]}.jsonl")
+        last = rows[-1] if rows else None
+        at = _stamp(last.get("analyzed_at")) if last else None
+        if at and at >= cut:
+            rec = {"analyzed_at": last.get("analyzed_at")}
+            rec.update({k: v for k, v in last.items() if k not in _DROP})
+            # המקורות נשארים — הברייף כותב כל עובדה עם המקור שלה — בלי שדות העזר
+            if isinstance(rec.get("refs"), dict):
+                rec["refs"] = {k: {f: v.get(f) for f in ("title", "source", "url")}
+                               for k, v in rec["refs"].items() if isinstance(v, dict)}
+            out[name] = rec
+    return out
+
+
 def companies_slim() -> str | None:
     """רשימת הכיסוי כטבלת טקסט — הסוכן מזהה בשם, לא ב-id.
 
@@ -296,6 +445,20 @@ def main() -> int:
         print(f"  סיכומי מאיה: {len(summ)} מתוך {n_maya} דיווחים")
         print(f"::notice title=סיכומי מאיה בקלט::{len(summ)} מתוך {n_maya} דיווחי הכיסוי "
               "עם סיכום מגוף הדוח; השאר כותרת בלבד")
+
+    # מה שהאתר ניתח — מספרים בלבד בלוג: הלוג של Actions ציבורי
+    try:
+        site = site_analyses(day)
+    except Exception as e:  # noqa: BLE001 — חבילה חלקית עדיפה על חבילה שנפלה
+        site = {}
+        print(f"::warning title=ניתוחי האתר לא צורפו לקלט::{type(e).__name__}")
+    parts = []
+    for name, payload in site.items():
+        if payload:
+            dump(name, payload)
+            parts.append(f"{name.split('.')[0]} {len(payload) if isinstance(payload, list) else 1}")
+    if parts:
+        print(f"::notice title=ניתוחי האתר בקלט::{' · '.join(parts)}")
 
     comps = companies_slim()
     if comps:
