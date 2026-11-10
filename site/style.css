@@ -711,7 +711,6 @@ section.rc-week { margin: 1.4rem 0 2rem; }
   text-decoration: none; background: var(--bg); }
 a.rc-chip:hover { border-color: var(--accent); color: var(--accent); }
 .rc-chip.rc-call { border-color: var(--accent); }
-svg.rc-ph { width: 0.95em; height: 0.95em; color: var(--accent); vertical-align: -0.12em; flex: none; }
 table.calls { font-size: 0.89rem; }
 table.calls td.t { white-space: nowrap; color: var(--fg); font-weight: 600; }
 table.calls td.q { color: var(--faint); font-size: 0.79rem; white-space: nowrap; }

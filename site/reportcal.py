@@ -29,11 +29,6 @@ MAX_DAY = 16           # אריחים ליום בתמונה; השאר — "וע�
 SRC = ("מקור: לוח האירועים במערכת מאיה של הבורסה לניירות ערך — מועדי פרסום הדוחות "
        "ושיחות הוועידה; הלוגואים מאתרי החברות")
 
-PHONE_SVG = ('<svg class="rc-ph" viewBox="0 0 24 24" aria-label="שיחת ועידה" role="img"><path d="M6.62 '
-             '10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 '
-             '0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 '
-             '2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" fill="currentColor"/></svg>')
-
 
 def _cover() -> tuple[dict[int, str], dict[int, float]]:
     """מזהה מאיה → שם בכיסוי, ושווי שוק (מיליוני ₪)."""
@@ -164,10 +159,13 @@ def image(week: dict) -> dict:
 
 
 def chips(items: list[dict]) -> str:
+    """שבב לכל חברה. **בלי סמל טלפון בעמוד** — יואב, 10/11/2026: הסמל רק בתמונת הייצוא.
+    בעמוד חברה עם שיחה מסומנת במסגרת בצבע ההדגשה, והשעה בתיבת הרמז ובטבלת השיחות."""
     out = []
     for it in items:
-        tip = " · ".join(x for x in (it.get("p"), ("שיחה " + it["t"]) if it.get("c") and it.get("t") else "") if x)
-        body = escape(it["n"]) + (PHONE_SVG if it.get("c") else "")
+        tip = " · ".join(x for x in (it.get("p"), ("שיחת ועידה " + it["t"]) if it.get("c") and it.get("t")
+                                     else ("שיחת ועידה" if it.get("c") else "")) if x)
+        body = escape(it["n"])
         tag = (f'<a class="rc-chip{" rc-call" if it.get("c") else ""}" href="{escape(it["url"])}" '
                f'target="_blank" rel="noopener" title="{escape(tip)}">{body}</a>') if it.get("url") else \
               f'<span class="rc-chip{" rc-call" if it.get("c") else ""}" title="{escape(tip)}">{body}</span>'
