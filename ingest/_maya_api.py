@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import sys
 
@@ -111,6 +111,16 @@ class MayaSession:
         בכמה בקשות. כישלון מחזיר אפס. רק יום בודד שחורג בעצמו מהתקרה
         אינו ניתן לפיצול, ואז נזרקת WindowTooLarge כמו קודם.
         """
+        # **מאיה מאמתת את toDate מול התאריך שלה ב-UTC.** בין חצות ל-02:00 שעון
+        # ישראל (03:00 בקיץ) "היום" כאן הוא מחר שם, והבקשה נדחית ב-400 — שהקוד
+        # למטה קורא כתקרת עימוד, מפצל ונופל ביום הבודד. כך נכתבה מהדורת הלילה של
+        # 11/11/2026 (00:06) בלי מאיה: "'To Date' חייב להיות קטן או שווה ל-10.11.2026".
+        # דיווח שפורסם אחרי חצות ייאסף בריצה שאחרי 02:00, כשהתאריך שם מתעדכן.
+        utc_today = datetime.now(timezone.utc).date()
+        if to_day > utc_today:
+            to_day = utc_today
+        if from_day > to_day:
+            return []
         if from_day < to_day:
             try:
                 return self._reports_window(from_day, to_day, company_id)
