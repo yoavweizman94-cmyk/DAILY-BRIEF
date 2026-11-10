@@ -427,16 +427,6 @@
   ],
   "others": []
  },
- "1779727": {
-  "link": null,
-  "certain": false,
-  "known": [],
-  "others": [
-   "https://www.mizrahi-tefahot.co.il",
-   "http://www.mizrahi-tefahot.co.il/",
-   "https://www.mizrahi-tefahot.co.il/en/Bank/financial-reports/Pages/Default.aspx"
-  ]
- },
  "1778153": {
   "link": null,
   "certain": false,
@@ -459,6 +449,494 @@
   "others": [
    "http://www.bankleumi.co.il/",
    "https://www.leumi.co.il/he/Investor-Relations"
+  ]
+ },
+ "1780359": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": [
+   "https://www.mizrahi-tefahot.co.il",
+   "http://www.mizrahi-tefahot.co.il/",
+   "https://www.mizrahi-tefahot.co.il/en/Bank/financial-reports/Pages/Default.aspx"
+  ]
+ },
+ "1780295": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_une1q54JSBam_rgG0Qw9sQ",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_une1q54JSBam_rgG0Qw9sQ"
+  ],
+  "others": [
+   "http://www.menif.co.il/"
+  ]
+ },
+ "1778228": {
+  "link": "https://bankleumi-co-il.zoom.us/webinar/register/WN_CmpUtEj_Snq45ZlHtJzGtw",
+  "certain": true,
+  "known": [
+   "https://bankleumi-co-il.zoom.us/webinar/register/WN_CmpUtEj_Snq45ZlHtJzGtw"
+  ],
+  "others": [
+   "https://english.leumi.co.il/WnnnWn/Investor_Relations/6254/"
+  ]
+ },
+ "1779468": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_aL5cf3XJSaik-ctMNGQr9Q",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_aL5cf3XJSaik-ctMNGQr9Q"
+  ],
+  "others": [
+   "https://www.tadiran-group.co.il/investors"
+  ]
+ },
+ "1778616": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_9i11LUx_QlSlOfxxDsuY_w#/registration",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_9i11LUx_QlSlOfxxDsuY_w#/registration",
+   "https://us06web.zoom.us/webinar/register/WN_P-TO9c59TcqgZ9jylWmXNg#/registration"
+  ],
+  "others": [
+   "https://ir.maxstock.co.il"
+  ]
+ },
+ "1778525": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": []
+ },
+ "1778503": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": [
+   "https://investors.abra-it.com/",
+   "https://www.abra-it.com/investor-relations/",
+   "https://abra-it.com/"
+  ]
+ },
+ "1779031": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_EaoHDbgFTm2KiR2LtsM9rA",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_EaoHDbgFTm2KiR2LtsM9rA"
+  ],
+  "others": []
+ },
+ "1778206": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_74qKFBtiQZWiGdxiBYIeTg",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_74qKFBtiQZWiGdxiBYIeTg"
+  ],
+  "others": []
+ },
+ "1779185": {
+  "link": "https://zoom.us/webinar/register/WN_3ZN8J6zeTgqRR5BbXmSYbQ#/",
+  "certain": true,
+  "known": [
+   "https://zoom.us/webinar/register/WN_3ZN8J6zeTgqRR5BbXmSYbQ#/"
+  ],
+  "others": []
+ },
+ "1778916": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": []
+ },
+ "1778614": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": []
+ },
+ "1777148": {
+  "link": "https://zoom.us/j/94243197233",
+  "certain": true,
+  "known": [
+   "https://zoom.us/j/94243197233",
+   "https://zoom.us/j/91264073788"
+  ],
+  "others": [
+   "https://www.meitav.co.il/investor_relations/"
+  ]
+ },
+ "1777152": {
+  "link": "https://zoom.us/j/94243197233",
+  "certain": true,
+  "known": [
+   "https://zoom.us/j/94243197233",
+   "https://zoom.us/j/91264073788"
+  ],
+  "others": [
+   "https://www.meitav.co.il/en/investor_relations/"
+  ]
+ },
+ "1778586": {
+  "link": "https://protect.checkpoint.com/v2/r02/___https://www.veidan-conferencing.com/melisron___.YzJlOm1laXRhcmxhdzpjOm9mZmljZTM2NV9lbWFpbHNfYXR0YWNobWVudDo4OTY4YmU0MDM5MGM1Njk4NGZlYzFkMTJiZGY0YTg0Njo3OmNiM2Q6MGZlYjI5MGQ4YzhjNWZiOTYxMWY1MjA1MGQwMTI2YTFkYzQ0NDBhNjYzODhmMjFlN2Q4YTQ4ZjE5MTg0N2ViOTpwOlQ6Rg",
+  "certain": true,
+  "known": [
+   "https://protect.checkpoint.com/v2/r02/___https://www.veidan-conferencing.com/melisron___.YzJlOm1laXRhcmxhdzpjOm9mZmljZTM2NV9lbWFpbHNfYXR0YWNobWVudDo4OTY4YmU0MDM5MGM1Njk4NGZlYzFkMTJiZGY0YTg0Njo3OmNiM2Q6MGZlYjI5MGQ4YzhjNWZiOTYxMWY1MjA1MGQwMTI2YTFkYzQ0NDBhNjYzODhmMjFlN2Q4YTQ4ZjE5MTg0N2ViOTpwOlQ6Rg"
+  ],
+  "others": [
+   "https://protect.checkpoint.com/v2/r02/___https://www.melisron.co.il/___.YzJlOm1laXRhcmxhdzpjOm9mZmljZTM2NV9lbWFpbHNfYXR0YWNobWVudDo4OTY4YmU0MDM5MGM1Njk4NGZlYzFkMTJiZGY0YTg0Njo3OjU0Yjg6ODMwOGIyY2M2MzkzNTM3NzQ2NTE3NGNmOGM1ZDAzYjMwZDYwMDY2NjJiZjNmMmNkMjdmNWYzMzA3YTljYjRiYzpwOlQ6Rg",
+   "https://protect.checkpoint.com/v2/r02/___https://accessibledocs.ai/?utm_source=document_icon&utm_medium=file_embedded&utm_campaign=template_processing&utm_content=icon_top_right&document_id=52d21349-e567-4108-b272-d51a34578845___.YzJlOm1laXRhcmxhdzpjOm9mZmljZTM2NV9lbWFpbHNfYXR0YWNobWVudDo4OTY4YmU0MDM5MGM1Njk4NGZlYzFkMTJiZGY0YTg0Njo3OmMwZTE6YjlmYzFkNTY1NWQyOTY0NzdjYjc4MjNjZTM1Yjg4OThjNjI0NmMzODgxOGM0ZTg3NGJiZjA4NjJmZDA4MWQ4ZjpwOlQ6Rg"
+  ]
+ },
+ "1779414": {
+  "link": "https://zoom.us/webinar/register/WN_7z9yt09xRkGAbwUlgPPEbg#/registration",
+  "certain": true,
+  "known": [
+   "https://zoom.us/webinar/register/WN_7z9yt09xRkGAbwUlgPPEbg#/registration"
+  ],
+  "others": []
+ },
+ "1779892": {
+  "link": "https://www.veidan-conferencing.com/evogene",
+  "certain": true,
+  "known": [
+   "https://www.veidan-conferencing.com/evogene"
+  ],
+  "others": [
+   "http://www.evogene.com/"
+  ]
+ },
+ "1779676": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_ff_pOhkHQ0akdnlt4lvR1A#/registration",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_ff_pOhkHQ0akdnlt4lvR1A#/registration"
+  ],
+  "others": [
+   "https://ashot.co.il/investor-relations/"
+  ]
+ },
+ "1779723": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_NDSmFyXCTpm4bULCwbc4Cw",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_NDSmFyXCTpm4bULCwbc4Cw"
+  ],
+  "others": [
+   "https://www.tsgitsystems.com",
+   "https://www.tsgitsystems.com/"
+  ]
+ },
+ "1780296": {
+  "link": "https://us02web.zoom.us/j/82495342805",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/j/82495342805"
+  ],
+  "others": [
+   "https://satcom-gilat.co.il"
+  ]
+ },
+ "1780391": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_nVVCixgtSmeydw6kIsVgzw",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_nVVCixgtSmeydw6kIsVgzw"
+  ],
+  "others": []
+ },
+ "1779851": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_CWQpBB03RFqFWkWZiDdzAQ",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_CWQpBB03RFqFWkWZiDdzAQ"
+  ],
+  "others": [
+   "https://mer-group.com/investor-relations/"
+  ]
+ },
+ "1778670": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_cvAIZCdNTVW02sSx-_VDxw",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_cvAIZCdNTVW02sSx-_VDxw"
+  ],
+  "others": [
+   "https://nawigroup.com/"
+  ]
+ },
+ "1779039": {
+  "link": "https://www.veidan-conferencing.com/harel",
+  "certain": true,
+  "known": [
+   "https://www.veidan-conferencing.com/harel"
+  ],
+  "others": [
+   "https://pr.harel-group.co.il/he/",
+   "https://pr.harel-group.co.il/he"
+  ]
+ },
+ "1778797": {
+  "link": "https://protect.checkpoint.com/v2/r02/___https:/us02web.zoom.us/webinar/register/WN_fvkqPVSrSnKhyhMV4LtBqw___.YzJlOnBlYXJsY29oZW46YzpvZmZpY2UzNjVfZW1haWxzX2F0dGFjaG1lbnQ6ODg3ODRkMjg5ZmM0MDBmZWFjMjk3ZWE1M2MxZWVhOWE6NzozNzdjOmIzYzc2NjM3ZDk3OGYxNGYxZTFlZjIzODRiZjI2YzM0MTVlMTM3Yzc4YWEyY2RhNzRmOTVlMzNjY2FkYjA4ODU6cDpGOk4",
+  "certain": true,
+  "known": [
+   "https://protect.checkpoint.com/v2/r02/___https:/us02web.zoom.us/webinar/register/WN_fvkqPVSrSnKhyhMV4LtBqw___.YzJlOnBlYXJsY29oZW46YzpvZmZpY2UzNjVfZW1haWxzX2F0dGFjaG1lbnQ6ODg3ODRkMjg5ZmM0MDBmZWFjMjk3ZWE1M2MxZWVhOWE6NzozNzdjOmIzYzc2NjM3ZDk3OGYxNGYxZTFlZjIzODRiZjI2YzM0MTVlMTM3Yzc4YWEyY2RhNzRmOTVlMzNjY2FkYjA4ODU6cDpGOk4"
+  ],
+  "others": [
+   "https://eladsoft.com/"
+  ]
+ },
+ "1777225": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_6BoZWWB_QTigcq-so21KSg#/registration",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_6BoZWWB_QTigcq-so21KSg#/registration"
+  ],
+  "others": [
+   "https://michpaltech.co.il/he/home",
+   "https://www.michpal.co.il/"
+  ]
+ },
+ "1778084": {
+  "link": "https://us06web.zoom.us/j/87158753724",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/j/87158753724",
+   "https://topgummiceuticals.com/meetings/"
+  ],
+  "others": [
+   "https://tgum.com"
+  ]
+ },
+ "1778093": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_YxUTT_-1THahgrSqFV9Mdg",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_YxUTT_-1THahgrSqFV9Mdg"
+  ],
+  "others": [
+   "https://www.amalgroup.co.il/"
+  ]
+ },
+ "1779267": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_Q6mcmj2IS1qXC330tBM4ww",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_Q6mcmj2IS1qXC330tBM4ww"
+  ],
+  "others": [
+   "https://bsel.co.il"
+  ]
+ },
+ "1779336": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_4ijpzAMXSn-s9VTD5Ijr0w",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_4ijpzAMXSn-s9VTD5Ijr0w"
+  ],
+  "others": []
+ },
+ "1779544": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_6A0pnNguSMiA6N1IHrVbKg",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_6A0pnNguSMiA6N1IHrVbKg"
+  ],
+  "others": [
+   "https://www.yachin.co.il/investor-relations/"
+  ]
+ },
+ "1778707": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_bIab1FcoS1OPyXNts1_Aag",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_bIab1FcoS1OPyXNts1_Aag"
+  ],
+  "others": [
+   "https://lahavgroup.co.il"
+  ]
+ },
+ "1779449": {
+  "link": "https://www.veidan-conferencing.com/bazan",
+  "certain": true,
+  "known": [
+   "https://www.veidan-conferencing.com/bazan"
+  ],
+  "others": [
+   "https://www.bazan.co.il/page_18816",
+   "https://www.bazan.co.il/"
+  ]
+ },
+ "1779283": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_NvmfHek3SCeGUaMQ6vxfzw",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_NvmfHek3SCeGUaMQ6vxfzw"
+  ],
+  "others": []
+ },
+ "1779177": {
+  "link": "https://zoom.us/webinar/register/WN_68QvmnpeReufDlGj5wDJDA",
+  "certain": true,
+  "known": [
+   "https://zoom.us/webinar/register/WN_68QvmnpeReufDlGj5wDJDA"
+  ],
+  "others": []
+ },
+ "1777907": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_gid3uMhASfakGNbhG8_fBQ",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_gid3uMhASfakGNbhG8_fBQ",
+   "https://register-conf.media-server.com/register/BI8acceda871c943a0aa142daf3d3dc609"
+  ],
+  "others": [
+   "http://www.azrieligroup.com/"
+  ]
+ },
+ "1778454": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": [
+   "https://protect.checkpoint.com/v2/r02/___https://phoenixfinancial.co.il/he___.YzJlOmZpcm9uMTpjOm9mZmljZTM2NV9lbWFpbHNfYXR0YWNobWVudDpmMmI2MzNjMmRhZGEyODRmMDBiMTE5YTdmMDQ0YmQ0Zjo3Ojk1MTc6YjA3ZGU3OTI0ZDMyZWExZmI1YWMzOGQxMGEzYmY1NDk0OTg1NGJmYjQ4ZGY5ZTM3YWI0OWUzODdiYTY3YTU2MzpwOkY6Rg",
+   "https://bit.ly/fnx-financial-review-hebrew ",
+   "https://bit.ly/fnx-financial-review-english "
+  ]
+ },
+ "1778466": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": [
+   "https://protect.checkpoint.com/v2/r02/___https://phoenixfinancial.co.il/___.YzJlOmZpcm9uMTpjOm9mZmljZTM2NV9lbWFpbHNfYXR0YWNobWVudDpmMmI2MzNjMmRhZGEyODRmMDBiMTE5YTdmMDQ0YmQ0Zjo3OmQwYTE6OGFmYzFkNTkxNWQ5ODkwMmFiNDkzZWZlYmE4YTUzYTFkYjY1OGU0YWJhNjZkY2MyZThhNmMzYjYyMTBkMGEzMzpwOkY6Rg",
+   "https://protect.checkpoint.com/v2/r02/___https://bit.ly/fnx-financial-review-hebrew___.YzJlOmZpcm9uMTpjOm9mZmljZTM2NV9lbWFpbHNfYXR0YWNobWVudDpmMmI2MzNjMmRhZGEyODRmMDBiMTE5YTdmMDQ0YmQ0Zjo3OmM0NDY6MWZlNWEyOGNkMmQwYzcyNjRhNjMyOWJlODE4MzhjMTA5YzI0ZDBjMDU0ODgyYjYzNjM5Zjk0ZmVkZDYxZjAwZTpwOkY6Rg",
+   "https://protect.checkpoint.com/v2/r02/___https://bit.ly/fnx-financial-review-english___.YzJlOmZpcm9uMTpjOm9mZmljZTM2NV9lbWFpbHNfYXR0YWNobWVudDpmMmI2MzNjMmRhZGEyODRmMDBiMTE5YTdmMDQ0YmQ0Zjo3OjdmZWM6YTUzYmQxNDViOGMyMzJlYTJlNjJjYTdmYWJlZGU0YTNmNDdjYmI2MTQ5Y2ExYWFmYjlhNTgxZTkxMmIzZDk1MjpwOkY6Rg"
+  ]
+ },
+ "1778086": {
+  "link": "https://protect.checkpoint.com/v2/r02/___https:/us02web.zoom.us/webinar/register/WN_xknQeo_BT52dQDb17LEQyg___.YzJlOmZpcm9uMTpjOm9mZmljZTM2NV9lbWFpbHNfYXR0YWNobWVudDo0MTllZGU4MmY1NzRmNjNkZjA1ZTdlMzlmYjg5ZTViMjo3OmNmODc6N2UyMDFlZDhlNmZiZWFkMWE1ZTk5ZDI2MWQwYzI0YTU0ZTEwOTI2NzBkZDBmZWFjYWJiODNmN2M5ZjQyYmU0MjpwOlQ6Rg",
+  "certain": true,
+  "known": [
+   "https://protect.checkpoint.com/v2/r02/___https:/us02web.zoom.us/webinar/register/WN_xknQeo_BT52dQDb17LEQyg___.YzJlOmZpcm9uMTpjOm9mZmljZTM2NV9lbWFpbHNfYXR0YWNobWVudDo0MTllZGU4MmY1NzRmNjNkZjA1ZTdlMzlmYjg5ZTViMjo3OmNmODc6N2UyMDFlZDhlNmZiZWFkMWE1ZTk5ZDI2MWQwYzI0YTU0ZTEwOTI2NzBkZDBmZWFjYWJiODNmN2M5ZjQyYmU0MjpwOlQ6Rg"
+  ],
+  "others": [
+   "http://www.ashtrom.co.il/",
+   "https://protect.checkpoint.com/v2/r02/___https:/www.ashtrom.co.il/investors-relations___.YzJlOmZpcm9uMTpjOm9mZmljZTM2NV9lbWFpbHNfYXR0YWNobWVudDo0MTllZGU4MmY1NzRmNjNkZjA1ZTdlMzlmYjg5ZTViMjo3OjIwMDM6YzMyNzVlODFlNmRiNDE5NGViN2FiYTkzMTg3NGNlODY4OTdiY2Q1MmM5ZjBlY2ZiOGQwMDJmYzBmNWY0YjU0OTpwOlQ6Rg"
+  ]
+ },
+ "1777967": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_LSbimMIvReaNpYp_s-Fl8g",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_LSbimMIvReaNpYp_s-Fl8g"
+  ],
+  "others": []
+ },
+ "1780196": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_CXrckGuQRs6ewHlwFqXwzw",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_CXrckGuQRs6ewHlwFqXwzw"
+  ],
+  "others": [
+   "http://www.qualitau.com/",
+   "https://link.accessidoc.com/_ENBfMFXRSFAT6LCBhFif0Je_ANnhb6vSDzZTJJIZtE1uBdyEKw5BQr7Ja57WMntOadmWqZqRCJyNzmXToJ9MMJHQc"
+  ]
+ },
+ "1779725": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_y9tlR1ioTx2G2vXFE3G13w",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_y9tlR1ioTx2G2vXFE3G13w"
+  ],
+  "others": [
+   "https://baladi.co.il",
+   "https://baladi.co.il/"
+  ]
+ },
+ "1779896": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_Wo_ejQOzQyeVKb4kI32NMw#/registration",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_Wo_ejQOzQyeVKb4kI32NMw#/registration"
+  ],
+  "others": [
+   "https://rp-optical-lab.com/"
+  ]
+ },
+ "1779437": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_CTP8jBzwQza2WAjELAX3lQ",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_CTP8jBzwQza2WAjELAX3lQ"
+  ],
+  "others": [
+   "https://rimongrp.com/he/"
+  ]
+ },
+ "1780236": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_bxHGynhJRHSalCyG-fRGeg",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_bxHGynhJRHSalCyG-fRGeg"
+  ],
+  "others": [
+   "https://www.afcon.co.il/"
+  ]
+ },
+ "1777820": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_404a6c6zTJ-75KPTfemMTw",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_404a6c6zTJ-75KPTfemMTw"
+  ],
+  "others": []
+ },
+ "1779073": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_pJZrN1DWQTeukmDqyVcUjA#/registration",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_pJZrN1DWQTeukmDqyVcUjA#/registration"
+  ],
+  "others": [
+   "https://ir.nofar-energy.com/investor-relations",
+   "https://link.accessidoc.com/D_ZM3EmAl7alzZz8PvinEMCecnHC6t7pwIzg_w1DDst5hJHQvecNu-WZnfKcMpbjDwlMP1dd4g_4WtxfoPPUkrDhGU"
+  ]
+ },
+ "1779147": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_pXaFwLp7QsWybnjLar2EBg",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_pXaFwLp7QsWybnjLar2EBg"
+  ],
+  "others": []
+ },
+ "1779049": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_ashKJlbhRFm93eTbO2oQYA",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_ashKJlbhRFm93eTbO2oQYA"
+  ],
+  "others": [
+   "https://accel.co.il/"
+  ]
+ },
+ "1779639": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_9m29yVHSQgCkTy8fGQZ1ow",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_9m29yVHSQgCkTy8fGQZ1ow"
+  ],
+  "others": []
+ },
+ "1779545": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_RTgHfitKRhGesGfMv2C-DA",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_RTgHfitKRhGesGfMv2C-DA"
+  ],
+  "others": [
+   "https://gotoglobal.com/he/goto-israel"
   ]
  }
 }
