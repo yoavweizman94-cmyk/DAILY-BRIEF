@@ -1879,9 +1879,207 @@
     return h;
   }
 
+  // ---------------------------------------------------------------- לוח השבוע
+  //
+  // **מי מפרסם דוח כספי בכל יום, בסגנון לוחות הדוחות שברשתות** (יואב, 10/11/2026, לפי
+  // דוגמה ששלח): עמודה לכל יום, אריח לכל חברה עם הלוגו שלה ושמה מתחתיו, ותג טלפון
+  // זהוב — עם השעה — לחברה שמקיימת גם שיחת ועידה. הנתונים מלוח האירועים של מאיה
+  // (ingest/maya_calls.py), והלוגו מאתר החברה עצמה (ingest/logos_pull.py). בלי לוגו —
+  // השם עצמו הוא האריח. **לוגו בהיר** (לבן על שקוף, ללוגו שיושב על כותרת כהה) מצויר
+  // על אריח כהה: על אריח לבן הוא נעלם — נמדד בלוגו של דלתא גליל.
+  var LOGOS = {};
+  function lightImage(im) {
+    try {
+      var w = 64, h = Math.max(8, Math.round(64 * im.naturalHeight / im.naturalWidth));
+      var c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      var cx = c.getContext("2d");
+      cx.drawImage(im, 0, 0, w, h);
+      // בהיר = רוב הפיקסלים הנראים כמעט לבנים. ממוצע לבד החטיא את דלתא גליל: אותיות
+      // לבנות, ולצידן עלה ירוק ושורה אפורה שהורידו את הממוצע מתחת לסף.
+      // ולוגו עם רקע לבן אטום (בריינסוויי, אבגול) אינו "בהיר": הלבן שלו הוא הרקע, ועל
+      // אריח לבן הוא נבלע כמו שצריך. בהיר = שקוף ברובו, והחלק הנראה לבן.
+      var px = cx.getImageData(0, 0, w, h).data, s = 0, n = 0, white = 0, all = px.length / 4;
+      for (var i = 0; i < px.length; i += 4) {
+        if (px[i + 3] < 60) { continue; }
+        var lum = 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2];
+        s += lum; n += 1;
+        if (lum > 228) { white += 1; }
+      }
+      return n > 20 && (all - n) / all > 0.1 && (s / n > 205 || white / n > 0.55);
+    } catch (e) { return false; }
+  }
+  // **קנבס אינו מחכה לתמונה.** כל הלוגואים של המטען נטענים לפני הציור, עד שש שניות;
+  // לוגו שלא נטען — האריח מציג את השם.
+  function preloadLogos(d) {
+    var srcs = [];
+    ((d && d.blocks) || []).forEach(function (b) {
+      if (b.type !== "week") { return; }
+      (b.days || []).forEach(function (day) {
+        (day.items || []).forEach(function (it) {
+          if (it.lg && !LOGOS[it.lg] && srcs.indexOf(it.lg) < 0) { srcs.push(it.lg); }
+        });
+      });
+    });
+    return Promise.all(srcs.map(function (src) {
+      return new Promise(function (res) {
+        var im = new Image(), over = false;
+        function fin(ok) {
+          if (over) { return; }
+          over = true;
+          LOGOS[src] = ok && im.naturalWidth && im.naturalHeight ? { img: im, light: lightImage(im) } : { img: null };
+          res();
+        }
+        im.onload = function () { fin(true); };
+        im.onerror = function () { fin(false); };
+        setTimeout(function () { fin(false); }, 6000);
+        im.src = src;
+      });
+    }));
+  }
+
+  // סמל השפופרת (Material Icons, "call", ברשיון Apache 2.0) — וקטור ולא תו: "☎" אינו
+  // בגופני האתר, וקנבס מצייר במקומו ריבוע.
+  var PHONE = "M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 " +
+    "2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 " +
+    "0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z";
+  var PHONE_P = null;
+  function phoneBadge(x, cx, cy, r) {
+    x.fillStyle = C.accent;
+    x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
+    if (!PHONE_P && window.Path2D) {
+      try { PHONE_P = new Path2D(PHONE); } catch (e) { PHONE_P = null; }
+    }
+    if (!PHONE_P) { return; }
+    var k = (r * 1.2) / 24;
+    x.save();
+    x.translate(cx - 12 * k, cy - 12 * k); x.scale(k, k);
+    x.fillStyle = "#0A111F"; x.fill(PHONE_P);
+    x.restore();
+  }
+  function fitText(x, text, max) {
+    var t = String(text || "");
+    if (x.measureText(t).width <= max) { return t; }
+    while (t.length > 1 && x.measureText(t + "…").width > max) { t = t.slice(0, -1); }
+    return t + "…";
+  }
+
+  // מעל split חברות ביום — שני אריחים בשורה, כדי שיום עמוס לא יימתח לגובה פי שניים מהשאר
+  var WK = { gap: 14, headH: 66, split: 5, band: 26, nameH: 28, tile1: 108, tile2: 96, pad: 8 };
+  function weekTile(x, it, l, t, w, h) {
+    x.direction = "rtl"; x.textAlign = "center";
+    if (it.more) {
+      x.strokeStyle = C.line; x.lineWidth = 1.5; x.setLineDash([6, 5]);
+      rr(x, l + 0.75, t + 0.75, w - 1.5, h - 1.5, 12); x.stroke(); x.setLineDash([]);
+      x.fillStyle = C.muted; x.font = F(700, 18);
+      x.fillText("ועוד " + it.more, l + w / 2, t + h / 2 + 7);
+      return;
+    }
+    var info = it.lg ? LOGOS[it.lg] : null, im = info && info.img, dark = !!(info && info.light);
+    x.fillStyle = dark ? "#1C2A44" : "#FFFFFF";
+    rr(x, l, t, w, h, 12); x.fill();
+    var ink = dark ? "#F3EEE4" : "#13243B", sub = dark ? "#B7C0CE" : "#55667C", px = 9;
+    var top = t + WK.band, bottom = t + h - (im ? WK.nameH : 6);
+    if (im) {
+      var aw = w - px * 2, ah = bottom - top - 4;
+      var k = Math.min(aw / im.naturalWidth, ah / im.naturalHeight);
+      var iw = im.naturalWidth * k, ih = im.naturalHeight * k;
+      x.drawImage(im, l + (w - iw) / 2, top + (ah - ih) / 2, iw, ih);
+      x.fillStyle = sub; x.font = F(600, 16);
+      x.fillText(fitText(x, it.n, w - px * 2), l + w / 2, t + h - 10);
+    } else {
+      var nm = nameLines(x, it.n || "", w - px * 2), s = nm.s, lines = nm.lines;
+      var lh = Math.round(s * 1.15), bh = lines.length * lh;
+      var y = top + (bottom - top - bh) / 2 + Math.round(s * 0.85);
+      x.fillStyle = ink; x.font = F(800, s);
+      lines.forEach(function (ln, i) { x.fillText(ln, l + w / 2, y + i * lh); });
+    }
+    if (it.c) {
+      var bx = l + 15, by = t + 14;
+      phoneBadge(x, bx, by, 10);
+      if (it.t) {
+        x.direction = "ltr"; x.textAlign = "left";
+        x.fillStyle = dark ? C.accent2 : "#8A5D0B"; x.font = F(700, 16);
+        // אריח צר: "24.11 10:00" גלש לאריח השכן — נשאר התאריך, שהוא מה שמבדיל שיחה ביום אחר
+        var tt = it.t, room = w - (bx + 14 - l) - 6;
+        if (x.measureText(tt).width > room) { tt = tt.split(" ")[0]; }
+        if (x.measureText(tt).width <= room) { x.fillText(tt, bx + 14, by + 6); }
+      }
+    }
+  }
+  // **שם בשתי שורות לכל היותר, בלי לשבור מילה.** wrap שובר מילה שאינה נכנסת לפי
+  // תווים, ובאריח צר יצאו "ישרוט ל" ו"הפניק ס". כאן הגופן קטן עד שכל מילה נכנסת
+  // שלמה, ורק אם גם בגופן המינימלי אינה נכנסת — היא מקוצרת בשלוש נקודות.
+  function nameLines(x, text, max) {
+    var words = String(text).split(/\s+/).filter(Boolean), s, i;
+    for (s = 22; s >= 16; s -= 1) {
+      x.font = F(800, s);
+      var ok = words.every(function (wd) { return x.measureText(wd).width <= max; });
+      if (!ok) { continue; }
+      var lines = [], cur = "";
+      for (i = 0; i < words.length; i += 1) {
+        var cand = cur ? cur + " " + words[i] : words[i];
+        if (!cur || x.measureText(cand).width <= max) { cur = cand; } else { lines.push(cur); cur = words[i]; }
+      }
+      if (cur) { lines.push(cur); }
+      if (lines.length <= 2) { return { s: s, lines: lines }; }
+    }
+    x.font = F(800, 16);
+    var two = [];
+    words.forEach(function (wd) {
+      if (two.length < 2) { two.push(fitText(x, wd, max)); } else { two[1] = fitText(x, two[1] + " " + wd, max); }
+    });
+    return { s: 16, lines: two.length ? two : [""] };
+  }
+  function weekBlock(x, b, g, draw) {
+    var days = b.days || [];
+    if (!days.length) { return 0; }
+    var n = days.length, gap = WK.gap;
+    var colW = (g.inner - gap * (n - 1)) / n;
+    var cols = days.map(function (day) {
+      var items = (day.items || []).slice();
+      if (day.more) { items.push({ more: day.more }); }
+      var two = items.length > WK.split, per = two ? 2 : 1, th = two ? WK.tile2 : WK.tile1;
+      var rows = Math.ceil(items.length / per);
+      return { day: day, items: items, per: per, th: th, h: rows ? rows * th + (rows - 1) * WK.pad : 60 };
+    });
+    var bodyH = Math.max.apply(null, cols.map(function (c) { return c.h; }));
+    var legendH = 46, h = WK.headH + 12 + bodyH + legendH;
+    if (!draw) { return h; }
+    var top = g.top;
+    cols.forEach(function (c, k) {
+      var right = g.right - k * (colW + gap), left = right - colW;
+      x.fillStyle = C.soft; rr(x, left, top, colW, WK.headH, 14); x.fill();
+      x.direction = "rtl"; x.textAlign = "center";
+      x.fillStyle = C.accent; x.font = F(800, 24);
+      x.fillText(c.day.label || "", left + colW / 2, top + 31);
+      x.fillStyle = C.muted; x.font = F(500, 17);
+      x.fillText(c.day.date || "", left + colW / 2, top + 55);
+      var y0 = top + WK.headH + 12;
+      if (!c.items.length) {
+        x.fillStyle = C.faint; x.font = F(400, 17);
+        x.fillText("אין פרסומים", left + colW / 2, y0 + 34);
+        return;
+      }
+      var tw = c.per === 2 ? (colW - WK.pad) / 2 : colW;
+      c.items.forEach(function (it, i) {
+        var row = Math.floor(i / c.per), pos = i % c.per;
+        var tr = right - pos * (tw + WK.pad);
+        weekTile(x, it, tr - tw, y0 + row * (c.th + WK.pad), tw, c.th);
+      });
+    });
+    var ly = top + WK.headH + 12 + bodyH + 32;
+    phoneBadge(x, g.right - 10, ly - 6, 10);
+    x.direction = "rtl"; x.textAlign = "right";
+    x.fillStyle = C.muted; x.font = F(400, 17);
+    x.fillText(b.legend || "החברה מקיימת גם שיחת ועידה — והשעה לצד הסמל", g.right - 28, ly);
+    return h;
+  }
+
   var BLOCKS = { stats: statsBlock, notes: notesBlock, table: tableBlock, bars: barsBlock,
     columns: columnsBlock, reports: reportsBlock, lines: linesBlock, dbars: dbarsBlock,
-    rank: rankBlock, dumbbell: dumbbellBlock, curves: curvesBlock, cards: cardsBlock };
+    rank: rankBlock, dumbbell: dumbbellBlock, curves: curvesBlock, cards: cardsBlock,
+    week: weekBlock };
 
   // **כל גוש מלבד האריחים והעיקרים — בכרטיס לבן, וכותרתו מעליו.** הריפוד
   // הפנימי לפי הסוג: טבלה ודיווחים ממלאים את הכרטיס עד הקצה (שורת הכותרת
@@ -2528,6 +2726,8 @@
 
   function render(d) {
     setTheme(d.theme);
+    // רוחב מפורש למטען שזקוק לו — לוח שבוע עם שישה ימים צר מדי ב-1200
+    if (d.width) { W0 = WMAX = d.width; }
     CUR_KICKER = d.kicker || "";
     // **כרטיס של מתואמות בלבד — בזהב.** הצבע שייך לסדרה: מתואמות זהובות בכל כרטיס,
     // ולכן כשהן הסדרה היחידה (עמודות היום, הגדולות, פס ההיקף) הסדרה הראשונה זהובה.
@@ -2742,7 +2942,7 @@
         setTimeout(function () { label(b, was); b.disabled = false; }, 2400);
       }
       var d0 = cardFor(b);
-      fontsReady(d0 && d0.theme).then(function () {
+      fontsReady(d0 && d0.theme).then(function () { return preloadLogos(d0); }).then(function () {
         var d = d0;
         if (!d) { reset("אין נתונים"); return; }
         save(render(d), (d.file || "tlv-otc") + ".png", function () {
@@ -2789,4 +2989,5 @@
   window.tlvRender = render;
   window.tlvReportsCard = reportsCard;
   window.tlvFontsReady = fontsReady;
+  window.tlvPreloadLogos = preloadLogos;
 })();

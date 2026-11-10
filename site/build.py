@@ -34,6 +34,7 @@ import meetings
 import mcp_data
 import impact
 import share
+import reportcal
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "site" / "dist"
@@ -698,6 +699,12 @@ def load_calls() -> list[dict]:
     return data.get("calls") or []
 
 
+def load_report_dates() -> list[dict]:
+    """מועדי פרסום הדוחות מלוח האירועים של מאיה (ingest/maya_calls.py, מ-10/11/2026)."""
+    data = load_json(ROOT / "output" / "calls" / "upcoming.json") or {}
+    return data.get("reports") or []
+
+
 def call_link_cell(c: dict, root: str = "") -> str:
     """התא שמסביר איך נכנסים לשיחה — כולל המקרים שבהם אי אפשר לדעת.
 
@@ -735,12 +742,51 @@ def calls_panel(calls: list[dict], day: str) -> str:
             '<p class="stamp"><a href="calls.html">כל השיחות הקרובות →</a></p>')
 
 
-def calls_page(calls: list[dict], today: str) -> str:
+def calls_page(calls: list[dict], today: str, reports: list[dict] | None = None) -> str:
     upcoming = [c for c in calls if (c.get("date") or "") >= today]
     past = [c for c in calls if (c.get("date") or "") < today]
-    if not calls:
+    if not calls and not reports:
         return ('<h1>שיחות ועידה</h1><p>אין נתונים. '
                 '<code>ingest/maya_calls.py</code> לא רץ עדיין.</p>')
+
+    def call_rows(rows: list[dict]) -> str:
+        return "".join(f'<tr><td class="t">{c.get("time") or "—"}</td>'
+                       f'<td>{c.get("company") or "—"}</td>'
+                       f'<td class="q">{c.get("period") or ""}</td>'
+                       f'<td>{call_link_cell(c)}</td></tr>' for c in rows)
+
+    # **לפי שבוע ויום: מי מפרסם דוח, ומי מקיים שיחה** (site/reportcal.py, מ-10/11/2026).
+    # לכל שבוע — כפתור לתמונה בסגנון לוחות הדוחות שברשתות.
+    weeks = reportcal.weeks(calls, reports or [], today)
+    secs = []
+    for w in weeks:
+        key = "wk-" + w["start"]
+        n_rep = sum(1 for d in w["days"] for it in d["items"])
+        n_call = sum(1 for d in w["days"] for it in d["items"] if it["c"])
+        days_html = []
+        for d in w["days"]:
+            if d["date"] < today:
+                continue
+            iso = d["date"]
+            dname = reportcal.DAY_HE[date.fromisoformat(iso).weekday()]
+            # שיחה בלי הודעת פרסום (co) מופיעה בטבלת השיחות שמתחת, לא ברשימת המפרסמים
+            reps = [it for it in d["items"] if not it.get("co")]
+            cl = sorted(d["calls"], key=lambda c: (c.get("time") or "", c.get("company") or ""))
+            h = (f'<div class="rc-day"><h3>יום {dname} {iso[8:10]}/{iso[5:7]} '
+                 f'<span class="au-cnt">{len(d["items"])} חברות · {len(cl)} שיחות</span></h3>')
+            if reps:
+                h += (f'<p class="rc-reps"><span class="rc-lbl">מפרסמים דוח כספי:</span> '
+                      f'{reportcal.chips(reps)}</p>')
+            if cl:
+                h += ('<div class="tw"><table class="calls"><thead><tr><th>שעה</th><th>חברה</th>'
+                      f'<th>רבעון</th><th>כניסה</th></tr></thead><tbody>{call_rows(cl)}</tbody></table></div>')
+            days_html.append(h + "</div>")
+        if not days_html:
+            continue
+        secs.append(f'<section class="rc-week"><div class="rc-head"><h2>שבוע {reportcal.week_range(w)}</h2>'
+                    f'<span class="au-cnt">{n_rep} חברות מפרסמות · {n_call} עם שיחת ועידה</span>'
+                    f'{otc.png_button("ייצוא תמונה לשבוע", key=key)}</div>'
+                    f'{otc.embed(key, reportcal.image(w))}{"".join(days_html)}</section>')
 
     def table(rows: list[dict]) -> str:
         out, seen_day = [], None
@@ -758,21 +804,25 @@ def calls_page(calls: list[dict], today: str) -> str:
                 f'<tbody>{"".join(out)}</tbody></table></div>')
 
     n_link = sum(1 for c in upcoming if c.get("link"))
-    body = ('<h1>שיחות ועידה</h1>'
-            '<p class="lead">שיחות סיכום רבעון של חברות נסחרות, לפי לוח האירועים '
-            'של מאיה. קישור הכניסה נשלף מדיווח החברה עצמו. '
+    n_rep = sum(1 for r in reports or [] if (r.get("date") or "") >= today)
+    body = ('<h1>שיחות ועידה ודוחות</h1>'
+            '<p class="lead">מי מפרסם דוח כספי בכל יום ומי מקיים שיחת ועידה, לפי לוח האירועים '
+            'של מאיה — כולל חברות שרק הודיעו מתי יפרסמו את הדוח. קישור הכניסה לשיחה נשלף מדיווח '
+            f'החברה עצמו. לכל שבוע אפשר לייצא תמונה. {reportcal.PHONE_SVG} — החברה מקיימת שיחת ועידה. '
             'שיחות שכבר התקיימו — <a href="transcripts.html">סיכומי התמלילים</a>.</p>'
-            f'<p class="stamp">{len(upcoming)} שיחות קרובות · '
+            f'<p class="stamp">{n_rep} מועדי פרסום קרובים · {len(upcoming)} שיחות קרובות · '
             f'{n_link} עם קישור כניסה</p>')
-    body += table(upcoming) if upcoming else "<p>אין שיחות קרובות.</p>"
+    body += "".join(secs) if secs else "<p>אין דוחות או שיחות קרובים.</p>"
     if past:
         body += f'<h2>שיחות שהתקיימו</h2>{table(past[::-1])}'
     body += ('<p class="fineprint">מקור: מאיה. לוח האירועים אינו כולל את קישור '
              'הכניסה — הוא מחולץ מגוף דיווח החברה, ולכן חברה שלא פרסמה קישור '
              'מסומנת ככזו במקום לנחש. חברה עם שתי שיחות באותו יום (עברית '
              'ואנגלית) מפרסמת בדרך כלל שני קישורים בדיווח אחד, ואי אפשר לדעת '
-             'איזה שייך לאיזו — שניהם מוצגים.</p>')
-    return body
+             'איזה שייך לאיזו — שניהם מוצגים. מועד הפרסום של הדוח הוא תאריך בלבד: '
+             'הלוח אינו מציין שעה. בתמונת השבוע החברות מסודרות לפי שווי השוק במאיה, '
+             'והלוגו נלקח מאתר החברה; חברה שהלוגו שלה לא נמצא מופיעה בשמה.</p>')
+    return body + (otc.export_js() if secs else "")
 
 
 TOPIC_MIN_ITEMS = 3
@@ -1412,9 +1462,15 @@ def main() -> int:
     else:
         print("::notice::עסקאות מתואמות: אין נתונים (output/jumbo ריק) — הלשוניות אינן מוצגות")
 
+    # לוגואים של החברות לתמונת השבוע (ingest/logos_pull.py) — באותו מקור כמו העמוד, כדי
+    # שהקנבס לא "יוכתם" ויוכל לייצא. בלי המניפסט: כתובות המקור אינן צריכות להיות באתר.
+    _logos = ROOT / "output" / "logos"
+    if _logos.is_dir():
+        shutil.copytree(_logos, OUT / "logos", dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("manifest.json"))
     (OUT / "calls.html").write_text(
-        PAGE.format(title=f"שיחות ועידה · {site_title}", site_title=site_title,
-                    root="", body=calls_page(calls, date.today().isoformat())),
+        PAGE.format(title=f"שיחות ועידה ודוחות · {site_title}", site_title=site_title,
+                    root="", body=calls_page(calls, date.today().isoformat(), load_report_dates())),
         encoding="utf-8")
 
     # שכבת ה-JSON של שרת ה-MCP (site/functions/api/mcp/). נבנית מאותם

@@ -696,6 +696,22 @@ li.fil .ax:hover { color: var(--accent); border-color: var(--accent); }
 
 /* ---------- שיחות ועידה ---------- */
 
+/* לוח הדוחות בעמוד שיחות הוועידה (site/reportcal.py): שבוע, יום, ומי מפרסם */
+section.rc-week { margin: 1.4rem 0 2rem; }
+.rc-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--border-strong); padding-bottom: 0.45rem; }
+.rc-head h2 { margin: 0; }
+.rc-head .otc-png { margin-inline-start: auto; }
+.rc-day { margin: 0.9rem 0 0.4rem; }
+.rc-day h3 { margin: 0 0 0.4rem; font-size: 1rem; }
+.rc-reps { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0 0 0.6rem; }
+.rc-lbl { color: var(--muted); font-size: 0.85rem; margin-inline-end: 0.2rem; }
+.rc-chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.12rem 0.55rem;
+  border: 1px solid var(--border); border-radius: 999px; font-size: 0.85rem; color: var(--fg);
+  text-decoration: none; background: var(--bg); }
+a.rc-chip:hover { border-color: var(--accent); color: var(--accent); }
+.rc-chip.rc-call { border-color: var(--accent); }
+svg.rc-ph { width: 0.95em; height: 0.95em; color: var(--accent); vertical-align: -0.12em; flex: none; }
 table.calls { font-size: 0.89rem; }
 table.calls td.t { white-space: nowrap; color: var(--fg); font-weight: 600; }
 table.calls td.q { color: var(--faint); font-size: 0.79rem; white-space: nowrap; }

@@ -1,0 +1,85 @@
+name: Report Calendar
+
+# לוח הדוחות והשיחות בעמוד שיחות הוועידה (calls.html): מי מפרסם דוח כספי בכל יום, מי
+# מקיים שיחת ועידה, והלוגואים לתמונת השבוע. יואב, 10/11/2026.
+#
+# · ingest/maya_calls.py — לוח האירועים של מאיה: שיחות ועידה ומועדי פרסום דוחות. רץ גם
+#   בכל מהדורת ברייף; כאן הוא רץ כדי שהעמוד יתעדכן גם בלי ברייף, ולפני הלוגואים —
+#   שנמשכים לחברות שבלוח.
+# · ingest/logos_pull.py — הלוגו של כל חברה מהאתר שלה (הכתובת ממאיה), בלי מודל ובלי עלות.
+#
+# לא נוגע בריפו הקוד: מטמון קישורי השיחות (data/calls_links.json) מקובע בצנרת הברייף,
+# וכאן הוא רק נקרא. התוכן — הלוח והלוגואים — נדחף לריפו התוכן, והאתר נבנה ונפרס.
+
+on:
+  schedule:
+    - cron: "30 4 * * *"       # 06:30/07:30 בישראל — לפני מהדורת הבוקר ופתיחת המסחר
+    - cron: "30 13 * * 0-4"    # 15:30/16:30 — הודעות שהתפרסמו במהלך היום
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: report-calendar
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Jerusalem
+
+jobs:
+  calendar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pillow
+
+      - name: Maya schedule (calls and report dates)
+        run: python ingest/maya_calls.py || echo "::warning title=לוח האירועים של מאיה לא נמשך::העמוד יציג את הלוח הקודם."
+
+      # כשל כאן אינו מפיל: חברה בלי לוגו מופיעה בשמה. הלוג ציבורי — מספרים בלבד.
+      - name: Company logos
+        run: python ingest/logos_pull.py || echo "::warning title=הלוגואים לא נמשכו::תמונת השבוע תציג שמות."
+
+      - name: Save content
+        run: CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push calendar
+
+      # התוכן נמשך שוב לפני הבנייה: צנרת אחרת עשויה הייתה לדחוף מאז, ובנייה על
+      # עותק ישן הייתה דורסת באתר תוכן חדש יותר.
+      - name: Refresh content before build
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Build site
+        run: python site/build.py
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Check inline JS
+        run: python scripts/check_inline_js.py
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
+          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
+            echo "::error::הפריסה לא החזירה כתובת"; exit 1; }

@@ -49,6 +49,35 @@ CACHE = ROOT / "data" / "calls_links.json"
 AHEAD_DAYS = 180
 KEEP_PAST_DAYS = 30       # כמה זמן לשמור שיחות שכבר התקיימו
 
+# **הלוח מחזיר 30 רשומות לבקשה, והשאר בעמודים (pageNumber).** ההערה למעלה פירשה
+# את ה-30 כסך הכל, ולכן עד 10/11/2026 נאספו רק 30 השיחות הראשונות בכל טווח —
+# בשבוע של 10/11 החלון של 21 ימים הסתיים ב-17/11, אף שהיו שיחות גם אחריו.
+# pageSize נדחה ב-HTTP 400; page ו-skip מתעלמים. עוצרים בעמוד קצר או בעמוד חוזר.
+PAGE_ROWS = 30
+MAX_PAGES = 60
+
+# eventTypeId=2 — "פרסום דוחות": החברות שהודיעו מתי יפרסמו דוח כספי, גם בלי שיחה.
+# יואב, 10/11/2026: "לכל יום — גם החברות שרק הודיעו שיפרסמו דוח". לפרסום הדוח אין
+# שעה בלוח (scheduledTime ריק), לשיחה יש.
+EV_CALL, EV_REPORT = 1, 2
+
+
+def schedule(s, event_type: int, from_d: date, to_d: date) -> list[dict]:
+    """כל הרשומות בלוח האירועים של מאיה לטווח, על פני כל העמודים."""
+    out, seen = [], set()
+    for page in range(1, MAX_PAGES + 1):
+        body = {"fromDate": from_d.isoformat(), "toDate": to_d.isoformat(),
+                "by": "company", "eventTypeId": event_type, "pageNumber": page}
+        rows = s._post("/api/v1/corporate-actions/financial-reports-schedule", body).json() or []
+        fresh = [r for r in rows if r.get("id") not in seen]
+        if not fresh:
+            break
+        seen.update(r.get("id") for r in fresh)
+        out += fresh
+        if len(rows) < PAGE_ROWS:
+            break
+    return out
+
 # מארחי ועידה מוכרים — קישור אצלם הוא כמעט תמיד קישור הכניסה עצמו
 HOSTS = ("zoom.us", "veidan-conferencing", "teams.microsoft", "teams.live",
          "webcast", "webinar", "choruscall", "media-server", "gcs-web",
@@ -207,13 +236,54 @@ def load_previous() -> dict:
         return {}
 
 
+def load_previous_reports() -> dict:
+    """מועדי פרסום שכבר נאספו — כמו השיחות, ה-API אינו מחזיר עבר."""
+    try:
+        old = json.loads((SITE_OUT / "upcoming.json").read_text(encoding="utf-8"))
+        return {f"{r.get('company_id')}|{r.get('date')}|{r.get('period')}": r
+                for r in old.get("reports") or []}
+    except Exception:
+        return {}
+
+
+def reports_schedule(s, today: date, calls: list[dict]) -> list[dict]:
+    """מי הודיע מתי יפרסם דוח כספי, ואם יש לו גם שיחת ועידה על אותו דוח.
+
+    השיוך לשיחה: אותו דיווח במאיה (reportId — החברה מודיעה על הדוח ועל השיחה
+    באותה הודעה), ואם אין — אותה חברה, אותה תקופה ואותה שנה."""
+    by_rid = {str(c["report_id"]): c for c in calls if c.get("report_id")}
+    by_key = {(c.get("company_id"), c.get("period"), c.get("year")): c for c in calls}
+    out = []
+    for r in schedule(s, EV_REPORT, today, today + timedelta(days=AHEAD_DAYS)):
+        rid = r.get("reportId")
+        call = by_rid.get(str(rid)) or by_key.get((r.get("companyId"), r.get("period"), r.get("year")))
+        out.append({
+            "company": r.get("companyName"),
+            "company_id": r.get("companyId"),
+            "date": (r.get("scheduledDate") or "")[:10],
+            "period": r.get("period"),
+            "year": r.get("year"),
+            "report_id": rid,
+            "report_url": f"https://maya.tase.co.il/he/reports/{rid}" if rid else None,
+            "call_date": call.get("date") if call else None,
+            "call_time": call.get("time") if call else None,
+        })
+    merged = load_previous_reports()
+    for r in out:
+        merged[f"{r['company_id']}|{r['date']}|{r['period']}"] = r
+    floor = (today - timedelta(days=KEEP_PAST_DAYS)).isoformat()
+    rows = [r for r in merged.values() if (r.get("date") or "") >= floor]
+    rows.sort(key=lambda r: (r["date"] or "", r["company"] or ""))
+    return rows
+
+
 def main() -> int:
     today = date.today()
     s = MayaSession()
     body = {"fromDate": today.isoformat(),
             "toDate": (today + timedelta(days=AHEAD_DAYS)).isoformat(),
-            "by": "company", "eventTypeId": 1}
-    rows = s._post("/api/v1/corporate-actions/financial-reports-schedule", body).json()
+            "by": "company", "eventTypeId": EV_CALL}
+    rows = schedule(s, EV_CALL, today, today + timedelta(days=AHEAD_DAYS))
 
     cache = load_cache()          # reportId → {link, others} — חוסך משיכת PDF יומית
     calls, fetched = [], 0
@@ -285,13 +355,24 @@ def main() -> int:
     raw.mkdir(parents=True, exist_ok=True)
     (raw / "calls.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    # מועדי פרסום הדוחות — לעמוד שיחות הוועידה ולתמונת השבוע, לא לברייף: calls.json
+    # של הברייף נשאר לוח השיחות שהנחיותיו מתארות. כשל כאן אינו מפיל את השיחות.
+    try:
+        reports = reports_schedule(s, today, calls)
+    except Exception as e:  # noqa: BLE001
+        print(f"::warning title=מועדי פרסום הדוחות לא נאספו::{type(e).__name__} — "
+              "העמוד יציג את מה שנאסף קודם")
+        reports = list(load_previous_reports().values())
     SITE_OUT.mkdir(parents=True, exist_ok=True)
     (SITE_OUT / "upcoming.json").write_text(
-        json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+        json.dumps({**payload, "reports": reports}, ensure_ascii=False, indent=1), encoding="utf-8")
 
     today_n = sum(1 for c in calls if c["date"] == today.isoformat())
+    up = [r for r in reports if (r.get("date") or "") >= today.isoformat()]
     print(f"שיחות ועידה: {len(calls)} בטווח ({today_n} היום), "
-          f"{payload['with_link']} עם קישור כניסה, {fetched} דיווחים נמשכו")
+          f"{payload['with_link']} עם קישור כניסה, {fetched} דיווחים נמשכו · "
+          f"מועדי פרסום דוחות: {len(up)} קרובים, {sum(1 for r in up if r.get('call_date'))} מהם עם שיחה")
     return 0
 
 
