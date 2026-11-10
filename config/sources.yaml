@@ -178,13 +178,16 @@ maya_watch:
     - ת452   # אזהרת רווח / עדכון תחזית
 
 # ---------------------------------------------------------------------------
-# שווקים — BOI (שערים יציגים) + yfinance. הרשימה נגזרת מ-drivers_catalog.
+# שווקים — BOI (שערים יציגים) + yfinance. הרשימה נגזרת מ-drivers_catalog,
+# ובנוסף תמונת השוק הכללית (מ-10/11/2026, ביקש יואב "כמו בדף הבית של Koyfin"):
+# מדדי ארה"ב, VIX, תעודות הסקטורים, זהב, גז טבעי, ליש"ט וין. Koyfin עצמו אינו
+# נמשך — תנאי השימוש שלו (סעיף 5.1) אוסרים לפרסם את המידע לאחרים, והברייף מופץ.
 # proxy: true = המדד הוא קירוב, לא המחיר הענפי עצמו — הסוכן מציין זאת בברייף.
 # ---------------------------------------------------------------------------
 markets:
   boi:
     api: https://boi.org.il/PublicApi/GetExchangeRates?asJson=true
-    currencies: [USD, EUR]
+    currencies: [USD, EUR, GBP, JPY]     # ין: השער היציג הוא ל-100 ין (unit בתשובה)
   yfinance:
     - {key: brent,        ticker: "BZ=F",      label: "ברנט",                       group: energy}
     - {key: wti,          ticker: "CL=F",      label: "WTI",                        group: energy}
@@ -202,6 +205,25 @@ markets:
     - {key: nasdaq,       ticker: "^IXIC",     label: "נאסד\"ק",                    group: indices}
     - {key: ta125,        ticker: "^TA125.TA", label: "ת\"א-125",                   group: indices}
     - {key: ta35,         ticker: "TA35.TA" ,  label: "ת\"א-35",                    group: indices}
+    # תמונת השוק הכללית — לא דרייבר של חברה מסוימת
+    - {key: ndx,          ticker: "^NDX",      label: "נאסד\"ק 100",                group: indices}
+    - {key: dow,          ticker: "^DJI",      label: "דאו ג'ונס",                  group: indices}
+    - {key: rut,          ticker: "^RUT",      label: "ראסל 2000",                  group: indices}
+    - {key: vix,          ticker: "^VIX",      label: "VIX",                        group: volatility}
+    - {key: gold,         ticker: "GC=F",      label: "זהב",                        group: metals}
+    - {key: natgas,       ticker: "NG=F",      label: "גז טבעי (Henry Hub)",        group: energy}
+    # תעודות SPDR — קירוב למדד הסקטור, לא המדד עצמו. בברייף: שורה אחת, לא 11 שורות
+    - {key: sec_xlk,      ticker: "XLK",       label: "טכנולוגיה (XLK)",            group: us_sectors}
+    - {key: sec_xlf,      ticker: "XLF",       label: "פיננסים (XLF)",              group: us_sectors}
+    - {key: sec_xlv,      ticker: "XLV",       label: "בריאות (XLV)",               group: us_sectors}
+    - {key: sec_xly,      ticker: "XLY",       label: "צריכה מחזורית (XLY)",        group: us_sectors}
+    - {key: sec_xlp,      ticker: "XLP",       label: "צריכה בסיסית (XLP)",         group: us_sectors}
+    - {key: sec_xle,      ticker: "XLE",       label: "אנרגיה (XLE)",               group: us_sectors}
+    - {key: sec_xli,      ticker: "XLI",       label: "תעשייה (XLI)",               group: us_sectors}
+    - {key: sec_xlb,      ticker: "XLB",       label: "חומרים (XLB)",               group: us_sectors}
+    - {key: sec_xlu,      ticker: "XLU",       label: "תשתיות (XLU)",               group: us_sectors}
+    - {key: sec_xlre,     ticker: "XLRE",      label: "נדל\"ן (XLRE)",              group: us_sectors}
+    - {key: sec_xlc,      ticker: "XLC",       label: "תקשורת (XLC)",               group: us_sectors}
   # תשואת ממשלתי שקלי 10ש: אין מקור חינמי יציב (BOI SDMX מסורבל, TASE בתשלום).
   # markets_pull כותב null + הערת מקור; הברייף מציג US10Y בלבד עד שיוגדר מקור.
   il_gov_10y:
@@ -217,7 +239,12 @@ trading_economics:
   # calendar_unavailable ב-te.json. ההגדרות נשארות למקרה ששודרג המסלול.
   calendar_countries: [israel, united states, euro area, china]
   calendar_days_ahead: 7
-  bonds: [Israel, United States, Germany]   # סינון לפי שם; ריק = הכל
+  # אג"ח ממשלתיות: קריאה אחת ל-/markets/bonds מחזירה את כל העקומים של כל המדינות.
+  # ההתאמה לפי המדינה (Country), כי השם מקוצר ("US 10Y", "UK 10Y"). עד 10/11/2026
+  # הסינון היה לפי השם בלבד, ו-"United States" לא תפס אף שורה. ריק = הכל.
+  bonds: [Israel, United States, Germany, United Kingdom, Italy, Japan]
+  # רק 10ש. עד 10/11 נשמר כל עקום גרמניה (עשר שורות), ואף צרכן לא קרא אותו.
+  bond_maturities: [10Y]
   indicators:                               # ריק = כל האינדיקטורים של ישראל
     - Interest Rate
     - Inflation Rate

@@ -227,7 +227,7 @@ const TOOLS = [
   },
   {
     name: "markets",
-    description: "רצועת השווקים של המהדורה האחרונה: מט\"ח, ברנט, סחורות, תשואות ומדדים עם שינוי יומי/שבועי/חודשי, תשואת ממשלתי שקלי 10ש ואינדיקטורי מאקרו ישראל (Trading Economics).",
+    description: "נתוני השווקים של המהדורה האחרונה: מט\"ח מול השקל, ברנט, גז, זהב וסחורות, מדדי ת\"א וארה\"ב, VIX ותעודות הסקטורים בארה\"ב — עם שינוי יומי/שבועי/חודשי; תשואות ממשלתיות 10ש (ישראל, ארה\"ב, גרמניה, בריטניה, איטליה, יפן) ואינדיקטורי מאקרו ישראל (Trading Economics).",
     inputSchema: { type: "object", properties: {} },
     async run(_a, ctx) {
       const d = await asset(ctx, "/mcp/markets.json");
@@ -252,8 +252,16 @@ const TOOLS = [
       }
       if (te) {
         const il = te.il_gov_10y;
+        const ilAsof = il && (il.asof || il.date);
         if (il && il.yield != null) {
-          lines.push(`\nממשלתי שקלי 10ש: ${il.yield}% (יומי ${signed(il.daily, "")}${il.date ? `, ${String(il.date).slice(0, 10)}` : ""}) — Trading Economics`);
+          lines.push(`\nממשלתי שקלי 10ש: ${il.yield}% (יומי ${signed(il.daily, "")}${ilAsof ? `, ${String(ilAsof).slice(0, 10)}` : ""}) — Trading Economics`);
+        }
+        const b10 = (Array.isArray(te.bonds) ? te.bonds : []).filter((b) => /\s10Y$/i.test(b.name || "") && b.yield != null);
+        if (b10.length) {
+          lines.push("\nתשואות ממשלתיות 10ש (Trading Economics, שינוי בנקודות אחוז):", "| אג\"ח | תשואה | יומי | שבועי | חודשי | נכון ל |", "|---|---|---|---|---|---|");
+          for (const b of b10) {
+            lines.push(`| ${b.name} | ${b.yield}% | ${signed(b.daily, "")} | ${signed(b.weekly, "")} | ${signed(b.monthly, "")} | ${String(b.asof || "").slice(0, 16).replace("T", " ")} |`);
+          }
         }
         if (Array.isArray(te.indicators) && te.indicators.length) {
           lines.push("\nאינדיקטורי מאקרו ישראל (Trading Economics):", "| מדד | ערך | קודם | לתאריך |", "|---|---|---|---|");

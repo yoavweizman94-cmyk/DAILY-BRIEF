@@ -453,6 +453,100 @@ def markets_strip(markets: dict | None, te: dict | None = None) -> str:
     return f'<section class="strip">{"".join(tiles)}</section>' if tiles else ""
 
 
+# שווקים בעולם — התמונה שבדף הבית של Koyfin, מהמקורות שלנו (yfinance, בנק ישראל,
+# Trading Economics). Koyfin עצמו אינו נמשך: סעיף 5.1 בתנאי השימוש שלו אוסר לפרסם
+# את המידע לאחרים, והאתר מופץ ללקוחות (יואב, 10/11/2026).
+WORLD_CARDS = [
+    ("מדדים בארה\"ב", ["sp500", "ndx", "nasdaq", "dow", "rut", "vix"]),
+    ("מט\"ח מול השקל", ["fx_usd_ils", "fx_eur_ils", "fx_gbp_ils", "fx_jpy_ils"]),
+    ("אנרגיה ומתכות", ["brent", "wti", "natgas", "gold", "aluminum"]),
+]
+# השם ב-Trading Economics ולא המדינה: "US 10Y", "UK 10Y" — כך גם בקבצים שנכתבו
+# לפני שנוסף שדה country (10/11/2026).
+BOND_NAMES = [("israel 10y", "ישראל"), ("us 10y", "ארה\"ב"), ("germany 10y", "גרמניה"),
+              ("uk 10y", "בריטניה"), ("italy 10y", "איטליה"), ("japan 10y", "יפן")]
+
+
+def _asof_badge(iso: str) -> str:
+    dd = f"{iso[8:10]}/{iso[5:7]}"
+    return (f'<b class="asof" dir="ltr" title="הנתון האחרון מ-{dd} — '
+            f'טרם פורסמה סגירה חדשה">{dd}</b>')
+
+
+def _wm_card(title: str, rows: list[dict], tall: bool = False) -> str:
+    """כרטיס של טבלה קטנה: שם · ערך · שינוי יומי."""
+    if not rows:
+        return ""
+    old = [r for r in rows if r.get("stale")]
+    # כמה שורות מאותו יום ישן (מדדי ארה"ב בריצת הבוקר) — תאריך אחד בכותרת ולא חמישה:
+    # תאריך בכל שורה שובר את השם לשתי שורות. שורה עדכנית (VIX נסחר גם בלילה) — בלי סימון.
+    one = len(old) > 1 and len({r["asof"] for r in old}) == 1
+    body = []
+    for r in rows:
+        ch, unit = r["ch"], r["unit"]
+        cls = "flat" if ch in (None, 0) else ("up" if ch > 0 else "down")
+        # ספרות קבועות: "+3.4%" מעל "+3.73%" אינם מיושרים בעמודה
+        chtxt = "—" if ch is None else (f"{ch:+.3f}" if unit == "pp" else f"{ch:+.2f}%")
+        note = _asof_badge(r["asof"]) if r.get("stale") and not one else ""
+        # bdi: "100 JPY/ILS" בתוך שורה מימין לשמאל מוצג אחרת כ-"JPY/ILS 100"
+        body.append(f'<tr class="{cls}"><td class="n"><bdi>{r["label"]}</bdi>{note}</td>'
+                    f'<td class="v" dir="ltr">{r["value"]}</td>'
+                    f'<td class="c" dir="ltr">{chtxt}</td></tr>')
+    head = _asof_badge(old[0]["asof"]) if one else ""
+    return (f'<section class="wm-card{" wm-tall" if tall else ""}"><h3>{title}{head}</h3>'
+            f'<table class="wm"><tbody>{"".join(body)}</tbody></table></section>')
+
+
+def world_panel(markets: dict | None, te: dict | None = None) -> str:
+    """שווקים בעולם: מדדי ארה"ב ו-VIX, תעודות הסקטורים, תשואות 10ש, מט"ח, אנרגיה ומתכות."""
+    if not markets:
+        return ""
+    pool = {**markets.get("fx", {}), **markets.get("instruments", {})}
+
+    def row(v: dict) -> dict:
+        unit = v.get("change_unit", "%")
+        return {"label": v["label"], "value": fmt_value(v["value"], unit == "pp"),
+                "ch": (v.get("changes") or {}).get("daily"), "unit": unit,
+                "asof": v.get("asof") or "", "stale": bool(v.get("stale_days"))}
+
+    def card(title: str, keys: list[str]) -> str:
+        return _wm_card(title, [row(pool[k]) for k in keys if pool.get(k)])
+
+    def daily(v: dict) -> float:
+        d = (v.get("changes") or {}).get("daily")
+        return -1e9 if d is None else d
+
+    # מהחזקה לחלשה — כך נקרא לוח סקטורים, ולא בסדר אלפביתי
+    sectors = sorted((v for v in markets.get("instruments", {}).values()
+                      if v.get("group") == "us_sectors"), key=lambda v: -daily(v))
+    bonds = []
+    for name, he in BOND_NAMES:
+        # ארה"ב מ-yfinance, כמו ברצועה שלמעלה — אחרת שני מספרים שונים לאותה תשואה בעמוד
+        if name == "us 10y" and pool.get("us10y"):
+            bonds.append({**row(pool["us10y"]), "label": he})
+            continue
+        b = next((x for x in (te or {}).get("bonds") or []
+                  if (x.get("name") or "").strip().lower() == name), None)
+        if b and b.get("yield") is not None:
+            ch = b.get("daily")
+            bonds.append({"label": he, "value": f'{b["yield"]:.3f}%',
+                          "ch": None if ch is None else round(ch, 3), "unit": "pp",
+                          "asof": "", "stale": False})
+    cards = [card(*WORLD_CARDS[0]),
+             _wm_card("סקטורים בארה\"ב", [row(v) for v in sectors], tall=True),
+             _wm_card("תשואות ממשלתיות 10 שנים", bonds),
+             card(*WORLD_CARDS[1]), card(*WORLD_CARDS[2])]
+    cards = [c for c in cards if c]
+    if not cards:
+        return ""
+    return ('<h2>שווקים בעולם</h2>'
+            f'<div class="wm-grid">{"".join(cards)}</div>'
+            '<p class="wm-src">שינוי יומי; תשואות בנקודות אחוז. מקורות: yfinance (מדדים, '
+            'סחורות ותעודות הסקטורים — תעודות סל של SPDR, קירוב למדד הסקטור), בנק ישראל '
+            '(שערים יציגים; הין ל-100 יחידות), Trading Economics (תשואות, מלבד ארה"ב — '
+            'yfinance).</p>')
+
+
 def indicators_panel(te: dict | None) -> str:
     """אינדיקטורי מאקרו לישראל מ-Trading Economics, עם כיוון מול הקריאה הקודמת."""
     if not te or not te.get("indicators"):
@@ -1194,6 +1288,7 @@ def main() -> int:
             reports_panel(reports),
             impact.home(_imp),
             calls_panel(calls, date.today().isoformat()),
+            world_panel(markets, te),
             indicators_panel(te),
             calendar_panel(te),
             '<hr class="sep">',

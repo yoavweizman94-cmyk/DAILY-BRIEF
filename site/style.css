@@ -324,7 +324,7 @@ ul.sources li.bad span { color: var(--down); font-weight: 700; }
 .tile .lbl { font-size: 0.71rem; color: var(--muted); line-height: 1.35; font-weight: 500; }
 /* תווית "הנתון מתאריך אחר". isolate הוא העיקר כאן ולא הצבע: בלעדיו
    הספרות של שם המכשיר ושל התאריך מתמזגות לריצה דו-כיוונית אחת. */
-.tile .lbl b.asof {
+.tile .lbl b.asof, .wm-card b.asof {
   unicode-bidi: isolate;
   direction: ltr;
   font-weight: 600;
@@ -353,6 +353,48 @@ ul.sources li.bad span { color: var(--down); font-weight: 700; }
 .tile.up .chg { color: var(--up); }
 .tile.down .chg { color: var(--down); }
 .tile.flat .chg { color: var(--faint); }
+
+/* שווקים בעולם — טבלאות קטנות לפי נושא, כמו לוח מכשירים: שם, מספר מיושר, ושינוי
+   שרק הוא צבוע. הרצועה שלמעלה היא מבט אחד; כאן ההקשר — מי הוביל ומי פיגר. */
+.wm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 0.8rem;
+  align-items: start;
+}
+/* אחת-עשרה שורות הסקטורים מול שש-ארבע בשאר: על פני שתי שורות של הרשת, אחרת
+   נפתח חור מתחת לכרטיסים הקצרים שלצידה. */
+.wm-card.wm-tall { grid-row: span 2; }
+.wm-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.8rem 0.35rem;
+}
+.wm-card h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  display: flex; align-items: center; gap: 0.1rem;
+}
+table.wm { font-size: 0.84rem; line-height: 1.35; }
+table.wm td { padding: 0.28rem 0; vertical-align: baseline; }
+/* שם בשורה אחת: "גז טבעי (Henry Hub)" שנשבר באמצע מאבד את סדר הסוגריים */
+table.wm td.n { padding-inline-end: 0.5rem; white-space: nowrap; }
+table.wm td.v, table.wm td.c {
+  font-family: var(--mono);
+  font-feature-settings: "tnum" 1;
+  text-align: left;
+  white-space: nowrap;
+}
+table.wm td.v { font-weight: 600; padding-inline-end: 0.7rem; }
+table.wm td.c { font-size: 0.92em; width: 4.6rem; }
+table.wm tr.up td.c { color: var(--up); }
+table.wm tr.down td.c { color: var(--down); }
+table.wm tr.flat td.c { color: var(--faint); }
+table.wm tbody tr:hover { background: transparent; }
+p.wm-src { font-size: 0.76rem; color: var(--faint); margin: 0.45rem 0 1.9rem; line-height: 1.5; }
 
 table.cal { font-size: 0.84rem; }
 table.cal td.imp { letter-spacing: 0.1em; white-space: nowrap; text-align: center; }
@@ -751,7 +793,7 @@ table.calls .none { color: var(--faint); font-size: 0.82rem; }
   body { background: #fff; color: #000; font-size: 10.5pt; }
   main { max-width: none; padding: 0; }
   a { color: #000; text-decoration: none; }
-  .strip { break-inside: avoid; }
+  .strip, .wm-card { break-inside: avoid; }
   li.rep, .tile, .topic-sum { break-inside: avoid; box-shadow: none; border-color: #999; }
   li.rep.m1 { background: #fff; }
   h2 { break-after: avoid; border-bottom-color: #000; }

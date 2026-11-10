@@ -91,7 +91,10 @@ def pull_boi(cfg, con, failures) -> dict:
         chg = changes(con, key, asof, val, "pct")
         if chg["daily"] is None:                      # אין עדיין state — ניקח מה-API
             chg["daily"] = round(x.get("currentChange", 0.0), 2)
-        out[key] = {"label": f"{cur}/ILS", "value": val, "unit": x.get("unit", 1),
+        unit = x.get("unit", 1) or 1
+        # הין מצוטט ל-100 יחידות. בלי זה בתווית, "JPY/ILS 2.01" נקרא כשער של ין אחד.
+        out[key] = {"label": f"{cur}/ILS" if unit == 1 else f"{unit} {cur}/ILS",
+                    "value": val, "unit": unit,
                     "asof": asof.isoformat(), "source": "BOI", "changes": chg}
     return out
 

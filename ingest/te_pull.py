@@ -81,7 +81,8 @@ def main() -> int:
     tcfg = cfg.get("trading_economics") or {}
     countries = tcfg.get("calendar_countries") or ["israel", "united states"]
     horizon = int(tcfg.get("calendar_days_ahead", 7))
-    want_bonds = set(tcfg.get("bonds") or [])
+    want_bonds = {str(w).lower() for w in (tcfg.get("bonds") or [])}
+    want_mat = {str(m).upper() for m in (tcfg.get("bond_maturities") or [])}
 
     s = requests.Session()
     today = date.today()
@@ -123,9 +124,14 @@ def main() -> int:
             if not isinstance(b, dict):
                 continue
             name = (b.get("Name") or b.get("Symbol") or "").strip()
-            if want_bonds and not any(w.lower() in name.lower() for w in want_bonds):
+            country = (b.get("Country") or "").strip()
+            # לפי המדינה ולא רק לפי השם: השם מקוצר ("US 10Y"), ו-"United States" אינו בתוכו
+            if want_bonds and country.lower() not in want_bonds \
+                    and not any(w in name.lower() for w in want_bonds):
                 continue
-            rows.append({"name": name, "symbol": b.get("Symbol"),
+            if want_mat and name.upper().rsplit(" ", 1)[-1] not in want_mat:
+                continue
+            rows.append({"name": name, "country": country, "symbol": b.get("Symbol"),
                          "yield": b.get("Last"), "daily": b.get("DailyChange"),
                          "weekly": b.get("WeeklyChange"), "monthly": b.get("MonthlyChange"),
                          "asof": b.get("Date")})
