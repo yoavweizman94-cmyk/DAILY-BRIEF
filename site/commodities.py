@@ -300,11 +300,12 @@ def _ai_tsource(refs: dict, ids, data: bool = True, extra: str = "") -> str:
 
 
 def _export(key: str, snap: dict, kicker: str, title: str, sub: str, blocks: list, source: str,
-            head: str, lines: list[str], tsource: str | None = None) -> str:
-    """כרטיס, ציוץ וכפתורים לסעיף אחד. tsource — שורת מקור קצרה יותר לציוץ."""
+            head: str, lines: list[str], tsource: str | None = None, insight: str = "") -> str:
+    """כרטיס, ציוץ וכפתורים לסעיף אחד. tsource — שורת מקור קצרה יותר לציוץ; insight —
+    שורת התובנה מהסקירה שבסעיף (share.insight), לפני המספרים."""
     payload = share.card(kicker, title, sub, blocks, source,
                          file=f"tlv-commodities-{key}-{snap.get('date') or 'latest'}")
-    return share.controls(key, payload, share.tweet(head, lines, tsource or source))
+    return share.controls(key, payload, share.tweet(head, lines, tsource or source, insight))
 
 
 def export_now(a: dict | None, snap: dict, te: dict, wb: dict, cfg: dict, hist: dict | None = None) -> str:
@@ -324,7 +325,8 @@ def export_now(a: dict | None, snap: dict, te: dict, wb: dict, cfg: dict, hist: 
     refs = a.get("refs") or {}
     return _export("cm-now", snap, "סחורות · תמונת מצב", share.plain(a.get("headline")), _ai_sub(a, snap), blocks,
                    _ai_source(refs, used), f"שוקי הסחורות · {day}",
-                   [share.lead(a.get("headline"))] + [_qline(q, generic) for q in qs], _ai_tsource(refs, used))
+                   [share.lead(a.get("headline"))] + [_qline(q, generic) for q in qs], _ai_tsource(refs, used),
+                   share.insight(a.get("overview")))
 
 
 def export_section(m: dict, a: dict, snap: dict, te: dict, wb: dict, cfg: dict,
@@ -347,7 +349,8 @@ def export_section(m: dict, a: dict, snap: dict, te: dict, wb: dict, cfg: dict,
                    blocks, _ai_source(refs, m.get("sources"), data, SRC_WB if wbx else ""),
                    f"סחורות · {label} · {day}",
                    [share.plain(m.get("title"))] + [_qline(q, generic) for q in qs],
-                   _ai_tsource(refs, m.get("sources"), data, SRC_WB_SHORT if wbx else ""))
+                   _ai_tsource(refs, m.get("sources"), data, SRC_WB_SHORT if wbx else ""),
+                   share.insight(m.get("body")))
 
 
 def export_regional(cfg: dict, te: dict, snap: dict) -> str:

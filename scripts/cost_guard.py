@@ -36,8 +36,8 @@ CHEAP = "claude-sonnet-5"
 #
 # **ועמוד ההשפעה על מניות** (scripts/analyze_impact.py, מ-05/11/2026) — רץ כל שעתיים
 # לאורך היום, ובתקרה יומית משלו (IMPACT_MAX_USD), שכוללת גם את תקצירי הציוץ שלו.
-# **ושרשורי X לסקירות הדוחות ולשיחות המשקיעים** (scripts/x_threads.py, מ-10/11/2026) —
-# בתקרה משלהם (X_THREADS_MAX_USD).
+# **והפוסטים ל-X לסקירות הדוחות, לשיחות המשקיעים ול"דוח ושיחה"** (scripts/x_threads.py,
+# מ-10/11/2026; שם הג'וב נשאר x-threads) — בתקרה משלהם (X_THREADS_MAX_USD).
 OWN_CAP = ("call-reviews", "impact-triage", "impact", "impact-tweets", "x-threads")
 
 

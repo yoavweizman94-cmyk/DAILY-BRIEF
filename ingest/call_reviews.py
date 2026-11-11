@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
-"""דוח ושיחה: סקירה אחת לדוח כספי ולשיחת הוועידה שבה ההנהלה הציגה אותו,
-וגרסה שלה לשרשור של עד שלושה ציוצים ב-X.
+"""דוח ושיחה: סקירה אחת לדוח כספי ולשיחת הוועידה שבה ההנהלה הציגה אותו.
+
+**הפוסט ל-X נכתב ממנה בנפרד** (scripts/x_threads.py, מ-11/11/2026), כמו לסקירות
+הדוחות ולשיחות המשקיעים: פוסט אחד שנפתח בתובנה, ולא שרשור. עד אז הסקירה החזירה
+גם שרשור של עד שלושה ציוצים, כאן, בקריאה של אופוס.
 
 **מה נפגש כאן, ולמה זה לא עוד סיכום.** סקירת הדוח (filing_review.py) אומרת
 מה במספרים; סיכום השיחה (globes_calls.py) אומר מה ההנהלה אמרה. כל אחד מהם
@@ -52,20 +55,16 @@ import anthropic  # noqa: E402
 import _api  # noqa: E402
 import _cli  # noqa: E402
 from _filings import has_pdf, is_financial  # noqa: E402
-# ספירת האורך כמו ב-X ותיקון המקף — אותם כלים כמו בתקצירים לציוץ בסחורות וברכב
-from share import maqaf, weighted_len  # noqa: E402
 
 CALLS = ROOT / "output" / "calls"
 OUT = CALLS / "combined"
 JOB = "call-reviews"
 MODEL = "claude-opus-5-5"
-SHORT_MODEL = "claude-sonnet-5"
 WINDOWS = (((15, 0), (16, 30)), ((19, 0), (23, 30)))
 BEFORE, AFTER = 21, 3        # ימים: הדוח לפני השיחה, או אחריה
 NEW_DAYS = 14                # רק דוח שפורסם בשבועיים האחרונים — ראה למעלה
 MAX_TRIES = 2                # ניסיונות בתשלום לפני שמוותרים על שיחה
 TEXT_CAP = 40_000            # תווי תמליל לאימות; הסיכום הוא העיקר
-X_MAX = 280
 # דוח של החברה עצמה גובר על אלה כשיש כמה מועמדים באותו חלון.
 SIDE = ("חברת הבת", "חברה בת", "חברת בת", "כלולה", "מוחזקת", "מצגת", "תיקון")
 
@@ -75,7 +74,7 @@ SIDE = ("חברת הבת", "חברה בת", "חברת בת", "כלולה", "מו
 SYSTEM = """אתה אנליסט מחקר שכותב עבור מנהל השקעות מקצועי. אתה מקבל שני
 מסמכים על אותה חברה ואותו רבעון: סקירה של הדוח הכספי, שנכתבה מתוך הדוח
 המלא, וסיכום של שיחת הוועידה שבה ההנהלה הציגה אותו — ואת תמליל השיחה
-לאימות. אתה כותב סקירה אחת שמחברת ביניהם, וגרסה קצרה שלה לשרשור ב-X.
+לאימות. אתה כותב סקירה אחת שמחברת ביניהם.
 
 **הקורא יכול לקרוא כל אחד מהם לבד.** מה שהוא קונה ממך הוא המפגש: מה
 המספרים אומרים, מה ההנהלה הוסיפה עליהם, ואיפה השניים לא מתיישבים. סקירה
@@ -132,24 +131,6 @@ review_md — **בדיוק** המבנה הבא, בכותרות markdown, בלי 
 שניים-שלושה דברים קרובים — דוח, אבן דרך, החלטה — שיגידו אם הקריאה נכונה.
 
 headline — משפט אחד, עד 25 מילים: הדבר המרכזי שעולה מהדוח ומהשיחה יחד.
-
-tweets — שרשור של ציוץ אחד עד שלושה, לפי כמות החומר. **שלושה רק כשיש
-שלושה דברים שונים לומר.**
-- הציוץ הראשון עומד בפני עצמו: שם החברה, הרבעון, והדבר המרכזי עם מספר אחד
-  או שניים.
-- השני — מה ההנהלה אמרה בשיחה מעבר למספרים: יעד, הסבר, כיוון.
-- השלישי — הפער, הסיכון, או מה שיאשר את הקריאה.
-- **עד 250 תווים לציוץ.** ב-X אות עברית נספרת כתו אחד, והסימנים ₪ ו-▲ כשניים.
-- שינוי באחוזים נכתב בחץ ולא בסימן: "▲9%", "▼3%". "+9%" בתוך טקסט עברי
-  מוצג הפוך.
-- טקסט פשוט בלבד: בלי markdown, בלי האשטגים, בלי אימוג'י, בלי קישורים,
-  בלי @, ובלי מספור — "1/3" נוסף אוטומטית.
-- רק עובדות שמופיעות ב-review_md, עם ייחוס: "לפי הדוח", "בשיחה אמר
-  המנכ"ל".
-- לכל היותר ציטוט ישיר אחד בכל השרשור, עד עשר מילים, במירכאות ועם שם
-  הדובר.
-- בלי המלצה, בלי מחיר יעד, בלי קריאה לפעולה, בלי "הזדמנות" ובלי
-  סופרלטיבים.
 """
 
 SCHEMA = {
@@ -159,19 +140,8 @@ SCHEMA = {
         "mismatch_reason": {"type": "string"},
         "headline": {"type": "string"},
         "review_md": {"type": "string"},
-        "tweets": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["same_company", "mismatch_reason", "headline", "review_md", "tweets"],
-    "additionalProperties": False,
-}
-
-SHORT_SYSTEM = """קצר כל ציוץ ברשימה לעד 240 תווים, בלי לשנות עובדה, מספר או
-ייחוס. טקסט פשוט בלבד, בלי מספור. החזר את אותה כמות ציוצים, באותו סדר."""
-
-SHORT_SCHEMA = {
-    "type": "object",
-    "properties": {"tweets": {"type": "array", "items": {"type": "string"}}},
-    "required": ["tweets"],
+    "required": ["same_company", "mismatch_reason", "headline", "review_md"],
     "additionalProperties": False,
 }
 
@@ -307,37 +277,7 @@ def payload(call: dict, rec: dict, review: str) -> str:
             "=== סקירת הדוח (נכתבה מתוך הדוח המלא) ===\n" + review.strip()
             + "\n\n=== סיכום שיחת הוועידה (נכתב מתוך התמליל) ===\n" + call["summary"].strip()
             + f"\n\n=== התמליל, לאימות מספרים וציטוטים{cut} ===\n" + text[:TEXT_CAP]
-            + "\n\nכתוב את הסקירה המשולבת ואת השרשור.")
-
-
-# ── השרשור ────────────────────────────────────────────────────────────
-def clean(t: str) -> str:
-    """טקסט פשוט: בלי סימני markdown, בלי מספור שהמודל הוסיף בעצמו, ועם מקף
-    עברי אחרי אות שימוש ("ל־100") — אחרת המספר נודד לצד השני בתצוגה."""
-    t = re.sub(r"[*_`#]", "", t or "")
-    t = re.sub(r"^\s*\(?\d\s*/\s*\d\)?\s*", "", t)
-    t = re.sub(r"\s*\(?\d\s*/\s*\d\)?\s*$", "", t)
-    t = re.sub(r"[ \t]+", " ", t)
-    return maqaf(re.sub(r"\n{3,}", "\n\n", t).strip())
-
-
-def number(tweets: list[str]) -> list[str]:
-    n = len(tweets)
-    return [f"{t}\n\n{i}/{n}" if n > 1 else t for i, t in enumerate(tweets, 1)]
-
-
-def shorten(tweets: list[str]) -> tuple[list[str], float]:
-    """ציוץ שעבר את 280 אחרי המספור מקוצר בקריאה זולה אחת; השאר נשארים כפי שנכתבו."""
-    long = [i for i, t in enumerate(number(tweets)) if weighted_len(t) > X_MAX]
-    if not long:
-        return tweets, 0.0
-    res, err, usd = _api.ask_json(SHORT_SYSTEM, json.dumps(tweets, ensure_ascii=False),
-                                  SHORT_SCHEMA, job=JOB, model=SHORT_MODEL,
-                                  max_tokens=3000, max_usd=0.2)
-    new = [clean(t) for t in (res or {}).get("tweets") or []]
-    if err or len(new) != len(tweets):
-        return tweets, usd
-    return [new[i] if i in long else t for i, t in enumerate(tweets)], usd
+            + "\n\nכתוב את הסקירה המשולבת.")
 
 
 # ── מצב ועלות ─────────────────────────────────────────────────────────
@@ -476,15 +416,10 @@ def main() -> int:
             print(f"::warning::{c['company']}: הדוח שנמצא אינו של השיחה — לא נכתבה סקירה")
             continue
         md = (res.get("review_md") or "").strip()
-        tweets = [t for t in (clean(x) for x in res.get("tweets") or []) if t][:3]
-        if not md or not tweets:
-            fail(c, rec, "הסקירה או השרשור חזרו ריקים", tries + 1)
+        if not md:
+            fail(c, rec, "הסקירה חזרה ריקה", tries + 1)
             failed += 1
             continue
-        tweets, usd = shorten(tweets)
-        run_usd += usd
-        item_usd += usd
-        thread = number(tweets)
 
         (OUT / f"{c['did']}.json").write_text(json.dumps({
             "did": c["did"], "status": "ok",
@@ -493,7 +428,6 @@ def main() -> int:
             "report": {k: rec.get(k) for k in ("id", "d", "t", "p")},
             "review_src": src, "report_review": review,
             "headline": (res.get("headline") or "").strip(), "review_md": md,
-            "tweets": thread, "tweet_len": [weighted_len(t) for t in thread],
             "model": MODEL, "usd": round(item_usd, 4),
             "generated": datetime.now().isoformat(timespec="minutes"),
         }, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")

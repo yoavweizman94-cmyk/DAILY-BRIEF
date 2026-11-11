@@ -2,21 +2,24 @@
 
 הנתונים נכתבים ב-`ingest/call_reviews.py`; כאן רק רינדור.
 
-**השרשור ל-X הוא טיוטה של הבעלים.** הוא נכתב לחשבון שלו ואינו חלק מהסקירה,
+**הפוסט ל-X הוא טיוטה של הבעלים.** הוא נכתב לחשבון שלו ואינו חלק מהסקירה,
 ולכן מוצג רק לו (data-owner, כמו הקישור ל"השיחות שלי"). זו הסתרה בתצוגה
-ולא שער: הטקסט ממילא נועד להתפרסם.
+ולא שער: הטקסט ממילא נועד להתפרסם. מ-11/11/2026 זה פוסט אחד ולא שרשור, והוא
+נכתב בנפרד מהסקירה (scripts/x_threads.py → output/x/callreviews.json).
 """
 import json
-import urllib.parse
+import re
 from pathlib import Path
 
+import share
 from transcripts import anchor_heads, esc, he_date, summary_toc
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "output" / "calls" / "combined"
+POSTS = ROOT / "output" / "x" / "callreviews.json"
 MAYA = "https://maya.tase.co.il/he/reports/"
 FILES = "https://mayafiles.tase.co.il/"
-X_MAX = 280
+_POSTS: dict | None = None
 
 
 def load() -> list[dict]:
@@ -37,74 +40,24 @@ def slug(rec: dict) -> str:
     return f"{rec.get('did')}.html"
 
 
+def post(rec: dict) -> str:
+    """הפוסט ל-X של הסקירה. סקירה מלפני 11/11 שעוד אין לה פוסט מציגה את השרשור
+    שנכתב איתה, מחובר לפוסט אחד ובלי המספור ("2/3") שנוסף לו אז."""
+    global _POSTS
+    if _POSTS is None:
+        _POSTS = share.load_posts(POSTS)
+    text = _POSTS.get(str(rec.get("did") or ""))
+    if not text and rec.get("tweets"):
+        text = "\n\n".join(re.sub(r"\s*\d+/\d+\s*$", "", str(t)).strip()
+                           for t in rec["tweets"] if str(t).strip())
+    return text or ""
+
+
 def _thread(rec: dict) -> str:
-    tweets = rec.get("tweets") or []
-    if not tweets:
-        return ""
-    lens = rec.get("tweet_len") or [len(t) for t in tweets]
-    items = []
-    for i, (t, n) in enumerate(zip(tweets, lens)):
-        over = " over" if n > X_MAX else ""
-        items.append(
-            f'<div class="cr-tw"><div class="cr-tw-t" id="tw{i}">{esc(t)}</div>'
-            f'<div class="cr-tw-bar"><span class="cr-cnt{over}" title="כפי ש-X סופר: '
-            f'אות עברית 1, ₪ ואימוג׳י 2">{n}/{X_MAX}</span>'
-            f'<button type="button" class="cr-copy" data-src="tw{i}">העתק</button></div></div>')
-    intent = "https://x.com/intent/post?text=" + urllib.parse.quote(tweets[0])
-    return (
-        '<section class="cr-x" data-owner hidden>'
-        # bdi: בלעדיו ה-X והמספר שאחריו מתחברים לרצף LTR אחד ומחליפים מקום
-        f'<h2>שרשור ל-<bdi>X</bdi> · {len(tweets)} {"ציוצים" if len(tweets) > 1 else "ציוץ"}</h2>'
-        '<p class="cr-x-note">טיוטה לחשבון שלך, מוצגת לך בלבד. נכתבה מתוך הסקירה '
-        'שלמעלה; כדאי לקרוא לפני פרסום. אין בה קישור — אפשר להוסיף, וקישור נספר '
-        'ב-X כ-23 תווים.</p>'
-        + "".join(items)
-        + '<div class="cr-x-actions">'
-        '<button type="button" class="cr-copy" data-all="1">העתק את כל השרשור</button>'
-        f'<a href="{esc(intent)}" target="_blank" rel="noopener">פתח את הציוץ הראשון ב-X</a>'
-        '</div></section>')
-
-
-COPY_JS = """
-<script>
-(function () {
-  function copy(text, btn) {
-    function done() {
-      var was = btn.textContent;
-      btn.textContent = "הועתק";
-      setTimeout(function () { btn.textContent = was; }, 1500);
-    }
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(text).then(done, function () { fallback(text); done(); });
-    } else {
-      fallback(text);
-      done();
-    }
-  }
-  function fallback(text) {
-    var ta = document.createElement("textarea");
-    ta.value = text;
-    ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    try { document.execCommand("copy"); } catch (e) { /* אין גישה ללוח */ }
-    document.body.removeChild(ta);
-  }
-  document.querySelectorAll(".cr-copy").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      if (btn.dataset.all) {
-        var parts = Array.prototype.map.call(document.querySelectorAll(".cr-tw-t"),
-          function (el) { return el.textContent; });
-        copy(parts.join("\\n\\n---\\n\\n"), btn);
-      } else {
-        copy(document.getElementById(btn.dataset.src).textContent, btn);
-      }
-    });
-  });
-})();
-</script>"""
+    """פוסט ל-X לבעלים (share.post_block), אחרי הסקירה. ההעתקה — במאזין המשותף שבתחתית
+    כל עמוד (build.py)."""
+    return share.post_block(f"xc-{rec.get('did')}", post(rec),
+                            ["הדוח במאיה", "שיחת המשקיעים, גלובס"])
 
 
 def detail(rec: dict, rows: list[dict], render) -> str:
@@ -140,8 +93,7 @@ def detail(rec: dict, rows: list[dict], render) -> str:
         + f'<div class="tr-body tr-full cr-body">{body}</div>'
         + _thread(rec)
         + report
-        + note()
-        + (COPY_JS if rec.get("tweets") else ""))
+        + note())
 
 
 def index(rows: list[dict]) -> str:

@@ -89,8 +89,8 @@ PAGE = """<!DOCTYPE html>
   : fetch("/api/me", {{credentials: "same-origin"}}).then(function (r) {{ return r.ok ? r.json() : null; }}))
   .then(function (j) {{ if (j && j.owner) {{ window.__owner = true; document.querySelectorAll("[data-owner]").forEach(function (e) {{ e.hidden = false; }}); }} }})
   .catch(function () {{}});
-/* העתקת השרשורים ל-X (share.thread_block) — מאזין אחד לכל העמודים, כולל סקירה שנטענת
-   לעמוד הדוחות אחרי הטעינה. data-src: ציוץ אחד; data-thread: השרשור כולו. */
+/* העתקת הפוסטים ל-X (share.post_block) — מאזין אחד לכל העמודים, כולל סקירה שנטענת
+   לעמוד הדוחות אחרי הטעינה. data-src: הרכיב שהטקסט שלו מועתק. */
 (function () {{
   function fallback(text) {{
     var ta = document.createElement("textarea");
@@ -106,17 +106,9 @@ PAGE = """<!DOCTYPE html>
   document.addEventListener("click", function (e) {{
     var btn = e.target.closest ? e.target.closest(".im-copy") : null;
     if (!btn) {{ return; }}
-    var text = "";
-    if (btn.hasAttribute("data-thread")) {{
-      var box = document.getElementById(btn.getAttribute("data-thread"));
-      if (!box) {{ return; }}
-      text = Array.prototype.map.call(box.querySelectorAll(".cr-tw-t"),
-        function (el) {{ return el.textContent; }}).join("\\n\\n");
-    }} else {{
-      var one = document.getElementById(btn.getAttribute("data-src"));
-      if (!one) {{ return; }}
-      text = one.textContent;
-    }}
+    var one = document.getElementById(btn.getAttribute("data-src"));
+    if (!one) {{ return; }}
+    var text = one.textContent;
     function done() {{
       var was = btn.textContent;
       btn.textContent = "הועתק";
@@ -1387,20 +1379,20 @@ def main() -> int:
         rev = OUT / "filings" / "reviews"
         if rev.is_dir():
             n = nx = 0
-            # שרשור ל-X לבעלים בסוף הסקירה (scripts/x_threads.py). הסקירה נטענת לעמוד
+            # פוסט ל-X לבעלים בסוף הסקירה (scripts/x_threads.py). הסקירה נטענת לעמוד
             # הדוחות בלחיצה, ולכן החשיפה לבעלים נעשית שם אחרי ההכנסה (pages/filings.html)
-            threads = share.load_threads(ROOT / "output" / "x" / "filings.json")
+            posts = share.load_posts(ROOT / "output" / "x" / "filings.json")
             for md in rev.glob("*.md"):
                 body = md.read_text(encoding="utf-8")
                 # שורת המטא הראשונה היא הערת HTML ואינה חלק מהסקירה
                 if body.startswith("<!--"):
                     body = body.split("-->", 1)[-1].lstrip()
-                thread = share.thread_block(f"xf-{md.stem}", threads.get(md.stem), ["הדוח במאיה"])
-                nx += bool(thread)
-                md.with_suffix(".html").write_text(render(body) + thread, encoding="utf-8")
+                post = share.post_block(f"xf-{md.stem}", posts.get(md.stem), ["הדוח במאיה"])
+                nx += bool(post)
+                md.with_suffix(".html").write_text(render(body) + post, encoding="utf-8")
                 md.unlink()
                 n += 1
-            print(f"  סקירות דוחות: {n}, מהן עם שרשור ל-X: {nx}")
+            print(f"  סקירות דוחות: {n}, מהן עם פוסט ל-X: {nx}")
 
     frag = PAGES / "landing.html"
     if frag.exists():
@@ -1618,7 +1610,7 @@ def main() -> int:
                             site_title=site_title, root="../", body=cbody),
                 encoding="utf-8")
         print(f"::notice::דוח ושיחה: {len(cr_rows)} סקירות, "
-              f"{sum(1 for r in cr_rows if r.get('tweets'))} עם שרשור")
+              f"{sum(1 for r in cr_rows if callreviews.post(r))} עם פוסט ל-X")
 
     # השיחות של הבעלים עם חברות — הקלטות שתומללו במחשב שלו. נבנה תמיד, גם ריק,
     # כדי שהקישור בניווט לא יוביל ל-404 לפני ההקלטה הראשונה. **לבעלים בלבד**:

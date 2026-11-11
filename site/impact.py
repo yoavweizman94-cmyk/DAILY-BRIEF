@@ -12,11 +12,11 @@
 
 **הסינון בדפדפן הוא תוספת.** בלי JS כל הכרטיסים מוצגים, וסרגל הסינון מוסתר.
 
-**שרשור ל-X** (מ-10/11/2026, לבקשת יואב) — טיוטה מפורטת לחשבון שלו לכל כרטיס, מתוך
-tweets.json של analyze_impact: פתיחה, ציוץ לכל חברה, מה יכול לבטל, ושורה תחתונה. כמו
-השרשור בעמוד "דוח ושיחה", הוא מוצג רק לבעלים (data-owner). זו הסתרה בתצוגה ולא שער:
-הטקסט ממילא נועד להתפרסם. המקור והקישור לאתר מתווספים כאן, לציוץ האחרון או כציוץ
-משלהם, וכל ציוץ עד 280 בספירה של X.
+**פוסט ל-X** (מ-10/11/2026, לבקשת יואב; פוסט אחד ולא שרשור מ-11/11) — טיוטה לחשבון
+שלו לכל כרטיס, מתוך tweets.json של analyze_impact. הפוסט נפתח בתובנה, ואחריה שורה
+לכל חברה, מה יכול לבטל ומה לעקוב. כמו הפוסט בעמוד "דוח ושיחה", הוא מוצג רק לבעלים
+(data-owner). זו הסתרה בתצוגה ולא שער: הטקסט ממילא נועד להתפרסם. המקור והקישור לאתר
+מתווספים כאן, בסוף הפוסט (share.post_block).
 """
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ def load() -> dict:
     since = (now - timedelta(days=PAGE_DAYS)).isoformat(timespec="seconds")
     items = dedupe([r for r in by_id.values() if (r.get("ts") or "") >= since])
     return {"state": state, "items": items, "profiles": profiles,
-            "tweets": share.load_threads(OUT / "tweets.json")}
+            "tweets": share.load_posts(OUT / "tweets.json")}
 
 
 # **אותו סיפור — כרטיס אחד** (כמו analyze_impact.same_story): חברה משותפת ושלוש מילים
@@ -233,14 +233,14 @@ def region(r: dict) -> str:
     return "il" if _IL.search(probe) else "world"
 
 
-def _tweet(r: dict, thread: list[str] | None) -> str:
-    """שרשור ל-X של הכרטיס (share.thread_block), עם שמות המקורות שלו."""
+def _tweet(r: dict, post: str | None) -> str:
+    """פוסט ל-X של הכרטיס (share.post_block), עם שמות המקורות שלו."""
     names = []
     for s in r.get("links") or []:
         n = " ".join(str(s.get("name") or "").split())
         if n and n not in names:
             names.append(n)
-    return share.thread_block("tw-" + anchor(r.get("src") or r["id"]), thread, names)
+    return share.post_block("tw-" + anchor(r.get("src") or r["id"]), post, names)
 
 
 def _card(r: dict, profiles: dict, latest: str | None, today, tweets: dict | None = None) -> str:

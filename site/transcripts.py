@@ -116,16 +116,16 @@ _THREADS: dict | None = None
 
 
 def _thread(rec: dict) -> str:
-    """שרשור ל-X לבעלים (scripts/x_threads.py), מתחת לסיכום ולפני התמליל המלא."""
+    """פוסט ל-X לבעלים (scripts/x_threads.py), מתחת לסיכום ולפני התמליל המלא."""
     global _THREADS
     if _THREADS is None:
         import share  # noqa: PLC0415 — רק כשנבנה עמוד שיחה
-        _THREADS = share.load_threads(ROOT / "output" / "x" / "transcripts.json")
-    th = _THREADS.get(str(rec.get("did")))
-    if not th:
+        _THREADS = share.load_posts(ROOT / "output" / "x" / "transcripts.json")
+    post = _THREADS.get(str(rec.get("did")))
+    if not post:
         return ""
     import share  # noqa: PLC0415
-    return share.thread_block(f"xt-{rec.get('did')}", th, ["שיחת המשקיעים, גלובס"])
+    return share.post_block(f"xt-{rec.get('did')}", post, ["שיחת המשקיעים, גלובס"])
 
 
 def detail(rec: dict, rows: list[dict], render, combined: set | None = None) -> str:

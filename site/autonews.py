@@ -226,9 +226,9 @@ def _tsrc_ai(refs: dict, ids, reg: bool = False) -> str:
 
 
 def _export(key: str, stamp: str, kicker: str, title: str, sub: str, blocks: list, source: str,
-            head: str, lines: list[str], tsource: str | None = None) -> str:
+            head: str, lines: list[str], tsource: str | None = None, insight: str = "") -> str:
     payload = share.card(kicker, title, sub, blocks, source, file=f"tlv-auto-{key}-{stamp or 'latest'}")
-    return share.controls(key, payload, share.tweet(head, lines, tsource or source))
+    return share.controls(key, payload, share.tweet(head, lines, tsource or source, insight))
 
 
 def export_now(a: dict | None) -> str:
@@ -249,7 +249,7 @@ def export_now(a: dict | None) -> str:
     return _export("au-now", str(a.get("analyzed_at") or "")[:10], "ענף הרכב · תמונת מצב",
                    share.plain(a.get("headline")), sub, blocks, _src_ai(refs, ids),
                    f"ענף הרכב · {_day(a)}", [share.lead(a.get("headline"))] + [f"• {t}" for t in titles],
-                   _tsrc_ai(refs, ids))
+                   _tsrc_ai(refs, ids), share.insight(a.get("overview")))
 
 
 def export_trends(a: dict | None, key: str, title: str) -> str:
@@ -271,7 +271,7 @@ def export_trends(a: dict | None, key: str, title: str) -> str:
     sub = f'סקירה מ-{_stamp(a.get("analyzed_at"))}. {share.DISCLAIMER}'
     return _export(f"au-{key}", str(a.get("analyzed_at") or "")[:10], "ענף הרכב", title, sub, blocks,
                    _src_ai(refs, ids), f"{title} · {_day(a)}", [f"• {share.plain(m['title'])}" for m in items],
-                   _tsrc_ai(refs, ids))
+                   _tsrc_ai(refs, ids), share.insight(items[0].get("channel") or items[0].get("body")))
 
 
 # --------------------------------------------------------------------------
