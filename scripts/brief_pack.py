@@ -216,6 +216,10 @@ def maya_summaries(raw_dir: Path, reports_dir: Path, day: str,
 # **מחוץ לחבילה בכוונה:** meetings (השיחות של הבעלים בלבד), x (טיוטות ציוצים)
 # וכל שדה tweets. הברייף מופץ ללקוחות.
 SITE_HOURS = 24
+# **הקיצוץ נמדד.** ב-11/11/2026 מהדורת הבוקר באופוס נקטעה בתקרה של $15 ($16.26)
+# אחרי 37 קריאות כלים — הראשונה עם ניתוחי האתר בקלט, ביום דוחות עמוס (71
+# דיווחי כיסוי). הניתוחים המלאים היו כ-120KB, והקלט נשלח מחדש בכל תור. מה
+# שהברייף כותב מהם הוא השורה, הכיוון לכל חברה והמקור; הגוף המלא נמצא בעמודים.
 IMPACT_MIN_SIG = 2              # 1 = נמוכה; הסף של הברייף משמיט אותה ממילא
 CAL_DAYS_AHEAD = 7
 _DROP = ("model", "effort", "cost_usd", "usd", "through", "prices_at", "window_h",
@@ -235,6 +239,17 @@ def _stamp(v) -> datetime | None:
 
 def _cut(text, n: int):
     return text if not isinstance(text, str) or len(text) <= n else text[:n].rstrip() + "…"
+
+
+def _trim(v, n: int = 450):
+    """כל מחרוזת בתוך המבנה — עד n תווים. המבנה עצמו (כותרות, חברות, מקורות) נשמר."""
+    if isinstance(v, str):
+        return _cut(v, n)
+    if isinstance(v, list):
+        return [_trim(x, n) for x in v]
+    if isinstance(v, dict):
+        return {k: _trim(x, n) for k, x in v.items()}
+    return v
 
 
 def site_analyses(day: str) -> dict:
@@ -260,7 +275,8 @@ def site_analyses(day: str) -> dict:
         for k in ("headline", "key_figures", "what_happened", "macro", "micro", "caveats",
                   "watch_next", "terms"):
             if a.get(k):
-                rec[k] = a[k]
+                rec[k] = (a[k] if k in ("key_figures", "terms")
+                          else _cut(a[k], 1200) if k == "what_happened" else _trim(a[k], 450))
         if not a:
             rec["summary"] = _cut(r.get("summary") or "", 1500)
         cbs.append(rec)
@@ -311,8 +327,8 @@ def site_analyses(day: str) -> dict:
         calls.append({"company": c.get("company"), "period": c.get("period"),
                       "call_date": c.get("call_date"), "call_url": c.get("call_url"),
                       "report_id": rep.get("id"), "report_title": rep.get("t"),
-                      "headline": c.get("headline"), "call_review": _cut(c.get("review_md"), 6000),
-                      "report_review": _cut(c.get("report_review"), 2500)})
+                      "headline": c.get("headline"), "call_review": _cut(c.get("review_md"), 3500),
+                      "report_review": _cut(c.get("report_review"), 1200)})
     out["call_reviews.jsonl"] = calls
 
     # ההשפעה על מניות — ניתוח לפי חברה וכיוון, בינונית ומעלה
@@ -324,12 +340,14 @@ def site_analyses(day: str) -> dict:
                 continue
             seen.add(r.get("id"))
             links = [{"name": x.get("name"), "url": x.get("url")} for x in r.get("links") or []
-                     if isinstance(x, dict) and "mail.google" not in str(x.get("url"))][:3]
-            imp.append({"ts": r.get("ts"), "kind": r.get("kind"), "region": r.get("region"),
-                        "sig": r.get("sig"), "headline": r.get("headline"),
-                        "what": _cut(r.get("what"), 900), "verdict": _cut(r.get("verdict"), 600),
-                        "watch": _cut(r.get("watch"), 300), "companies": r.get("companies") or [],
-                        "links": links})
+                     if isinstance(x, dict) and "mail.google" not in str(x.get("url"))][:1]
+            # העובדות עצמן נמצאות במקור (מאיה/rss) שהברייף קורא ממילא; מכאן — הכרעה לפי חברה
+            comps = [{"name": c.get("name"), "direction": c.get("direction"),
+                      "line": _cut(c.get("line"), 160)}
+                     for c in r.get("companies") or [] if isinstance(c, dict)]
+            imp.append({"ts": r.get("ts"), "kind": r.get("kind"), "sig": r.get("sig"),
+                        "headline": r.get("headline"), "verdict": _cut(r.get("verdict"), 350),
+                        "companies": comps, "links": links})
     out["impact.jsonl"] = imp
 
     # הסקירה האחרונה של עמודי הסחורות והרכב, אם נכתבה בחלון
@@ -338,12 +356,16 @@ def site_analyses(day: str) -> dict:
         last = rows[-1] if rows else None
         at = _stamp(last.get("analyzed_at")) if last else None
         if at and at >= cut:
+            # **התמונה והחברות, לא הסעיפים.** הסעיפים מסכמים כותרות שהברייף קורא
+            # ממילא ב-rss.jsonl, וה-refs שלהם הם כתובות ארוכות (עברית מקודדת):
+            # יחד כשני שלישים מהסקירה. מה שאין לברייף ממקום אחר הוא ההכרעה —
+            # הסקירה הכוללת, השורה לכל חברה ומה לעקוב. מקור לעובדה — מה-rss.
             rec = {"analyzed_at": last.get("analyzed_at")}
-            rec.update({k: v for k, v in last.items() if k not in _DROP})
-            # המקורות נשארים — הברייף כותב כל עובדה עם המקור שלה — בלי שדות העזר
-            if isinstance(rec.get("refs"), dict):
-                rec["refs"] = {k: {f: v.get(f) for f in ("title", "source", "url")}
-                               for k, v in rec["refs"].items() if isinstance(v, dict)}
+            for k in ("registry_month", "headline", "overview", "companies", "impact", "watch"):
+                if last.get(k):
+                    rec[k] = _cut(last[k], 1200) if k == "overview" else _trim(last[k], 300)
+            if isinstance(last.get("leasing"), dict) and last["leasing"].get("summary"):
+                rec["leasing"] = _cut(last["leasing"]["summary"], 600)
             out[name] = rec
     return out
 
