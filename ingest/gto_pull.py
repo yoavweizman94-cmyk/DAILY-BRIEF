@@ -38,6 +38,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from collections import Counter
 from datetime import datetime
@@ -149,6 +150,15 @@ def _hidden_rows(path: Path, wait_s: int = 120) -> tuple[list[list], str] | None
     xl = win32com.client.DispatchEx("Excel.Application")
     wb = None
     pid = _excel_pid(xl)
+    # **שעון עצר מבחוץ.** קריאת COM שנתקעת אינה חוזרת ללולאה, ולכן ה-deadline
+    # שבה אינו נבדק. נצפה 11/11/2026, אחרי ש-GTO הופעל מחדש ב-11:33: שרת ה-RTD
+    # לא ענה, הסקריפט נתקע עד שמתזמן המשימות הרג אותו אחרי 15 דקות, ובכל חצי
+    # שעה נשאר מופע Excel נסתר יתום. הטיימר סוגר את המופע של הסקריפט בלבד (לפי
+    # ה-PID), והקריאה התקועה חוזרת בשגיאת COM — כלומר "אין קריאה חיה".
+    watchdog = threading.Timer(wait_s + 45, _reap, args=(pid,)) if pid else None
+    if watchdog:
+        watchdog.daemon = True
+        watchdog.start()
     try:
         xl.Visible = False
         xl.DisplayAlerts = False
@@ -179,6 +189,8 @@ def _hidden_rows(path: Path, wait_s: int = 120) -> tuple[list[list], str] | None
     except pythoncom.com_error:
         return None
     finally:
+        if watchdog:
+            watchdog.cancel()
         try:
             if wb is not None:
                 wb.Close(False)
