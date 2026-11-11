@@ -25,6 +25,14 @@
 $15.35 על מהדורות שנמסרו מ-GitHub באיחור של שעות — והמהדורה שבאמת
 חשובה הייתה נחסמת בגללן.
 
+שדה `max_usd` מעלה לריצה **אחת** את תקרת העלות של קריאת הברייף עצמה
+(BRIEF_MAX_USD ב-run_daily.sh: $15 בבוקר ובנעילה, $8 בצהריים ובלילה). שני
+הספים שלמעלה קובעים אם הברייף נכתב ובאיזה מודל; התקרה עוצרת קריאה שכבר
+רצה. נוסף ב-11/11/2026 לבקשת הבעלים: מהדורת הבוקר באופוס נקטעה בתקרה אחרי
+$16.26 ו-37 קריאות כלים, ביום דוחות עמוס, והנעילה של אותו יום נשאה קלט גדול
+לפחות באותה מידה. הערך עובר לשלב הצינור דרך GITHUB_ENV, ותקרה מעל
+MAX_USD_CEIL נדחית: טעות הקלדה אינה צריכה לרוקן הטענה.
+
 שדה `if_missing` הופך את הטריגר לריצה שמתנהגת כמו ריצה מתוזמנת: בלי
 הפקה כפויה, ולכן run_daily בוחר את המהדורה שבזמן (edition_due) ויוצא אם
 היא כבר נכתבה. זה מה שמאפשר "לוודא" מהדורה בלי לשלם עליה פעמיים — מנגנון
@@ -45,6 +53,7 @@ from pathlib import Path
 TRIGGER = Path(__file__).resolve().parent.parent / ".trigger" / "daily-brief.json"
 EDITIONS = ("", "morning", "midday", "close", "night")
 TOPICS_ONLY_TTL_H = 2
+MAX_USD_CEIL = 40.0
 
 
 def _age_hours(stamp) -> float | None:
@@ -67,7 +76,7 @@ def main() -> int:
     event = os.environ.get("GITHUB_EVENT_NAME", "")
 
     topics_only = ""
-    soft = hard = ""
+    soft = hard = cap = ""
     source = (os.environ.get("IN_SOURCE") or "").strip()
     if event == "workflow_dispatch" or source:
         edition = (os.environ.get("IN_EDITION") or "").strip()
@@ -96,6 +105,7 @@ def main() -> int:
         reviews = str(cfg.get("reviews") or "").strip()
         soft = str(cfg.get("soft_usd") or "").strip()
         hard = str(cfg.get("hard_usd") or "").strip()
+        cap = str(cfg.get("max_usd") or "").strip()
         force = "" if cfg.get("if_missing") else "1"
         if not force:
             print("::notice title=הפקה רק אם חסרה::המהדורה נבחרת לפי השעה, ואם היא "
@@ -153,6 +163,19 @@ def main() -> int:
         print(f"::notice title=עקיפת הבלם הקשה::הסף שמעליו לא מופק ברייף הועלה ל-${hard} "
               "לריצה הזו", file=sys.stderr)
     print(f"BRIEF_HARD_USD={hard}")
+    # ריק = התקרה של המהדורה ב-run_daily.sh (${BRIEF_MAX_USD:-$DEFAULT_MAX}).
+    if cap and not cap.replace(".", "", 1).isdigit():
+        print(f"::warning::max_usd={cap!r} אינו מספר — התקרה לקריאה נשארת כרגיל",
+              file=sys.stderr)
+        cap = ""
+    if cap and not 0 < float(cap) <= MAX_USD_CEIL:
+        print(f"::warning::max_usd={cap} מחוץ לטווח (עד ${MAX_USD_CEIL:.0f}) — התקרה "
+              "לקריאה נשארת כרגיל", file=sys.stderr)
+        cap = ""
+    if cap:
+        print(f"::notice title=עקיפת התקרה לקריאה::תקרת העלות של קריאת הברייף הועלתה "
+              f"ל-${cap} לריצה הזו", file=sys.stderr)
+    print(f"BRIEF_MAX_USD={cap}")
     return 0
 
 
