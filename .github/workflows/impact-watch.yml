@@ -43,7 +43,9 @@ env:
 jobs:
   impact:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # 75 ולא 40: כתיבה מחדש של כל הפוסטים ל-X (11/11/2026, פוסט אחד במקום שרשור) היא
+    # עשרות קריאות ברצף, ועוד צעד הפוסטים לסקירות. ריצה שנחתכת מאבדת כל מה שלא נשמר.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v7
 
@@ -82,6 +84,13 @@ jobs:
             echo "::warning title=עמוד ההשפעה על מניות לא עודכן (קוד $rc)::${why:-הסיבה באנוטציה שמעל} — מה שלא נותח ימתין לריצה הבאה."
           fi
           exit 0
+
+      # **שמירה לפני הפוסטים לסקירות.** ריצה שנחתכת בתקרת הזמן לפני "Save content"
+      # מאבדת גם את הניתוח ואת הפוסטים שכבר שולמו; כך מה שנכתב עד כאן כבר בריפו התוכן.
+      # השמירה שבסוף מוסיפה את מה שנכתב אחריה, ובלי שינוי היא יוצאת בלי לעשות דבר.
+      - name: Save analysis
+        if: steps.analyze.outputs.changed == 'yes'
+        run: CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push impact
 
       # **פוסטים ל-X לסקירות הדוחות, לשיחות המשקיעים ול"דוח ושיחה"** (scripts/x_threads.py,
       # מ-10/11/2026; פוסט אחד ולא שרשור מ-11/11). כאן ולא בצנרות שכותבות את הסקירות: הצנרת
