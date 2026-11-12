@@ -152,6 +152,22 @@ ensure editions"**, דוחפת בשעת כל מהדורה טריגר `if_missing
 - התקנה מחדש: `powershell -ExecutionPolicy Bypass -File scripts\ensure_task.ps1`
 - הסרה: אותה פקודה עם `-Remove`
 
+### רשת ביטחון לצנרות המקור (במחשב המשרד, מ-12/11/2026)
+
+אותה בעיה פוגעת גם בצנרות שמזינות את העמודים. ב-12/11, בין 18:00 ל-21:00, לא רצו
+בכלל הכותרות, ההשפעה על מניות והסחורות, והעמודים נשארו עם שעה ישנה, אף שהצנרות
+עצמן היו תקינות.
+
+המשימה **"TLV TASE View - catch up pipelines"** מריצה את `scripts/catchup.py` כל
+15 דקות. הוא קורא את ביטויי ה-cron מקובצי ה-workflow, ובודק לכל צנרת אם המשבצת
+האחרונה שלה עברה בלי ריצה. אם כן, הוא משגר ריצה אחת.
+- אם ה-cron עבד, לא קורה כלום.
+- המהדורות עצמן נשארות באחריות ensure editions.
+
+- יומן: `%LOCALAPPDATA%\TLV-TASE-View\catchup.log`
+- בדיקה בלי לשגר: `python scripts/catchup.py --dry`
+- התקנה מחדש: `powershell -ExecutionPolicy Bypass -File scripts\catchup_task.ps1`, והסרה עם `-Remove`
+
 המשימה עובדת על שכפול נפרד של הריפו ב-`%LOCALAPPDATA%`, ולא נוגעת בתיקיית
 העבודה.
 
