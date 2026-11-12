@@ -18,13 +18,22 @@ import argparse
 import json
 import os
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "output"
 
-IL = timezone(timedelta(hours=3))
+# **שעון ישראל ולא UTC+3 קבוע.** עד 13/11/2026 עמד כאן היסט קבוע של שעון הקיץ,
+# ובחורף "היום" של הבדיקה התחלף ב-23:00: ריצת 23:15 הכריזה שהברייף בן יום
+# ושלחה מייל, עוד לפני שמהדורת הלילה הגיעה בכלל.
+IL = ZoneInfo("Asia/Jerusalem")
+
+# **מהדורת הלילה נכתבת אחרי חצות, תחת התאריך החדש.** עד שהיא מגיעה, הברייף
+# האחרון הוא של אתמול, וזה המצב התקין. ה-cron שלה ב-00:00, ורשת הביטחון
+# המקומית דוחפת ב-00:05; ברייף מאתמול אחרי השעה הזו הוא כבר תקלה.
+NIGHT_GRACE_HOUR = 2
 
 
 # --- למה זה נשבר, לא רק שזה נשבר -------------------------------------
@@ -342,7 +351,8 @@ def main() -> int:
                "אין צורך בפעולה."])
         return 0
 
-    today = datetime.now(IL).date()
+    now = datetime.now(IL)
+    today = now.date()
     rows, bad, tg = [], [], []
 
     # --- הברייף: נכתב שלוש פעמים ביום, כל יום ---
@@ -352,8 +362,10 @@ def main() -> int:
     else:
         day, name = b
         age = (today - date.fromisoformat(day)).days
-        rows.append(("ברייף", day, f"{age} ימים", name))
-        if age >= 1:
+        night_pending = age == 1 and now.hour < NIGHT_GRACE_HOUR
+        rows.append(("ברייף", day, f"{age} ימים" + (" · מהדורת הלילה בדרך" if night_pending else ""),
+                     name))
+        if age >= 1 and not night_pending:
             bad.append(f"הברייף האחרון הוא של {day} — {age} ימים. "
                        "בדוק את Daily Brief; פעימות ההשלמה היו אמורות לתפוס זאת.")
             tg.append(("ברייף", day, f"{age} ימים"))
@@ -462,6 +474,28 @@ def main() -> int:
         except ValueError:
             rows.append((label, day, "תאריך לא תקין", hint))
             continue
+        # **חסימה ידועה אינה תקלה חדשה.** מאוקטובר 2026 Govmap דורש reCAPTCHA,
+        # והסריקה מושבתת בכוונה (CLAUDE.md, שלב 5). ההתראה נשלחה בכל ריצה על
+        # מצב שאין מה לעשות בו, ומ-12/11 — כשהמשמר רץ כל שעה — זה נעשה מייל בשעה,
+        # שקובר התראה אמיתית. החסימה נמדדת מהסימון שהסריקה עצמה כותבת
+        # (ingest/nadlan_pull.py): הוא מתחדש בכל בדיקה שמאשרת אותה, וסריקה מוצלחת
+        # מוחקת אותו. כשהוא חסר, או שאיש לא אישר אותו בתוך הסף — חוזרים להתריע.
+        if label == "שוק הדיור" and n > limit:
+            blk = {}
+            try:
+                blk = (json.loads(path.read_text(encoding="utf-8")) or {}).get("blocked") or {}
+            except (json.JSONDecodeError, OSError):
+                pass
+            seen = str(blk.get("at") or "")[:10]
+            try:
+                fresh_block = (blk.get("reason") == "recaptcha"
+                               and (today - date.fromisoformat(seen)).days <= limit)
+            except ValueError:
+                fresh_block = False
+            if fresh_block:
+                since = str(blk.get("since") or seen)[:10]
+                rows.append((label, day, f"{n} ימים · מושבת: Govmap דורש reCAPTCHA מ-{since}", hint))
+                continue
         rows.append((label, day, f"{n} ימים", hint))
         if n > limit:
             bad.append(f"{label}: הסריקה האחרונה הייתה ב-{day} — {n} ימים. "
