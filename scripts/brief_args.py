@@ -75,7 +75,7 @@ def _age_hours(stamp) -> float | None:
 def main() -> int:
     event = os.environ.get("GITHUB_EVENT_NAME", "")
 
-    topics_only = ""
+    topics_only = topics_replace = ""
     soft = hard = cap = ""
     source = (os.environ.get("IN_SOURCE") or "").strip()
     if event == "workflow_dispatch" or source:
@@ -131,6 +131,14 @@ def main() -> int:
                       f"(מעל {TOPICS_ONLY_TTL_H}) — נשאר משימוש קודם ומתעלמים "
                       "ממנו; מופק ברייף מלא", file=sys.stderr)
                 topics_only = ""
+        # **topics_replace — כל סיכומי הסקטור מהריצה הזו, גם כשנושא חזר דל יותר.**
+        # summarize_topics.py שומר מעצמו את הגרסה העשירה של אותו יום (60915fd),
+        # ולכן אחרי "תרענן הכל" נשארו עמודים עם סיכום מהבוקר (12/11/2026). הדגל
+        # עובר ל-TOPICS_REPLACE=1, ותקף רק לצד topics_only ובאותו תוקף של שעתיים.
+        if topics_only and cfg.get("topics_replace"):
+            topics_replace = "1"
+            print("::notice title=סיכומי סקטור — החלפה מלאה::כל נושא נכתב מהריצה הזו, "
+                  "גם אם חזר עם פחות אייטמים מהגרסה הקודמת של היום", file=sys.stderr)
         src = f"{event or 'unknown'} (.trigger)"
 
     if edition not in EDITIONS:
@@ -147,6 +155,7 @@ def main() -> int:
     print(f"BRIEF_FORCE_IN={force}")
     print(f"BRIEF_SRC={src}")
     print(f"BRIEF_TOPICS_ONLY={topics_only}")
+    print(f"TOPICS_REPLACE={topics_replace}")
     if soft and not soft.replace(".", "", 1).isdigit():
         print(f"::warning::soft_usd={soft!r} אינו מספר — הבלם היומי נשאר כרגיל",
               file=sys.stderr)
