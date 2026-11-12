@@ -116,7 +116,9 @@ export async function onRequestPost({ request, env }) {
       "User-Agent": "tlv-tase-view",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ ref: "main", inputs: { edition, reviews: "" } }),
+    // requested_at: כשריצה אחרת כבר כותבת את אותה מהדורה, הלחיצה ממתינה לה בתור,
+    // ואז מרעננת את העמודים בלי לכתוב את המהדורה שוב (run_daily.sh, "בקשה שכבר נענתה").
+    body: JSON.stringify({ ref: "main", inputs: { edition, reviews: "", requested_at: new Date().toISOString() } }),
   });
   if (res.status !== 204) {
     const detail = (await res.text().catch(() => "")).slice(0, 200);
