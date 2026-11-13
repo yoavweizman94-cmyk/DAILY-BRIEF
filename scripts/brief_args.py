@@ -48,6 +48,10 @@ MAX_USD_CEIL נדחית: טעות הקלדה אינה צריכה לרוקן הט
 · `due` — אין לחיצה לבצע: היא כבר בוצעה בריצה אחרת, או ישנה מארבע שעות. רשת
   ביטחון בלבד — בלי הפקה כפויה ובלי עקיפת בלם, כלומר המהדורה שבזמן ורק אם חסרה.
   הסיבה המדויקת באנוטציה של ג'וב claim.
+· `trigger` — טריגר מפורש שבוטל בתור ושוחזר בשיגור חוזר. הקובץ כבר הוחזר לתוכן
+  שלו בקומיט שדחף אותו, והריצה מוכרעת כמו הדחיפה עצמה — לא כמו workflow_dispatch.
+  topics_only נמדד מול שעת הדחיפה (CLAIM_TRIGGER_PUSHED), כדי שהשהייה בתור לא
+  תהפוך רענון סקטורים זול לברייף מלא.
 · `own` או ריק — כמו קודם, לפי האירוע. ריק פירושו שהבדיקה עצמה נכשלה, ואז שעת
   הלחיצה נלקחת מה-inputs כפי שהייתה עד 13/11.
 
@@ -61,18 +65,23 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-TRIGGER = Path(__file__).resolve().parent.parent / ".trigger" / "daily-brief.json"
+# BRIEF_TRIGGER_FILE — לבדיקות בלבד (scripts/claim_smoke.py), כדי לא לגעת בקובץ האמיתי.
+TRIGGER = Path(os.environ.get("BRIEF_TRIGGER_FILE")
+               or Path(__file__).resolve().parent.parent / ".trigger" / "daily-brief.json")
 EDITIONS = ("", "morning", "midday", "close", "night")
 TOPICS_ONLY_TTL_H = 2
 MAX_USD_CEIL = 40.0
 
 
-def _age_hours(stamp) -> float | None:
+def _age_hours(stamp, ref: datetime | None = None) -> float | None:
     """גיל חותמת הזמן של הטריגר בשעות, או None אם אינה קריאה.
 
     הזמן בקובץ נכתב מקומית ובלי אזור זמן, והריצה בענן היא UTC. ההשוואה
     היא לזמן המקומי של הריצה (TZ=Asia/Jerusalem ב-workflow), ולכן שתי
     הצדדים באותו אזור. גיל שלילי — שעון שהוזז — נחשב טרי.
+
+    `ref` — הרגע שמולו מודדים, במקום עכשיו. טריגר ששוחזר אחרי שבוטל בתור
+    נמדד מול שעת הדחיפה שלו, כדי שיוכרע בדיוק כמו שהיה מוכרע בזמנו.
     """
     try:
         t = datetime.fromisoformat(str(stamp))
@@ -80,16 +89,39 @@ def _age_hours(stamp) -> float | None:
         return None
     if t.tzinfo is not None:
         t = t.astimezone().replace(tzinfo=None)
-    return max(0.0, (datetime.now() - t).total_seconds() / 3600)
+    now = ref.astimezone().replace(tzinfo=None) if ref and ref.tzinfo else (ref or datetime.now())
+    return max(0.0, (now - t).total_seconds() / 3600)
+
+
+def trigger_kind(cfg: dict, ref: datetime | None = None) -> str:
+    """מה דחיפה של קובץ הטריגר הזה מבקשת — אותה הכרעה כמו main למטה:
+    topics (topics_only בתוקף), skip (if_missing — רשת ביטחון, לא בקשה) או full
+    (ברייף כפוי, עם העקיפות שבקובץ). scripts/brief_claim.py משחזר רק topics ו-full."""
+    if cfg.get("topics_only"):
+        age = _age_hours(cfg.get("at"), ref)
+        if age is not None and age <= TOPICS_ONLY_TTL_H:
+            return "topics"
+    return "skip" if cfg.get("if_missing") else "full"
 
 
 def main() -> int:
     event = os.environ.get("GITHUB_EVENT_NAME", "")
+    claim = (os.environ.get("CLAIM_MODE") or "").strip()
+    # טריגר ששוחזר: הקובץ כבר הוחזר לתוכן שלו (שלב Restore recovered trigger), והריצה
+    # מתנהגת כמו הדחיפה המקורית — לא כמו workflow_dispatch שהיא בפועל.
+    recovered = claim == "trigger"
+    pushed = None
+    if recovered:
+        try:
+            pushed = datetime.fromisoformat(
+                (os.environ.get("CLAIM_TRIGGER_PUSHED") or "").replace("Z", "+00:00"))
+        except ValueError:
+            pushed = None
 
     topics_only = topics_replace = ""
     soft = hard = cap = ""
     source = (os.environ.get("IN_SOURCE") or "").strip()
-    if event == "workflow_dispatch" or source:
+    if (event == "workflow_dispatch" or source) and not recovered:
         edition = (os.environ.get("IN_EDITION") or "").strip()
         reviews = (os.environ.get("IN_REVIEWS") or "").strip()
         force = "1"
@@ -101,7 +133,7 @@ def main() -> int:
         if event == "workflow_dispatch" and not source:
             soft = (os.environ.get("IN_SOFT") or "").strip()
             hard = (os.environ.get("IN_HARD") or "").strip()
-    elif event == "schedule":
+    elif event == "schedule" and not recovered:
         # המהדורה נקבעת מה-cron בשלב Resolve edition; כאן רק ברירות מחדל.
         edition, reviews, force, src = "", "", "", "schedule"
     else:
@@ -132,7 +164,7 @@ def main() -> int:
         # הבטוחה היא ברייף, ולכן הדגל תקף רק לצד חותמת זמן טרייה.
         topics_only = "1" if cfg.get("topics_only") else ""
         if topics_only:
-            age = _age_hours(cfg.get("at"))
+            age = _age_hours(cfg.get("at"), pushed)
             if age is None:
                 print("::warning::topics_only בלי שדה at תקין — מופק ברייף מלא",
                       file=sys.stderr)
@@ -151,9 +183,11 @@ def main() -> int:
             print("::notice title=סיכומי סקטור — החלפה מלאה::כל נושא נכתב מהריצה הזו, "
                   "גם אם חזר עם פחות אייטמים מהגרסה הקודמת של היום", file=sys.stderr)
         src = f"{event or 'unknown'} (.trigger)"
+        if recovered:
+            sha = (os.environ.get("CLAIM_TRIGGER_SHA") or "")[:7]
+            src = f"שיגור חוזר של טריגר {sha} (.trigger)"
 
     requested_at = (os.environ.get("IN_REQUESTED_AT") or "").strip()
-    claim = (os.environ.get("CLAIM_MODE") or "").strip()
     if claim == "click":
         edition = (os.environ.get("CLAIM_EDITION") or "").strip()
         requested_at = (os.environ.get("CLAIM_REQUESTED_AT") or "").strip()

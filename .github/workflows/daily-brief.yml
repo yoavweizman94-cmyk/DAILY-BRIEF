@@ -1,10 +1,13 @@
 name: Daily Brief
 
 # **ריצת לחיצה נקראת בשמה.** ה-API אינו מחזיר את ה-inputs של ריצה, ולכן לחיצה שבוטלה
-# בתור ב-13/11/2026 לא אמרה מה ביקשה. ריצה אחרת — השם הרגיל (ביטוי ריק = ברירת המחדל).
+# בתור ב-13/11/2026 לא אמרה מה ביקשה. גם שיגור חוזר של טריגר נקרא בשמו, עם ה-sha המלא:
+# scripts/brief_claim.py מזהה לפיו שהטריגר כבר שוגר (TRIGGER_TITLE שם — לשנות יחד).
+# ריצה אחרת — השם הרגיל (ביטוי ריק = ברירת המחדל).
 run-name: >-
   ${{ inputs.requested_at && format('הפק ({0}){1} · {2}', inputs.edition || 'לפי השעה',
-  inputs.redispatch_of && ' · שיגור חוזר' || '', inputs.requested_at) || '' }}
+  inputs.redispatch_of && ' · שיגור חוזר' || '', inputs.requested_at)
+  || inputs.trigger_sha && format('טריגר · שיגור חוזר · {0}', inputs.trigger_sha) || '' }}
 
 # שלוש מהדורות ביום. cron של GitHub הוא UTC בלבד וישראל מזיזה שעון פעמיים בשנה,
 # ולכן כל מהדורה מתוזמנת לשתי שעות UTC — קיץ (UTC+3) וחורף (UTC+2) — ו-run_daily.sh
@@ -69,6 +72,12 @@ on:
         description: "פנימי: מספר הריצה ששיגרה מחדש לחיצה ממתינה. ריק בשיגור רגיל"
         required: false
         default: ""
+      # טריגר מפורש (.trigger/daily-brief.json) שבוטל בתור לפני שרץ: הריצה מחזירה את
+      # הקובץ לתוכנו בקומיט הזה ומתנהגת כמו הדחיפה עצמה (scripts/brief_claim.py).
+      trigger_sha:
+        description: "פנימי: שיגור חוזר של טריגר שבוטל בתור — ה-sha של הקומיט שדחף אותו"
+        required: false
+        default: ""
   # קריאה מ-brief-request.yml, כשבדיקת התור מצאה ב-KV לחיצה ממתינה. הריצה עצמה תובעת
   # אותה (ג'וב claim), לא הבדיקה.
   # `source` אינו קישוט: ריצה שנקראת יורשת את event_name של הקוראת
@@ -119,17 +128,21 @@ jobs:
   # · בכל ריצה אחרת — לחיצה שממתינה ב-KV ואין אחריה ריצה בתור משוגרת מחדש, והריצה
   #   ממשיכה בשלה.
   # לחיצה שכבר בוצעה בריצה אחרת אינה מבוצעת שוב, והריצה שלה ממשיכה כרשת ביטחון.
+  # **אותו דבר לטריגר מפורש** (לא if_missing) שבוטל בתור לפני שרץ: הוא משוגר מחדש עם
+  # trigger_sha, אלא אם טריגר חדש יותר מחליף אותו; הבקשה שמורה בקומיט, לא ב-KV.
   # הג'וב לעולם אינו עוצר ברייף: כשהוא נכשל, הריצה ממשיכה לפי ה-inputs שלה.
   claim:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      actions: write   # רשימת הריצות, ושיגור חוזר של לחיצה ממתינה
-      contents: read
+      actions: write   # רשימת הריצות והג'ובים שלהן, ושיגור חוזר של בקשה ממתינה
+      contents: read   # קובץ הטריגר כפי שהיה בכל קומיט
     outputs:
       mode: ${{ steps.claim.outputs.mode }}
       edition: ${{ steps.claim.outputs.edition }}
       requested_at: ${{ steps.claim.outputs.requested_at }}
+      trigger_sha: ${{ steps.claim.outputs.trigger_sha }}
+      trigger_pushed: ${{ steps.claim.outputs.trigger_pushed }}
       pages: ${{ steps.claim.outputs.pages }}
     steps:
       - uses: actions/checkout@v7
@@ -137,6 +150,7 @@ jobs:
           sparse-checkout: |
             scripts/kv_request.py
             scripts/brief_claim.py
+            scripts/brief_args.py
           sparse-checkout-cone-mode: false
           fetch-depth: 1
 
@@ -150,6 +164,7 @@ jobs:
           IN_REQUESTED_AT: ${{ inputs.requested_at }}
           IN_SOURCE: ${{ inputs.source }}
           IN_REDISPATCH_OF: ${{ inputs.redispatch_of }}
+          IN_TRIGGER_SHA: ${{ inputs.trigger_sha }}
         run: python3 scripts/brief_claim.py
 
   brief:
@@ -191,6 +206,18 @@ jobs:
           pip install -r requirements.txt
           npm install -g @anthropic-ai/claude-code
 
+      # **טריגר ששוחזר רץ על הקובץ שלו, לא על הנוכחי.** מאז שנדחף, משימת רשת הביטחון
+      # דוחפת if_missing לאותו קובץ חמש פעמים ביום; הריצה צריכה את מה שהדחיפה המקורית
+      # ביקשה. השם הזה נבדק ב-brief_claim.py (RESTORE_STEP) — שלב שהצליח = הטריגר בוצע.
+      - name: Restore recovered trigger
+        if: needs.claim.outputs.mode == 'trigger'
+        env:
+          SHA: ${{ needs.claim.outputs.trigger_sha }}
+        run: |
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::trigger_sha לא תקין"; exit 1; }
+          git show "$SHA:.trigger/daily-brief.json" > .trigger/daily-brief.json
+          echo "::notice title=הקובץ מהקומיט ${SHA:0:7}::$(tr -d '\n' < .trigger/daily-brief.json | cut -c1-300)"
+
       # הפרמטרים מוכרעים במקום אחד, כי לשלושת האירועים מקורות שונים
       # ולאירוע push אין inputs כלל. הכרעת claim גוברת עליהם (brief_args.py).
       - name: Resolve arguments
@@ -204,6 +231,8 @@ jobs:
           CLAIM_MODE: ${{ needs.claim.outputs.mode }}
           CLAIM_EDITION: ${{ needs.claim.outputs.edition }}
           CLAIM_REQUESTED_AT: ${{ needs.claim.outputs.requested_at }}
+          CLAIM_TRIGGER_SHA: ${{ needs.claim.outputs.trigger_sha }}
+          CLAIM_TRIGGER_PUSHED: ${{ needs.claim.outputs.trigger_pushed }}
         run: |
           python scripts/brief_args.py > /tmp/brief.env
           cat /tmp/brief.env >> "$GITHUB_ENV"
