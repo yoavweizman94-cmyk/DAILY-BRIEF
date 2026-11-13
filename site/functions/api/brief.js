@@ -9,11 +9,17 @@
 // הריצה עצמה היא זו שכבר רצה בתזמון, עם אותם מעקות: `reviews` נשאר ריק כדי
 // שלא ייכתבו סקירות דוחות בטעות, והמהדורה נבחרת מרשימה סגורה.
 //
-// **שתי דרכים, ושתיהן חיות.** עם GITHUB_DISPATCH_TOKEN — אסימון fine-grained
-// לריפו הזה עם הרשאת Actions: Read and write — הריצה משוגרת מיד. בלעדיו
-// הבקשה נרשמת ל-KV, ו-.github/workflows/brief-request.yml תובע אותה בפעימה
-// הקרובה (עד עשר דקות) ומריץ את המהדורה. כך הכפתור עובד בלי שום הגדרה,
-// והאסימון הוא שדרוג לזמן תגובה ולא תנאי לקיום.
+// **הלחיצה נרשמת קודם, והשיגור רק מעיר ריצה (מ-13/11/2026).** כל לחיצה נכתבת ל-KV
+// לפני השיגור. ב-concurrency של daily-brief יש מקום לפעילה אחת ולממתינה אחת, וריצה
+// חדשה מבטלת את הממתינה: ב-13/11 לחיצה שחיכתה אחרי מהדורת הלילה בוטלה כך ב-00:57,
+// ורענון העמודים שלה אבד בשקט. מאז הריצה שמקבלת את המקום תובעת את הלחיצה מ-KV
+// (scripts/brief_claim.py), וכל ריצה אחרת שרואה לחיצה ממתינה משגרת אותה מחדש. הסימון
+// שהלחיצה בוצעה הוא שמונע ביצוע כפול.
+//
+// **ובלי אסימון — אותו רישום.** עם GITHUB_DISPATCH_TOKEN — אסימון fine-grained לריפו
+// הזה עם הרשאת Actions: Read and write — הריצה משוגרת מיד. בלעדיו, או כש-GitHub דוחה
+// אותו, הלחיצה נשארת ב-KV עד שריצת ברייף כלשהי, או הפעימה של brief-request.yml, תמצא
+// אותה. כך הכפתור עובד בלי שום הגדרה, והאסימון הוא שדרוג לזמן תגובה ולא תנאי לקיום.
 import { readCookie, readSession, getUser, normEmail, json, COOKIE, rateLimit } from "../_lib/auth.js";
 
 const REPO = "yoavweizman94-cmyk/DAILY-BRIEF";
@@ -30,7 +36,7 @@ const QUEUE_TTL = 14400;         // ארבע שעות. שעתיים לא הספ�
 // באיחור ובדילוגים: נמדד 28/09/2026 שריצה שאמורה להיות כל חצי שעה יצאה
 // אחת לשעתיים, ופעימת ה-10 דקות לא יצאה כלל במשך שעה וחצי. להבטיח לקורא
 // עשר דקות זה לשקר לו, ולכן הניסוח אומר מה באמת ידוע.
-const QUEUE_WAIT = "בפעימה הקרובה של GitHub (לעיתים שעה ויותר)";
+const QUEUE_WAIT = "בריצת הברייף הקרובה או בפעימת התור של GitHub (לעיתים שעה ויותר)";
 const SETUP = "צור אסימון GitHub fine-grained לריפו DAILY-BRIEF עם הרשאת Actions: Read and write, "
   + "והוסף אותו ב-Workers & Pages → forest-brief → Settings → Variables and Secrets "
   + "(Secret, בשם GITHUB_DISPATCH_TOKEN) — או כסוד DISPATCH_TOKEN ב-GitHub, ואז הרץ "
@@ -85,12 +91,20 @@ export async function onRequestPost({ request, env }) {
   const rl = await rateLimit(env, `brief:${email}`, PER_HOUR, 3600);
   if (!rl.ok) return json({ error: `עד ${PER_HOUR} הפקות בשעה` }, 429);
 
-  // בלי אסימון: הבקשה נרשמת ל-KV ונתבעת בפעימה הקרובה. מפתח אחד בכוונה —
-  // שתי לחיצות עוקבות הן בקשה אחת, לא שתי מהדורות.
-  async function enqueue(why) {
-    await env.USERS.put(QUEUE_KEY, JSON.stringify({
-      edition, at: new Date().toISOString(), by: email,
-    }), { expirationTtl: QUEUE_TTL });
+  // **רישום לפני שיגור.** אותה שעה בדיוק עוברת ל-KV ול-requested_at של השיגור: לפיה
+  // הריצה יודעת שהלחיצה בוצעה, ולפיה run_daily.sh אינו כותב מהדורה שנכתבה אחריה.
+  // מפתח אחד בכוונה — שתי לחיצות עוקבות הן בקשה אחת, לא שתי מהדורות.
+  const at = new Date().toISOString();
+  let recorded = false;
+  if (env.USERS) {
+    try {
+      await env.USERS.put(QUEUE_KEY, JSON.stringify({ edition, at, by: email }),
+        { expirationTtl: QUEUE_TTL });
+      recorded = true;
+    } catch { /* KV לא זמין: השיגור עדיין נושא את הלחיצה ב-inputs שלו */ }
+  }
+  // tokenProblem: רק כשהאסימון חסר או נדחה יש טעם לשלוח למדריך. תקלה של GitHub חולפת.
+  function queued(why, tokenProblem = true) {
     return json({
       ok: true,
       edition,
@@ -98,35 +112,43 @@ export async function onRequestPost({ request, env }) {
       label: LABEL[edition],
       message: (why ? why + " " : "")
         + `נרשמה בקשה להפקת ברייף (${LABEL[edition]}) ולרענון כל עמודי האתר. ההפקה מתחילה `
-        + `${QUEUE_WAIT} ונמשכת 15–25 דקות. להתחלה מיידית צריך אסימון — ראה המדריך.`,
-      runs: `https://github.com/${REPO}/actions/workflows/brief-request.yml`,
+        + `${QUEUE_WAIT} ונמשכת 15–25 דקות.`
+        + (tokenProblem ? " להתחלה מיידית צריך אסימון — ראה המדריך." : ""),
+      runs: `https://github.com/${REPO}/actions/workflows/${WORKFLOW}`,
     }, 202, NO_STORE);
   }
   if (!env.GITHUB_DISPATCH_TOKEN) {
-    if (!env.USERS) return json({ error: "לא הוגדר אסימון הפעלה", setup: SETUP }, 501);
-    return enqueue("");
+    if (!recorded) return json({ error: "לא הוגדר אסימון הפעלה", setup: SETUP }, 501);
+    return queued("");
   }
 
-  const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      "User-Agent": "tlv-tase-view",
-      "Content-Type": "application/json",
-    },
-    // requested_at: כשריצה אחרת כבר כותבת את אותה מהדורה, הלחיצה ממתינה לה בתור,
-    // ואז מרעננת את העמודים בלי לכתוב את המהדורה שוב (run_daily.sh, "בקשה שכבר נענתה").
-    body: JSON.stringify({ ref: "main", inputs: { edition, reviews: "", requested_at: new Date().toISOString() } }),
-  });
+  let res;
+  try {
+    res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "tlv-tase-view",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ref: "main", inputs: { edition, reviews: "", requested_at: at } }),
+    });
+  } catch {
+    if (recorded) return queued("GitHub לא ענה.", false);
+    return json({ error: "GitHub לא ענה" }, 502);
+  }
   if (res.status !== 204) {
     const detail = (await res.text().catch(() => "")).slice(0, 200);
-    // **אסימון שנדחה אינו סוף הבקשה.** אסימון fine-grained פג בתאריך שנקבע כשנוצר:
-    // ב-02/11/2026 הכפתור נכשל כך, ואף לחיצה לא הגיעה ל-GitHub. הבקשה נרשמת לתור
-    // כמו בלי אסימון, וההודעה אומרת גם למה וגם מה לתקן.
-    if (env.USERS && (res.status === 401 || res.status === 403 || res.status === 404)) {
-      return enqueue(`GitHub דחה את אסימון ההפעלה (${res.status}) — כנראה שפג תוקפו.`);
+    // **שיגור שנכשל אינו סוף הבקשה.** אסימון fine-grained פג בתאריך שנקבע כשנוצר: ב-02/11/2026
+    // הכפתור נכשל כך, ואף לחיצה לא הגיעה ל-GitHub. הלחיצה כבר רשומה ב-KV, ולכן כל כישלון
+    // — אסימון שנדחה או תקלה של GitHub — הופך לבקשה בתור, וההודעה אומרת למה.
+    if (recorded) {
+      const rejected = res.status === 401 || res.status === 403 || res.status === 404;
+      return queued(rejected
+        ? `GitHub דחה את אסימון ההפעלה (${res.status}) — כנראה שפג תוקפו.`
+        : `GitHub השיב ${res.status} לשיגור.`, rejected);
     }
     return json({ error: `GitHub השיב ${res.status}`, detail }, 502);
   }
@@ -138,8 +160,9 @@ export async function onRequestPost({ request, env }) {
     // כל צנרות העמודים רצות במקביל לברייף, והאתר נפרס פעם אחרונה כשכולן מסתיימות.
     message: `הופעלה הפקת ברייף (${LABEL[edition]}) ורענון של כל הנתונים באתר — רכב, סחורות, למ"ס, `
       + "רגולציה, כותרות, דיווחים, עסקאות מחוץ לבורסה ותמלולי שיחות משקיעים. הברייף מוכן תוך "
-      + "10–20 דקות, והאתר כולו נפרס מחדש כשכל העמודים מסתיימים — לרוב תוך 25 דקות. העסקאות "
-      + "המתואמות נאספות מ-GTO במחשב המשרד כל חצי שעה.",
+      + "10–20 דקות, והאתר כולו נפרס מחדש כשכל העמודים מסתיימים — לרוב תוך 25 דקות. אם ריצה "
+      + "אחרת כבר פעילה, הלחיצה ממתינה לסיומה ונשמרת עד שתבוצע. העסקאות המתואמות נאספות "
+      + "מ-GTO במחשב המשרד כל חצי שעה.",
     runs: `https://github.com/${REPO}/actions/workflows/${WORKFLOW}`,
   }, 202, NO_STORE);
 }

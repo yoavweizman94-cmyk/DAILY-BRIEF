@@ -17,7 +17,9 @@ workflow_dispatch אחת. כשה-cron של GitHub עובד, הבדיקה לא ע
 
 **מחוץ לרשימה, בכוונה:**
 - daily-brief: המהדורות שייכות ל-ensure_editions, ושיגור כאן היה כופה מהדורה.
-- brief-request: התור של כפתור "הפק". מ-12/11 הכפתור משגר ישירות.
+- brief-request: התור של כפתור "הפק". מ-12/11 הכפתור משגר ישירות, ומ-13/11 לחיצה
+  שבוטלה בתור משוגרת מחדש מתוך daily-brief עצמו (scripts/brief_claim.py) — בתוך
+  התור, ולכן בלי מרוץ, וגם כשהמחשב הזה ישן.
 - nadlan-scan: Govmap חסום ב-reCAPTCHA.
 
 רץ כל 15 דקות כמשימה מתוזמנת (scripts/catchup_task.ps1). היומן נשמר ב-

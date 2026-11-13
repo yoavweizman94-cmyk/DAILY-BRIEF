@@ -1,5 +1,11 @@
 name: Daily Brief
 
+# **ריצת לחיצה נקראת בשמה.** ה-API אינו מחזיר את ה-inputs של ריצה, ולכן לחיצה שבוטלה
+# בתור ב-13/11/2026 לא אמרה מה ביקשה. ריצה אחרת — השם הרגיל (ביטוי ריק = ברירת המחדל).
+run-name: >-
+  ${{ inputs.requested_at && format('הפק ({0}){1} · {2}', inputs.edition || 'לפי השעה',
+  inputs.redispatch_of && ' · שיגור חוזר' || '', inputs.requested_at) || '' }}
+
 # שלוש מהדורות ביום. cron של GitHub הוא UTC בלבד וישראל מזיזה שעון פעמיים בשנה,
 # ולכן כל מהדורה מתוזמנת לשתי שעות UTC — קיץ (UTC+3) וחורף (UTC+2) — ו-run_daily.sh
 # בוחר מהדורה לפי השעה המקומית בפועל ויוצא בשקט בשעה ה"שנייה".
@@ -57,7 +63,14 @@ on:
         description: "מתי נלחץ הפק (ISO). ריק = הפקה כפויה בכל מקרה"
         required: false
         default: ""
-  # קריאה מ-brief-request.yml, שתובע בקשת הפקה שהכפתור באתר כתב ל-KV.
+      # ריצה ששיגרה מחדש לחיצה שחיכתה ב-KV (scripts/brief_claim.py). שיגור חוזר שאינו
+      # מצליח לסמן ב-KV שהלחיצה בוצעה — אינו מבצע אותה, אחרת כל ריצה הייתה חוזרת עליה.
+      redispatch_of:
+        description: "פנימי: מספר הריצה ששיגרה מחדש לחיצה ממתינה. ריק בשיגור רגיל"
+        required: false
+        default: ""
+  # קריאה מ-brief-request.yml, כשבדיקת התור מצאה ב-KV לחיצה ממתינה. הריצה עצמה תובעת
+  # אותה (ג'וב claim), לא הבדיקה.
   # `source` אינו קישוט: ריצה שנקראת יורשת את event_name של הקוראת
   # ("schedule"), וברירת המחדל של schedule היא לדלג על ברייף קיים —
   # כלומר בקשה מפורשת של הבעלים הייתה יוצאת ריקה.
@@ -84,6 +97,11 @@ on:
 permissions:
   contents: write
 
+# **מקום לפעילה אחת ולממתינה אחת.** ריצה חדשה שנכנסת לתור מבטלת את הממתינה, בלי
+# שאף ג'וב שלה התחיל. ריצות תזמון וטריגר מחליפות זו את זו בלי נזק; לחיצה על "הפק"
+# אינה ניתנת להחלפה, ולכן היא שמורה ב-KV ונתבעת רק כשהריצה כבר מחזיקה את המקום —
+# ג'וב claim למטה. פיצול לקבוצות נפרדות היה מריץ שתי מהדורות במקביל: שתי דחיפות
+# לריפו התוכן באותן דקות, כמו ההתנגשות שזרקה ברייף ששולם ב-12/10/2026.
 concurrency:
   group: daily-brief
   cancel-in-progress: false
@@ -92,7 +110,52 @@ env:
   TZ: Asia/Jerusalem
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # **מה לחיצה על "הפק" דורשת מהריצה הזו — נקבע כשהיא כבר מחזיקה את המקום.**
+  # ב-13/11/2026 לחיצה מ-00:36 חיכתה בתור אחרי מהדורת הלילה, cron מאוחר ביטל אותה
+  # ב-00:57, יצא על "המהדורה כבר קיימת", ורענון העמודים של הלחיצה אבד בשקט. מאז הכפתור
+  # רושם כל לחיצה ב-KV לפני שהוא משגר, והג'וב הזה (scripts/brief_claim.py):
+  # · בריצת לחיצה — תובע את הלחיצה הממתינה ורושם שבוצעה, לפני ההפקה;
+  # · בכל ריצה אחרת — לחיצה שממתינה ב-KV ואין אחריה ריצה בתור משוגרת מחדש, והריצה
+  #   ממשיכה בשלה.
+  # לחיצה שכבר בוצעה בריצה אחרת אינה מבוצעת שוב, והריצה שלה ממשיכה כרשת ביטחון.
+  # הג'וב לעולם אינו עוצר ברייף: כשהוא נכשל, הריצה ממשיכה לפי ה-inputs שלה.
+  claim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write   # רשימת הריצות, ושיגור חוזר של לחיצה ממתינה
+      contents: read
+    outputs:
+      mode: ${{ steps.claim.outputs.mode }}
+      edition: ${{ steps.claim.outputs.edition }}
+      requested_at: ${{ steps.claim.outputs.requested_at }}
+      pages: ${{ steps.claim.outputs.pages }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            scripts/kv_request.py
+            scripts/brief_claim.py
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - name: Claim a pending click
+        id: claim
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GH_TOKEN: ${{ github.token }}
+          IN_EDITION: ${{ inputs.edition }}
+          IN_REQUESTED_AT: ${{ inputs.requested_at }}
+          IN_SOURCE: ${{ inputs.source }}
+          IN_REDISPATCH_OF: ${{ inputs.redispatch_of }}
+        run: python3 scripts/brief_claim.py
+
   brief:
+    needs: claim
+    # !cancelled ולא ברירת המחדל: claim שנכשל אינו סיבה לדלג על מהדורה.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     # הועלה מ-45 כשהמהדורה הפיקה גם סקירות דוחות. הן כבויות מאז
     # 28/08/2026, אבל המרווח נשאר: הצנרת מושכת שבעה מקורות וסורקת
@@ -129,7 +192,7 @@ jobs:
           npm install -g @anthropic-ai/claude-code
 
       # הפרמטרים מוכרעים במקום אחד, כי לשלושת האירועים מקורות שונים
-      # ולאירוע push אין inputs כלל.
+      # ולאירוע push אין inputs כלל. הכרעת claim גוברת עליהם (brief_args.py).
       - name: Resolve arguments
         env:
           IN_EDITION: ${{ inputs.edition }}
@@ -137,6 +200,10 @@ jobs:
           IN_SOURCE: ${{ inputs.source }}
           IN_SOFT: ${{ inputs.soft_usd }}
           IN_HARD: ${{ inputs.hard_usd }}
+          IN_REQUESTED_AT: ${{ inputs.requested_at }}
+          CLAIM_MODE: ${{ needs.claim.outputs.mode }}
+          CLAIM_EDITION: ${{ needs.claim.outputs.edition }}
+          CLAIM_REQUESTED_AT: ${{ needs.claim.outputs.requested_at }}
         run: |
           python scripts/brief_args.py > /tmp/brief.env
           cat /tmp/brief.env >> "$GITHUB_ENV"
@@ -168,7 +235,8 @@ jobs:
           BRIEF_EDITION: ${{ steps.ed.outputs.edition }}
           # הרצה ידנית תמיד מפיקה מחדש; מתוזמנת מדלגת אם כבר יש ברייף טרי
           BRIEF_FORCE: ${{ env.BRIEF_FORCE_IN }}
-          BRIEF_REQUESTED_AT: ${{ inputs.requested_at }}
+          # שעת הלחיצה שנתבעה (או ה-input, כשאין הכרעת claim)
+          BRIEF_REQUESTED_AT: ${{ env.BRIEF_REQUESTED_AT_IN }}
           # קובץ טריגר עם "topics_only": 1 מדלג על כתיבת הברייף ומרענן
           # רק חדשות, סיכומי סקטור והאתר. ראה scripts/brief_args.py.
           TOPICS_ONLY: ${{ env.BRIEF_TOPICS_ONLY }}
@@ -304,11 +372,15 @@ jobs:
   # **הכפתור מרענן את כל האתר, לא רק את הברייף.** כל עמוד מתעדכן בצנרת משלו, וה-cron
   # של GitHub מדלל אותן: offex-backfill, "כל שעה", רץ ב-04–05/10/2026 כל שלוש עד שש
   # שעות. לחיצה על הכפתור הפיקה ברייף טרי לצד עמודים בני חצי יום. בריצת כפתור —
-  # workflow_dispatch, או source מתור ה-KV — ורק בה, מופעלות כאן כל צנרות העמודים,
-  # במקביל לברייף. טריגר של רשת הביטחון רץ חמש פעמים ביום, ואין סיבה לשלם בכל אחד
-  # מהם על סקירות.
+  # לחיצה שנתבעה, או שיגור ידני — ורק בה, מופעלות כאן כל צנרות העמודים, במקביל
+  # לברייף. טריגר של רשת הביטחון רץ חמש פעמים ביום, ואין סיבה לשלם בכל אחד מהם על
+  # סקירות; ולחיצה שכבר בוצעה בריצה אחרת אינה מרעננת שוב. כש-claim לא הכריע (mode
+  # ריק) — כמו לפני 13/11, לפי האירוע.
   refresh-pages:
-    if: github.event_name == 'workflow_dispatch' || inputs.source != ''
+    needs: claim
+    if: >-
+      ${{ !cancelled() && (needs.claim.outputs.pages == 'true'
+      || (needs.claim.outputs.mode == '' && (github.event_name == 'workflow_dispatch' || inputs.source != ''))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

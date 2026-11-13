@@ -40,6 +40,16 @@ MAX_USD_CEIL נדחית: טעות הקלדה אינה צריכה לרוקן הט
 להפיק אותה, הריצה יוצאת לפני האיסוף. ה-cron עצמו מתאחר בשעות, ולכן הוא
 אינו אחריות מספיקה לבדו.
 
+**ההכרעה של ג'וב claim גוברת (מ-13/11/2026).** scripts/brief_claim.py רץ לפני
+הברייף, כשהריצה כבר מחזיקה את המקום בתור, ומחליט מה לחיצה על "הפק" דורשת ממנה
+(CLAIM_MODE):
+· `click` — לבצע לחיצה: הפקה כפויה, עם המהדורה ושעת הלחיצה שנתבעו מ-KV. לרוב
+  אלה ה-inputs של הריצה עצמה, אבל לחיצה מאוחרת יותר שממתינה ב-KV גוברת.
+· `due` — הלחיצה של הריצה כבר בוצעה בריצה אחרת: רשת ביטחון בלבד. בלי הפקה כפויה
+  ובלי עקיפת בלם, כלומר המהדורה שבזמן ורק אם חסרה.
+· `own` או ריק — כמו קודם, לפי האירוע. ריק פירושו שהבדיקה עצמה נכשלה, ואז שעת
+  הלחיצה נלקחת מה-inputs כפי שהייתה עד 13/11.
+
 הפלט הוא שורות KEY=VALUE, לטעינה לסביבה של השלב.
 """
 from __future__ import annotations
@@ -141,6 +151,21 @@ def main() -> int:
                   "גם אם חזר עם פחות אייטמים מהגרסה הקודמת של היום", file=sys.stderr)
         src = f"{event or 'unknown'} (.trigger)"
 
+    requested_at = (os.environ.get("IN_REQUESTED_AT") or "").strip()
+    claim = (os.environ.get("CLAIM_MODE") or "").strip()
+    if claim == "click":
+        edition = (os.environ.get("CLAIM_EDITION") or "").strip()
+        requested_at = (os.environ.get("CLAIM_REQUESTED_AT") or "").strip()
+        force = "1"
+        src = f"{src} · לחיצה"
+    elif claim == "due":
+        # הלחיצה כבר בוצעה. עקיפת בלם שנשלחה איתה שייכת לה, לא לרשת הביטחון.
+        edition, force, requested_at = "", "", ""
+        soft = hard = cap = ""
+        src = f"{src} · רשת ביטחון"
+        print("::notice title=רשת ביטחון::הלחיצה של הריצה כבר בוצעה — מופקת המהדורה "
+              "שבזמן, ורק אם חסרה", file=sys.stderr)
+
     if edition not in EDITIONS:
         print(f"::warning::מהדורה {edition!r} אינה מוכרת — נבחרת לפי השעה",
               file=sys.stderr)
@@ -153,6 +178,8 @@ def main() -> int:
     # אפס = כבוי. הסקירות נוצרות בלחיצה בעמוד; ראה run_daily.sh.
     print(f"BRIEF_REVIEWS={reviews or 0}")
     print(f"BRIEF_FORCE_IN={force}")
+    # שעת הלחיצה ל-run_daily.sh: מהדורה שנכתבה אחריה אינה נכתבת שוב.
+    print(f"BRIEF_REQUESTED_AT_IN={requested_at}")
     print(f"BRIEF_SRC={src}")
     print(f"BRIEF_TOPICS_ONLY={topics_only}")
     print(f"TOPICS_REPLACE={topics_replace}")
