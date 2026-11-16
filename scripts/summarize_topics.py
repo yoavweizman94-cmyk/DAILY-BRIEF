@@ -142,25 +142,43 @@ def main() -> int:
     # כולם, ולכל אצווה יש תקציב זמן משלה.
     got: list[dict] = []
     failures: list[str] = []
-    for i in range(0, len(blocks), BATCH):
-        chunk = blocks[i:i + BATCH]
-        tag = f"{i // BATCH + 1}/{(len(blocks) + BATCH - 1) // BATCH}"
+
+    def ask(chunk: list[str], tag: str) -> list[dict]:
         # **ישירות ל-API, פלט מובנה** (05/10/2026). עד אז JSONL חופשי דרך ה-CLI: שורה
         # שגרש עברי שבר בה ("נדל"ן") מחקה נושא שלם, וכל קריאה שילמה על ~54K טוקני
         # הנחיות סוכן.
         res, err, usd = _api.ask_json(PROMPT, "הנושאים:\n" + "\n\n".join(chunk), SCHEMA,
                                       job="topic-summaries", model=MODEL, max_tokens=24000,
                                       max_usd=MAX_USD)
-        if not err:
-            print(f"  אצווה {tag}: ${usd:.3f}")
-            got += [t for t in (res or {}).get("topics") or [] if isinstance(t, dict)]
         if err:
             # **שגיאת ה-CLI היא האבחנה, וללוג היא אינה נקראת.** הלוגים של
             # Actions דורשים הזדהות; יתרה שאזלה, מפתח שנדחה ומודל עמוס
             # נראים כאן זהים בלעדיה. זו הודעת שגיאה של הכלי ולא תוכן
             # הברייף, ולכן מותר לה לעלות לאנוטציה.
             failures.append(f"אצווה {tag}: {err}")
-            continue
+            return []
+        print(f"  אצווה {tag}: ${usd:.3f}")
+        return [t for t in (res or {}).get("topics") or [] if isinstance(t, dict)]
+
+    for i in range(0, len(blocks), BATCH):
+        got += ask(blocks[i:i + BATCH], f"{i // BATCH + 1}/{(len(blocks) + BATCH - 1) // BATCH}")
+
+    # **אצווה "מוצלחת" יכולה לחזור כמעט ריקה.** ב-16/11/2026 האצווה הראשונה החזירה
+    # 98 טוקנים: פתיח אחד בלי אייטמים לנושא אחד, ושלושה נושאים לא חזרו כלל — בלי
+    # שגיאה, ולכן בלי ניסיון חוזר. נושא שהיו לו כותרות וחזר בלי אייטמים, או לא חזר,
+    # נשלח שוב פעם אחת, לבדו עם שאר הנושאים שנפלו. אצווה שנכשלה בשגיאה נכנסת לכאן
+    # באותה דרך.
+    full = {t.get("slug") for t in got if t.get("items")}
+    retry = [b for s, b in zip(want, blocks) if s not in full]
+    if retry and got:
+        print(f"  ניסיון חוזר ל-{len(retry)} נושאים שחזרו ריקים")
+        again = []
+        for i in range(0, len(retry), BATCH):
+            again += ask(retry[i:i + BATCH], f"חוזר {i // BATCH + 1}")
+        fixed = {t.get("slug") for t in again if t.get("items")}
+        # הגרסה החוזרת מחליפה את הריקה רק כשיש בה אייטמים
+        got = [t for t in got if t.get("slug") not in fixed] + \
+              [t for t in again if t.get("slug") in fixed]
 
     if failures:
         print("::warning title=אצוות סיכום שנפלו::" + " · ".join(failures))
@@ -216,8 +234,8 @@ def main() -> int:
         if thin:
             parts.append("פחות משלושה אייטמים: " + ", ".join(thin))
         print("::warning title=סיכומי נושא חלקיים::" + " · ".join(parts)
-              + " — עמוד סקטור בלי סיכום מציג את הקובץ הקודם ואינו "
-                "מתרוקן, ולכן החוסר אינו נראה באתר.")
+              + " (אחרי ניסיון חוזר) — האתר טוען רק את הקובץ האחרון: נושא כזה "
+                "מוצג בלי תמונת מצב, אלא אם נשמרה לו גרסה קודמת מהיום.")
 
     out_dir = ROOT / "output" / "topics"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -231,15 +249,23 @@ def main() -> int:
     # נושא שלריצה הזו יש בו פחות אייטמים מלקודמת — או שאינו בה כלל — נשאר כפי
     # שהיה; בשוויון נכתבת הגרסה החדשה, שקראה קלט טרי יותר. TOPICS_REPLACE=1
     # כותב את הריצה הזו כמות שהיא — למשל אחרי תיקון בסיווג, כשהדל הוא הנכון.
+    # **גם בהחלפה מלאה, "כלום" אינו גרסה.** העמוד טוען רק את הקובץ האחרון, ולכן נושא
+    # שלא חזר נעלם מהאתר עד מחר. ב-16/11/2026 ההחלפה המלאה מחקה כך את הסיכומים של
+    # הבוקר באנרגיה, בחומרי בנייה ובמתכות. נושא שחזר בלי אייטמים, או לא חזר כלל,
+    # שומר את הגרסה הקודמת של היום, אם יש בה אייטמים.
+    replace = os.environ.get("TOPICS_REPLACE") == "1"
     try:
         prev = (json.loads(path.read_text(encoding="utf-8")).get("summaries") or {}
-                if path.exists() and os.environ.get("TOPICS_REPLACE") != "1" else {})
+                if path.exists() else {})
     except (OSError, json.JSONDecodeError):
         prev = {}
     kept = []
     for slug, old in prev.items():
-        if slug in topics and isinstance(old, dict) and \
-                len(old.get("items") or []) > len((data.get(slug) or {}).get("items") or []):
+        if slug not in topics or not isinstance(old, dict):
+            continue
+        n_old = len(old.get("items") or [])
+        n_new = len((data.get(slug) or {}).get("items") or [])
+        if (n_old > 0 and n_new == 0) if replace else n_old > n_new:
             data[slug] = old
             kept.append(slug)
     if kept:
