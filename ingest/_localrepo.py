@@ -30,8 +30,12 @@ class Repo:
     def git(self, *args: str, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
         env = dict(os.environ, GIT_TERMINAL_PROMPT="0", GCM_INTERACTIVE="never")
         email = self.author.lower().replace(" ", "-") + "@users.noreply.github.com"
+        # http.lowSpeed*: העברה שנתקעה נעצרת ב-git עצמו. ב-16/11/2026 fetch מ-17:06 נשאר על
+        # חיבור מת אחרי שינה של המחשב: ה-timeout כאן הורג רק את עטיפת git.exe, והתהליך האמיתי
+        # נשאר יתום, החזיק את maintenance.lock, ושתי משיכות ה-GTO הבאות נקטעו בלי לכתוב.
         r = subprocess.run(
             ["git", "-c", "credential.helper=", "-c", "credential.helper=wincred",
+             "-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=60",
              "-c", "core.quotepath=false", "-c", f"user.name={self.author}",
              "-c", f"user.email={email}", *args],
             cwd=str(cwd or self.dir), capture_output=True, text=True, encoding="utf-8", errors="replace",

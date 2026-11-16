@@ -36,7 +36,13 @@ LOCK = HOME / "ensure_editions.lock"
 TRIGGER = ".trigger/daily-brief.json"
 # אותו אישור שמור ש-git push משתמש בו בתיקיית העבודה; בלי מסוף, ולכן בלי
 # בקשת סיסמה שתולה את המשימה.
-GIT = ["git", "-c", "credential.helper=", "-c", "credential.helper=wincred"]
+#
+# **ו-git עוצר בעצמו העברה שנתקעה.** ב-16/11/2026 fetch שהתחיל לפני שהמחשב נרדם נשאר על
+# חיבור מת: ה-timeout של subprocess הורג רק את עטיפת git.exe, והתהליך האמיתי נשאר יתום
+# ותקוע. המשימה של 18:05 נקטעה בלי לדחוף, ומהדורת הנעילה לא הובטחה. פחות מ-1KB לשנייה
+# במשך דקה — git מפסיק בעצמו, והניסיון החוזר למטה נפתח על חיבור חדש.
+GIT = ["git", "-c", "credential.helper=", "-c", "credential.helper=wincred",
+       "-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=60"]
 ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
