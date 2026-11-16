@@ -1059,5 +1059,45 @@
   "others": [
    "https://res.afi-g.com/Pages/default.aspx"
   ]
+ },
+ "1781282": {
+  "link": "https://zoom.us/webinar/register/WN_Ta6RhPQuS1CdUdaqVlaweA",
+  "certain": true,
+  "known": [
+   "https://zoom.us/webinar/register/WN_Ta6RhPQuS1CdUdaqVlaweA"
+  ],
+  "others": [
+   "https://www.denya-group.com"
+  ]
+ },
+ "1781280": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_aIwZ_Y9EQWOG3PpV6L7N9A",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_aIwZ_Y9EQWOG3PpV6L7N9A"
+  ],
+  "others": [
+   "https://www.supergas-power.co.il/"
+  ]
+ },
+ "1781353": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_JX7F60bfTySlLkJIgLzKDg",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_JX7F60bfTySlLkJIgLzKDg"
+  ],
+  "others": [
+   "https://platform.accessibledocs.ai/public/files/6afa97a640df72fcd294dd15?token=eba611c1961c9eb0ba93bc5017affb9d58511106450b81d3eeb6069ff665a1ba"
+  ]
+ },
+ "1781269": {
+  "link": "https://www.veidan-conferencing.com/dimri",
+  "certain": true,
+  "known": [
+   "https://www.veidan-conferencing.com/dimri"
+  ],
+  "others": [
+   "https://ir.dimri.co.il"
+  ]
  }
 }
