@@ -156,6 +156,17 @@ class GH:
         urllib.request.urlopen(req, timeout=60).read()
 
 
+GHOST = timedelta(minutes=20)
+
+
+def _created(r: dict) -> datetime:
+    return datetime.strptime(r["created_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+
+def _ghost(r: dict, now: datetime) -> bool:
+    return r.get("status") == "queued" and now - _created(r) > GHOST
+
+
 def main(argv: list[str]) -> int:
     dry = "--dry" in argv
     now = datetime.now(timezone.utc)
@@ -168,12 +179,15 @@ def main(argv: list[str]) -> int:
             if slot is None:
                 continue
             checked += 1
-            runs = gh.get(f"actions/workflows/{wf}/runs?per_page=1").get("workflow_runs") or []
+            # **ריצת רפאים אינה ריצה.** ב-16/11/2026 ריצת commodities-watch מ-18:29 נשארה queued
+            # בלי ג'ובים, ו-GitHub דוחה ביטול שלה (409). כשהיא האחרונה, "ריצה פעילה" הייתה משאירה
+            # את הצנרת בלי שיגור לתמיד. queued יותר מ-GHOST דקות — מדלגים עליה (כמו brief_claim).
+            runs = gh.get(f"actions/workflows/{wf}/runs?per_page=5").get("workflow_runs") or []
+            runs = [r for r in runs if not _ghost(r, now)]
             last = runs[0] if runs else None
             if last and last["status"] != "completed":
                 continue                        # ריצה פעילה או בתור
-            made = (datetime.strptime(last["created_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-                    if last else None)
+            made = _created(last) if last else None
             if made and made >= slot:
                 continue                        # המשבצת כוסתה
             age = f"{(now - made).total_seconds() / 3600:.1f}h" if made else "never"
