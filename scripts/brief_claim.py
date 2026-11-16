@@ -78,6 +78,20 @@ LABEL = {"": "לפי השעה", "morning": "בוקר", "midday": "צהריים",
 
 TRIGGER_FILE = ".trigger/daily-brief.json"
 TRIGGER_MAX_AGE_MIN = int(ba.TOPICS_ONLY_TTL_H * 60)
+
+# **ריצה תקועה בתור אינה ריצה ממתינה.** ב-16/11/2026 ריצת daily-brief מ-18:07 נשארה queued
+# בלי ג'ובים, ו-GitHub השיב 409 גם על ביטול וגם על force-cancel. כל ריצה אחריה ראתה אותה
+# "ממתינה אחרי הריצה הזו" ולא שיגרה מחדש את הלחיצה — רשת הביטחון כבויה כל עוד היא קיימת.
+# ריצה שמחכה למקום בקבוצת ה-concurrency מסומנת pending; queued היא המתנה לשרת, שנמשכת
+# שניות עד דקות. queued מעל GHOST_MIN דקות היא ריצת רפאים, ונספרת כאילו לא נוצרה.
+GHOST_MIN = 20
+
+
+def is_ghost(r: dict, now: datetime) -> bool:
+    if r.get("status") != "queued":
+        return False
+    t = kv.parse_at(r.get("created_at"))
+    return bool(t) and now - t > timedelta(minutes=GHOST_MIN)
 # ה-run-name של שיגור חוזר (daily-brief.yml), וה-sha המלא אחריו. claim_smoke בודק
 # ששני הקבצים מסכימים על הנוסח ועל שם השלב.
 TRIGGER_TITLE = "טריגר · שיגור חוזר · "
@@ -339,7 +353,7 @@ def build_view(runs: list[dict], now: datetime, content, jobs,
         else:
             continue
         view.append({"id": r.get("id"), "sha": sha, "via": via, "kind": kinds[sha],
-                     "state": run_state(r, via, jobs), "created": t,
+                     "state": "dropped" if is_ghost(r, now) else run_state(r, via, jobs), "created": t,
                      "title": (r.get("display_title") or "") if via == "push" else ""})
     return view
 
@@ -459,7 +473,8 @@ def run() -> int:
     want_trig = tp["redispatch"] if tp else None
     if want_click or want_trig:
         waiting = [r for r in runs or []
-                   if r.get("status") != "completed" and str(r.get("id")) != str(run_id)]
+                   if r.get("status") != "completed" and str(r.get("id")) != str(run_id)
+                   and not is_ghost(r, now)]
         if waiting:
             what = "לחיצה על הפק" if want_click else f"טריגר {want_trig['sha'][:7]}"
             notes.append(("notice", "בקשה ממתינה",
