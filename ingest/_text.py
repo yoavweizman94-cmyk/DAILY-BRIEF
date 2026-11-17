@@ -116,3 +116,23 @@ def clean_html(html: str, max_chars: int = 8000, *, strip_bidi: bool = False,
     if len(text) > max_chars:
         text = text[:max_chars].rsplit(" ", 1)[0] + " […]"
     return text
+
+
+# **שם הפרסום של ניוזלטר, לפי הדומיין של השולח.** משותף לברייף (gmail_pull) ולעמוד
+# ההשפעה על מניות (analyze_impact). כתובת השולח אינה יוצאת מכאן: היא אינה מקור שאפשר
+# לצטט, ובעמודי הסקטור היא הוצגה כמות שהיא.
+PUBLISHERS = (("ft.com", "FT"), ("wsj.com", "WSJ"), ("bloomberg", "Bloomberg"),
+              ("thomsonreuters", "Reuters"), ("reuters", "Reuters"), ("economist", "The Economist"),
+              ("nytimes", "NYT"), ("haaretz", "TheMarker"), ("calcalist", "כלכליסט"),
+              ("divenewsletter", "Industry Dive"), ("ittnewsletter", "Data Center Knowledge"),
+              ("stratechery", "Stratechery"))
+
+
+def publisher(sender: str) -> str:
+    """"Bloomberg" מתוך "Bloomberg <noreply@news.bloomberg.com>"; שם התצוגה כשהדומיין אינו מוכר."""
+    dom = (re.search(r"@([\w.-]+)", sender or "") or [None, ""])[1].lower()
+    for key, name in PUBLISHERS:
+        if key in dom:
+            return name
+    disp = re.sub(r"^(?:gmail|ניוזלטר):\s*", "", sender or "").split("<")[0].strip().strip('"')
+    return disp[:40] if disp and "@" not in disp else "ניוזלטר"

@@ -7,6 +7,7 @@
 2. מקומית: קובץ token.json בשורש (נוצר ע"י scripts/gmail_authorize.py).
 
 פלט: data/raw/<YYYY-MM-DD>/gmail.jsonl — שורה למייל: {id, ts, title, body, url, source}
+  url ריק תמיד (אין קישור ציבורי למייל), ו-source הוא "ניוזלטר: <שם הפרסום>".
 """
 from __future__ import annotations
 
@@ -25,7 +26,7 @@ import yaml
 
 from _env import load_env
 from _state import connect, filter_new
-from _text import clean_html
+from _text import clean_html, publisher
 
 load_env()
 
@@ -153,13 +154,18 @@ def main() -> int:
         if skip_prefixes and subject.strip().startswith(skip_prefixes):
             skipped += 1
             continue
+        # **בלי קישור לתיבת הדואר, ובלי כתובת השולח.** עד 17/11/2026 נשמרו כאן קישור
+        # ל-Gmail של הבעלים ושורת From מלאה, והסוכן ציטט את הקישור כמו כל מקור: 68
+        # קישורים כאלה ב-14 ברייפים שהופצו ללקוחות, ועוד בעמודי הסקטור (publish_news).
+        # הקישור אינו נפתח לאף קורא, והוא חושף מזהי הודעות ומינויים. ניוזלטר מצוטט בשם
+        # הפרסום שלו, בלי קישור. מזהה ההודעה נשאר ב-id, לדה-דופ.
         rows.append({
             "id": mid,
             "ts": ts.isoformat(timespec="seconds"),
             "title": subject,
             "body": extract_body(msg.get("payload", {})),
-            "url": f"https://mail.google.com/mail/u/0/#all/{mid}",
-            "source": f"gmail:{headers.get('from', '?')}",
+            "url": "",
+            "source": f"ניוזלטר: {publisher(headers.get('from', ''))}",
         })
 
     con = connect()

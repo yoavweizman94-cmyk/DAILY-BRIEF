@@ -706,11 +706,21 @@ def news_items_html(rows: list[dict], limit: int | None = None) -> str:
         if day != last_day:
             out.append(f'<li class="daysep">{day[8:10]}/{day[5:7]}</li>')
             last_day = day
-        url = r.get("url") or "#"
+        url = r.get("url") or ""
+        # **ניוזלטר אינו קישור.** שורות שנכתבו לפני 17/11/2026 נושאות קישור לתיבת הדואר
+        # של הבעלים ושורת From מלאה (ingest/gmail_pull.py); הקישור אינו נפתח לאף קורא,
+        # והכתובת הייתה ב-HTML כתגית. כותרת בלי קישור, ושם הפרסום בלבד.
+        if "mail.google." in url:
+            url = ""
+        src = r.get("source") or ""
+        if src.startswith("gmail:"):
+            src = "ניוזלטר: " + (src[6:].split("<")[0].strip().strip('"') or "Gmail")
+        title = r.get("title", "")
+        head = (f'<a href="{url}" target="_blank" rel="noopener">{title}</a>' if url
+                else f'<span class="nl">{title}</span>')
         out.append(
             f'<li class="nw"><span class="t">{(r.get("ts") or "")[11:16]}</span>'
-            f'<a href="{url}" target="_blank" rel="noopener">{r.get("title","")}</a>'
-            f'<span class="src">{r.get("source","")}</span></li>')
+            f'{head}<span class="src">{esc(src)}</span></li>')
     return "".join(out)
 
 

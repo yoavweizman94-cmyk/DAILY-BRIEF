@@ -518,6 +518,7 @@ ul.news li.nw {
 }
 ul.news li.nw .t { color: var(--faint); font-size: 0.77rem; }
 ul.news li.nw a { text-decoration: none; flex: 1; }
+ul.news li.nw .nl { flex: 1; }   /* ניוזלטר: כותרת בלי קישור */
 ul.news li.nw a:hover { text-decoration: underline; }
 ul.news li.nw .src { color: var(--faint); font-size: 0.72rem; white-space: nowrap; }
 

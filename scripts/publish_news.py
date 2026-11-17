@@ -22,8 +22,22 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "ingest"))
+from _text import publisher  # noqa: E402
+
 SOURCES = ("rss.jsonl", "gmail.jsonl")
 MAX_MATCH_CHARS = 4000        # מספיק לכותרת ולפתיח; מייל שלם רק מרעיש
+
+
+def public(r: dict) -> dict:
+    """בלי קישור לתיבת הדואר של הבעלים ובלי כתובת שולח — גם בשורות שנכתבו לפני
+    17/11/2026, כשמשיכת ה-Gmail עוד שמרה אותם (ראו ingest/gmail_pull.py)."""
+    if "mail.google." in (r.get("url") or ""):
+        r["url"] = ""
+    src = r.get("source") or ""
+    if src.startswith("gmail:"):
+        r["source"] = "ניוזלטר: " + publisher(src)
+    return r
 
 
 def norm(s: str) -> str:
@@ -84,11 +98,11 @@ def main() -> int:
             continue
         for slug, _ in hits:
             counts[slug] = counts.get(slug, 0) + 1
-        classified.append({
+        classified.append(public({
             "id": it.get("id"), "ts": it.get("ts"), "title": it.get("title"),
             "url": it.get("url"), "source": it.get("source"),
             "topics": [s for s, _ in hits],
-        })
+        }))
 
     out_dir = ROOT / "output" / "news"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -96,6 +110,8 @@ def main() -> int:
 
     # דה-דופ חוצה-מקורות: אותו פיד נמשך גם ב-rss וגם ב-feedly, וה-id שונה
     # בין השניים. המפתח הוא הקישור, ובהיעדרו הכותרת המנורמלת.
+    # **קישור ה-Gmail הישן מיזג את כל הניוזלטרים לשורה אחת:** מזהה ההודעה ישב אחרי
+    # ה-#, שנחתך כאן, וכל המיילים קיבלו את אותו מפתח. public() מרוקן אותו לפני המפתח.
     def key(r: dict) -> str:
         return (r.get("url") or "").split("#")[0].rstrip("/") or norm(r.get("title", ""))
 
@@ -103,7 +119,7 @@ def main() -> int:
     if dst.exists():                       # שלוש מהדורות ביום כותבות לאותו קובץ
         for line in dst.read_text(encoding="utf-8").splitlines():
             if line.strip():
-                r = json.loads(line)
+                r = public(json.loads(line))
                 merged[key(r)] = r
     for r in classified:
         k = key(r)

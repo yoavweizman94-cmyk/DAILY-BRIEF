@@ -71,7 +71,7 @@ import _cli  # noqa: E402
 import _profiles  # noqa: E402
 import x_threads  # noqa: E402
 from analyze_gov import bad_numbers  # noqa: E402
-from _text import BIDI, INVISIBLE  # noqa: E402
+from _text import BIDI, INVISIBLE, publisher  # noqa: E402
 
 CONTENT = ROOT / "output"
 DIGEST = CONTENT / "digest"
@@ -117,12 +117,8 @@ REGIONS = {"il": "ישראל", "world": "עולם"}
 # אתר ישראלי — לפי שם המקור או כותרת בעברית. ידיעה בלי שדה אזור מקבלת כך את האזור שלה.
 IL_SRC = re.compile(r"[֐-׿]|globes|calcalist|themarker|bizportal|ynet|maariv|haaretz|"
                     r"ice\.co\.il|walla|mako|davar|israelhayom|jpost|timesofisrael", re.I)
-# שם הניוזלטר לפי דומיין השולח — הכתובת עצמה אינה נשמרת
-MAIL_NAMES = (("ft.com", "FT"), ("wsj.com", "WSJ"), ("bloomberg", "Bloomberg"),
-              ("thomsonreuters", "Reuters"), ("reuters", "Reuters"), ("economist", "The Economist"),
-              ("nytimes", "NYT"), ("haaretz", "TheMarker"), ("calcalist", "כלכליסט"),
-              ("divenewsletter", "Industry Dive"), ("ittnewsletter", "Data Center Knowledge"),
-              ("stratechery", "Stratechery"))
+# שם הניוזלטר לפי דומיין השולח — הכתובת עצמה אינה נשמרת. הטבלה ב-ingest/_text.py
+# (PUBLISHERS), משותפת עם gmail_pull, שממנו מגיעים הניוזלטרים לברייף.
 MAIL_IL = ("TheMarker", "כלכליסט")
 MAIL_SKIP = re.compile(r"mailtase\.co\.il", re.I)   # "סוכן חכם" של מאיה — מאיה כבר מקור ישיר
 MAIL_BOILER = re.compile(r"unsubscribe|view (?:this|it|in) (?:email )?(?:in )?(?:your )?browser|"
@@ -617,12 +613,7 @@ def _calls(days: list[str], names: set[str]) -> list[dict]:
 
 
 def _mail_name(sender: str) -> str:
-    dom = (re.search(r"@([\w.-]+)", sender or "") or [None, ""])[1].lower()
-    for key, name in MAIL_NAMES:
-        if key in dom:
-            return name
-    disp = (sender or "").removeprefix("gmail:").split("<")[0].strip().strip('"')
-    return disp[:40] or "ניוזלטר"
+    return publisher(sender)
 
 
 def _chunks(body: str) -> list[str]:
