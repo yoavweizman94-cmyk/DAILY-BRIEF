@@ -1099,5 +1099,24 @@
   "others": [
    "https://ir.dimri.co.il"
   ]
+ },
+ "1781680": {
+  "link": "https://zoom.us/webinar/register/WN_QfcMGQu-RXybvcshNsl3OQ",
+  "certain": true,
+  "known": [
+   "https://zoom.us/webinar/register/WN_QfcMGQu-RXybvcshNsl3OQ"
+  ],
+  "others": []
+ },
+ "1781413": {
+  "link": null,
+  "certain": false,
+  "known": [],
+  "others": [
+   "https://www.ayalon-ins.co.il/",
+   "https://ayalonins.activetrail.biz/event_Q126",
+   "https://ayalonins.activetrail.biz/event_Q326",
+   "https://link.accessidoc.com/AfYETJ3m9ZzjL7QQJM-O6q2lsBOWTJHvXE-FPnFgRN9Rglc2kg-UmUsZ9H-Zmz9-fBeqoqCHPLDoPwWaB6ggRLkaKE"
+  ]
  }
 }
