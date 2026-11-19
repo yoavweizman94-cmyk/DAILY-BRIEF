@@ -31,6 +31,7 @@ import jumbo
 import transcripts
 import callreviews
 import meetings
+import peers as peerspage
 import mcp_data
 import impact
 import share
@@ -70,7 +71,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <nav><a href="{root}index.html">סקירה</a><a href="{root}headlines.html">כותרות</a><a href="{root}reports.html">דיווחים</a><a href="{root}impact.html">השפעה על מניות</a><a href="{root}cbs.html">למ"ס</a><a href="{root}auto.html">רכב</a><a href="{root}commodities.html">סחורות</a><a href="{root}gov.html">רגולציה</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}results.html">דוח ושיחה</a><a href="{root}meetings.html" data-owner hidden>השיחות שלי</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
+  <nav><a href="{root}index.html">סקירה</a><a href="{root}headlines.html">כותרות</a><a href="{root}reports.html">דיווחים</a><a href="{root}impact.html">השפעה על מניות</a><a href="{root}cbs.html">למ"ס</a><a href="{root}auto.html">רכב</a><a href="{root}commodities.html">סחורות</a><a href="{root}gov.html">רגולציה</a><a href="{root}filings.html">דוחות כספיים</a><a href="{root}calls.html">שיחות ועידה</a><a href="{root}transcripts.html">תמלולים</a><a href="{root}results.html">דוח ושיחה</a><a href="{root}meetings.html" data-owner hidden>השיחות שלי</a><a href="{root}peers.html" data-owner hidden>מתחרים</a><a href="{root}offex.html">מחוץ לבורסה</a><a href="{root}nadlan.html">שוק הדיור</a><a href="{root}deals.html">עסקאות נדל"ן</a><a href="{root}coverage.html">כיסוי</a><a href="{root}archive.html">ארכיון</a><a href="{root}account.html">החשבון</a></nav>
   <a class="brand" href="{root}index.html">{site_title}<em>מחקר יומי · הבורסה בתל אביב</em></a>
 </header>
 <main>
@@ -1639,6 +1640,16 @@ def main() -> int:
                 encoding="utf-8")
         print(f"::notice::השיחות שלי: {len(mt_rows)} הקלטות, "
               f"{sum(1 for r in mt_rows if r.get('summary'))} עם סקירה")
+
+    # מתחרים ומגמות לאחזקות התעשייתיות של הקרן (site/peers.py). נבנה תמיד, גם ריק.
+    # **לבעלים בלבד** — השער ב-functions/_middleware.js. הלוג ציבורי — ולכן ספירות בלבד.
+    pr = peerspage.load()
+    (OUT / "peers.html").write_text(
+        PAGE.format(title=f"מתחרים ומגמות · {site_title}", site_title=site_title, root="",
+                    body=peerspage.index(pr)),
+        encoding="utf-8")
+    print(f"::notice::מתחרים ומגמות: {len(pr['cards'])} תובנות ב-{peerspage.DAYS} ימים, "
+          f"{len(pr['recent'])} ידיעות מהותיות ב-48 שעות")
 
     # site/functions/ נשאר מחוץ ל-dist בכוונה: הוא קוד שרץ לפני כל בקשה,
     # לא נכס סטטי. העתקה לתוך תיקיית הפריסה גרמה לו להיות שניהם בו-זמנית,

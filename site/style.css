@@ -1618,6 +1618,20 @@ button.pend-go:focus-visible {
 .topic-meta .dir.mixed { color: var(--warn); border-color: var(--warn); }
 .topic-meta .dir.flat { color: var(--faint); }
 
+/* ---------- מתחרים ומגמות (peers.html, לבעלים) ---------- */
+.peer-h .topic-sum-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+.peer-chips { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; font-size: 0.8rem; }
+.peer-chip {
+  border: 1px solid var(--border); border-radius: 999px; padding: 0.05rem 0.55rem;
+  color: var(--fg); background: var(--accent-soft);
+}
+.peer-chip.prop { background: transparent; border-style: dashed; color: var(--muted); }
+.peer-more { margin: 0.2rem 0 0; font-size: 0.85rem; }
+.peer-more summary { cursor: pointer; color: var(--accent-2); }
+.peer-more ul { margin: 0.4rem 0 0; padding-inline-start: 1.1rem; }
+.peer-more li { margin: 0 0 0.45rem; line-height: 1.6; }
+.peer-more .src { color: var(--faint); font-size: 0.75rem; }
+
 /* ---------- רשימת הכיסוי ---------- */
 
 .cov-tag {

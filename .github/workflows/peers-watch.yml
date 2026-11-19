@@ -1,0 +1,105 @@
+name: Peers Watch
+
+# עמוד "מתחרים ומגמות" (peers.html, לבעלים בלבד): לכל אחזקה תעשייתית של קרן המניות —
+# מה קורה אצל המתחרים, הלקוחות המהותיים והענף, ומה זה אומר על האחזקה.
+#   1. ingest/fund_holdings.py — האחזקות מדוח האחזקות החודשי של הקרן במאיה (אין מודל).
+#   2. ingest/peers_news.py — Google News לכל מתחר, לקוח ומונח ב-output/peers/peers.json,
+#      וכותרות האתר שמזכירות אותם (אין מודל).
+#   3. scripts/analyze_peers.py — מיון (Sonnet) ותובנות לכל אחזקה (אופוס).
+#
+# **שלוש פעמים ביום** — 07:20, 13:20 ו-19:20 בחורף (05:20/11:20/17:20 UTC). ה-cron של GitHub
+# מפיל ריצות, ו-scripts/catchup.py משלים משבצת שהוחמצה.
+#
+# **תקרה יומית משלה** (PEERS_MAX_USD, $10 — החלטת הבעלים, 19/11/2026), מחוץ לבלם הברייף
+# (scripts/cost_guard.py, OWN_CAP). האחזקות ומפת המתחרים בריפו התוכן הפרטי בלבד; הלוג
+# ציבורי, ולכן הסקריפטים מדפיסים מספרים בלבד.
+on:
+  schedule:
+    - cron: "20 5,11,17 * * *"
+  workflow_dispatch:
+    inputs:
+      max_holdings:
+        description: "כמה אחזקות לכתוב להן תובנות בריצה (ריק = כולן)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: peers-watch
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Jerusalem
+
+jobs:
+  peers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Fetch private content
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # כשל כאן אינו מפיל את הריצה: נשאר הקובץ הקודם, והאחזקות משתנות פעם בחודש
+      - name: Fund holdings
+        run: python ingest/fund_holdings.py || echo "::warning title=אחזקות הקרן לא עודכנו::נשאר הקובץ הקודם."
+
+      - name: Peers news
+        run: python ingest/peers_news.py || echo "::warning title=חדשות המתחרים לא נמשכו::המיון ירוץ על מה שנמשך קודם."
+
+      - name: Triage and insights
+        id: analyze
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PEERS_MAX_HOLDINGS: ${{ inputs.max_holdings }}
+        run: |
+          set +e
+          python scripts/analyze_peers.py 2>&1 | tee analyze.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            why=$(grep -E '^[A-Za-z_.]+(Error|Exception)' analyze.log | tail -1 | cut -d: -f1)
+            echo "::warning title=עמוד המתחרים לא עודכן (קוד $rc)::${why:-הסיבה באנוטציה שמעל} — הידיעות ימתינו לריצה הבאה."
+          fi
+          exit 0
+
+      - name: Save content
+        run: CONTENT_DEPLOY_KEY='${{ secrets.CONTENT_DEPLOY_KEY }}' bash scripts/content_repo.sh push peers
+
+      # התוכן נמשך שוב לפני הבנייה: צנרת אחרת עשויה הייתה לדחוף מאז
+      - name: Refresh content before build
+        env:
+          CONTENT_DEPLOY_KEY: ${{ secrets.CONTENT_DEPLOY_KEY }}
+        run: bash scripts/content_repo.sh pull
+
+      - name: Build site
+        run: python site/build.py
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Check inline JS
+        run: python scripts/check_inline_js.py
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          (cd site && npx --yes wrangler@4 pages deploy dist --project-name forest-brief --branch main) 2>&1 | tee dep.log
+          grep -qE 'https://[a-z0-9.-]+\.pages\.dev' dep.log || {
+            echo "::error title=הפריסה נכשלה::wrangler לא החזיר כתובת פריסה"; exit 1; }

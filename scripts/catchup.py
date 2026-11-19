@@ -60,6 +60,7 @@ WORKFLOWS = {
     "maya-watch.yml": {},
     "headlines.yml": {},
     "impact-watch.yml": {},
+    "peers-watch.yml": {},
     "commodities-watch.yml": {},
     "auto-watch.yml": {},
     "gov-watch.yml": {},

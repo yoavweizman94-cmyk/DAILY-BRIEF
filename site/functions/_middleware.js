@@ -42,7 +42,8 @@ const PUBLIC_APP = /^\/(login(\.html)?)$|^\/(style\.css|favicon\.ico|robots\.txt
 // ו-/meetings/<id>. הנתיב מפוענח ומנורמל לפני הבדיקה: "/%6Deetings.html"
 // ו-"//Meetings.html" מגיעים לאותו קובץ, ושער שבודק את הנתיב הגולמי היה
 // מחמיץ אותם.
-const OWNER_ONLY = /^\/meetings(\.html)?(\/|$)/;
+// ומ-19/11/2026 גם "מתחרים ומגמות" (peers.html, site/peers.py): הוא חושף את אחזקות הקרן.
+const OWNER_ONLY = /^\/(meetings|peers)(\.html)?(\/|$)/;
 
 function ownerOnly(pathname) {
   let p = pathname;

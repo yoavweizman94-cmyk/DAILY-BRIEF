@@ -38,7 +38,9 @@ CHEAP = "claude-sonnet-5"
 # לאורך היום, ובתקרה יומית משלו (IMPACT_MAX_USD), שכוללת גם את תקצירי הציוץ שלו.
 # **והפוסטים ל-X לסקירות הדוחות, לשיחות המשקיעים ול"דוח ושיחה"** (scripts/x_threads.py,
 # מ-10/11/2026; שם הג'וב נשאר x-threads) — בתקרה משלהם (X_THREADS_MAX_USD).
-OWN_CAP = ("call-reviews", "impact-triage", "impact", "impact-tweets", "x-threads")
+# **ועמוד המתחרים והמגמות** (scripts/analyze_peers.py, מ-19/11/2026) — בתקרה משלו (PEERS_MAX_USD, $10).
+OWN_CAP = ("call-reviews", "impact-triage", "impact", "impact-tweets", "x-threads",
+           "peers-triage", "peers-insights")
 
 
 def spent(day: str) -> tuple[float, int]:
