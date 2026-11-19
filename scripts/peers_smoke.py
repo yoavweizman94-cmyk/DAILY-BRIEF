@@ -80,6 +80,14 @@ check("רינדור: הצעה מסומנת", 'class="peer-chip prop"' in html, T
 check("רינדור: כותרת מוברחת", "&lt;b&gt;מעלה&lt;/b&gt;" in html and "<b>מעלה</b>" not in html, True)
 check("רינדור: שורת באחזקה", "<b>באחזקה:</b> מחיר" in html, True)
 check("רינדור: לפי כותרות מסומן", "לפי כותרות" in html, True)
+d2 = dict(d, peers={"holdings": {**d["peers"]["holdings"], "ד": {"competitors": [{"name": "X", "src": "דוח"}],
+                                                              "suppliers": [{"name": "Y", "src": "דוח"}]}}},
+          sectors={"ד": "מסחר ושרותים-מסחר"})
+h2 = P.index(d2)
+check("רינדור: חברה במעקב מחוץ לקרן", "במעקב — לא בדוח האחזקות של הקרן · מסחר ושרותים-מסחר" in h2, True)
+check("רינדור: ספקים מהותיים", "<b>ספקים מהותיים:</b>" in h2, True)
+qs2 = {q["q"]: q for q in N.queries({"holdings": {"ד": {"suppliers": [{"name": "Y", "q": "\"Y\""}]}}})}
+check("חיפושים: ספק", qs2['"Y"']["tags"][0]["kind"], "supplier")
 check("רינדור: תווית כפולה מוסרת", P._f({"x": "בענף: בענף: מחיר"}, "x"), "מחיר")
 check("רינדור: 'פרשנות:' מוסרת", P._f({"x": "פרשנות: אות"}, "x"), "אות")
 

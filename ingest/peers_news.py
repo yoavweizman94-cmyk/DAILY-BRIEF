@@ -87,7 +87,8 @@ def queries(peers: dict) -> list[dict]:
     """(שאילתה, עברית?) לכל מתחר, לקוח ומונח — עם האחזקות שהיא שייכת להן."""
     by_q: dict[tuple, dict] = {}
     for holding, cfg in (peers.get("holdings") or {}).items():
-        for kind, rows in (("competitor", cfg.get("competitors")), ("customer", cfg.get("customers"))):
+        for kind, rows in (("competitor", cfg.get("competitors")), ("customer", cfg.get("customers")),
+                           ("supplier", cfg.get("suppliers"))):
             for p in rows or []:
                 q = p.get("q") or f'"{p["name"]}"'
                 k = (q, bool(p.get("il")) or bool(HEB.search(q)))
@@ -104,7 +105,8 @@ def site_items(peers: dict, since: datetime) -> list[dict]:
     """כותרות מהאתר עצמו שמזכירות מתחר או לקוח בשמו (בלי מונחים — הם רחבים מדי)."""
     names = []
     for holding, cfg in (peers.get("holdings") or {}).items():
-        for kind, rows in (("competitor", cfg.get("competitors")), ("customer", cfg.get("customers"))):
+        for kind, rows in (("competitor", cfg.get("competitors")), ("customer", cfg.get("customers")),
+                           ("supplier", cfg.get("suppliers"))):
             for p in rows or []:
                 base = re.split(r"\s*\(", p["name"])[0].strip()
                 if len(base) >= 4:

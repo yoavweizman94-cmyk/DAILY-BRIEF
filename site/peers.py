@@ -57,8 +57,14 @@ def load() -> dict:
         except (KeyError, ValueError):
             continue
         recent.append({**r, "why": t.get("why", ""), "sig": t.get("sig", 0), "holdings": t.get("holdings") or []})
+    try:
+        import yaml
+        cos = yaml.safe_load((ROOT / "config" / "companies.yaml").read_text(encoding="utf-8")).get("companies") or []
+        sectors = {c.get("name_he"): c.get("tase_sector") or "" for c in cos}
+    except (OSError, ImportError, AttributeError):
+        sectors = {}
     return {"holdings": _json(PEERS / "holdings.json", {}), "peers": _json(PEERS / "peers.json", {}),
-            "cards": cards, "recent": recent, "last_run": state.get("last_run") or ""}
+            "cards": cards, "recent": recent, "last_run": state.get("last_run") or "", "sectors": sectors}
 
 
 def _when(ts: str) -> str:
@@ -124,11 +130,17 @@ def index(d: dict) -> str:
     rep = hold.get("report") or {}
     fund = (hold.get("fund") or {}).get("name") or "הקרן"
     rows = [h for h in hold.get("holdings") or [] if h.get("name") in peers]
+    # **חברות במעקב שאינן בדוח האחזקות** (לבקשת הבעלים, 19/11/2026): במפת המתחרים, אבל לא
+    # בקרן לפי הדוח האחרון. אחרי האחזקות, בלי משקל.
+    held = {h["name"] for h in rows}
+    sectors = d.get("sectors") or {}
+    rows += [{"name": n, "weight": None, "tase_sector": sectors.get(n, ""), "extra": True}
+             for n in peers if n not in held]
     unmapped = [h["name"] for h in hold.get("holdings") or []
                 if h.get("industrial") and h.get("name") and h["name"] not in peers]
     head = ('<div class="dash-head"><h1>מתחרים ומגמות</h1></div>'
-            f'<p class="stamp">מה קורה אצל המתחרים, הלקוחות המהותיים והענפים של האחזקות התעשייתיות '
-            f'של {escape(fund)} — ומה זה אומר על כל אחזקה. האחזקות לפי {escape(rep.get("title") or "דוח האחזקות")}'
+            f'<p class="stamp">מה קורה אצל המתחרים, הלקוחות והספקים המהותיים והענפים של האחזקות התעשייתיות '
+            f'של {escape(fund)} ושל חברות נוספות במעקב — ומה זה אומר על כל חברה. האחזקות לפי {escape(rep.get("title") or "דוח האחזקות")}'
             f'{" שפורסם ב-" + _day(rep["published"]) if rep.get("published") else ""}, ולכן אינן משקפות שינויים מאז. '
             'העמוד גלוי רק לך.</p>')
     if not rows:
@@ -142,8 +154,11 @@ def index(d: dict) -> str:
         for h in r["holdings"]:
             rec_h.setdefault(h, []).append(r)
     weight = sum(h.get("weight") or 0 for h in rows)
+    n_extra = sum(1 for h in rows if h.get("extra"))
     tiles = ('<div class="strip">'
-             f'<div class="tile"><div class="lbl">אחזקות במעקב</div><div class="val">{len(rows)}</div></div>'
+             f'<div class="tile"><div class="lbl">חברות במעקב</div><div class="val">{len(rows)}</div>'
+             + (f'<div class="chg">{len(rows) - n_extra} בקרן · {n_extra} מחוצה לה</div>' if n_extra else "")
+             + '</div>'
              f'<div class="tile"><div class="lbl">משקל בקרן</div><div class="val">{weight:.1f}%</div></div>'
              f'<div class="tile"><div class="lbl">תובנות ב-{DAYS} ימים</div><div class="val">{len(d["cards"])}</div></div>'
              f'<div class="tile"><div class="lbl">ידיעות מהותיות</div><div class="val">{len(d["recent"])}</div>'
@@ -166,12 +181,16 @@ def index(d: dict) -> str:
                 f'<span class="src">{escape(r.get("source") or "")} · {_when(r["ts"])}</span>'
                 f'<br><span class="stamp">{escape(r.get("why") or "")}</span></li>' for r in rec[:12])
             more = f'<details class="peer-more"><summary>עוד {len(rec)} ידיעות מהותיות ב-48 שעות</summary><ul>{items}</ul></details>'
+        where = ("במעקב — לא בדוח האחזקות של הקרן" if h.get("extra")
+                 else f'{h.get("weight") or 0:.2f}% מהקרן')
+        sector = f' · {escape(h["tase_sector"])}' if h.get("tase_sector") else ""
         sec.append(
             f'<section class="topic-sum peer-h" data-h="{escape(name)}">'
             f'<div class="topic-sum-head">{escape(name)}'
-            f'<span class="stamp">{h.get("weight", 0):.2f}% מהקרן · {escape(h.get("tase_sector") or "")}</span></div>'
+            f'<span class="stamp">{where}{sector}</span></div>'
             + _chips(cfg.get("competitors") or [], "מתחרים")
             + _chips(cfg.get("customers") or [], "לקוחות מהותיים")
+            + _chips(cfg.get("suppliers") or [], "ספקים מהותיים")
             + body + more + '</section>')
 
     foot = ('<p class="stamp">מקור השיוך של כל מתחר מופיע במעבר עכבר: "דוח" — החברה נוקבת בשמו בפרק התחרות '

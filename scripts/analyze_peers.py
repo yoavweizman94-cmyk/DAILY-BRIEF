@@ -41,7 +41,7 @@ INSIGHT_MODEL = os.environ.get("PEERS_MODEL") or "claude-opus-5"
 WINDOW = timedelta(hours=36)
 BATCH = 80
 MAX_PER_HOLDING = 12
-KIND = {"competitor": "מתחר", "customer": "לקוח", "term": "ענף"}
+KIND = {"competitor": "מתחר", "customer": "לקוח", "supplier": "ספק", "term": "ענף"}
 
 # רעש שאין צורך לשלם עליו מיון: תזוזות מניה, שינויי אחזקות של מוסדיים, יעדי מחיר
 NOISE = re.compile(r"shares (gap|rise|fall|drop|jump|slip)|stock (slips|rises|falls|drops|jumps)|"
@@ -52,7 +52,7 @@ NOISE = re.compile(r"shares (gap|rise|fall|drop|jump|slip)|stock (slips|rises|fa
                    r"\bCAGR\b|forecast to reach|market to (reach|grow)", re.I)
 
 TRIAGE = """אתה ממיין ידיעות עבור מנהל השקעות של קרן מניות. לכל ידיעה מצוינות האחזקות של
-הקרן שהיא עשויה לגעת בהן, ודרך מה: מתחר, לקוח מהותי, או מונח ענפי.
+הקרן שהיא עשויה לגעת בהן, ודרך מה: מתחר, לקוח מהותי, ספק מהותי, או מונח ענפי.
 
 השאלה לכל ידיעה: האם מנהל ההשקעות שמחזיק את האחזקה ירצה לדעת עליה — כי היא מזיזה את
 הכלכלה של הענף או של האחזקה: מחיר, ביקוש, עלות תשומה, כושר ייצור, תחרות, רגולציה,
@@ -200,11 +200,13 @@ def insight_for(holding: str, peers_cfg: dict, items: list[dict], cap: float) ->
     prof = _profiles.line(holding, limit=400) or "אין תיאור פעילות במאיה"
     comps = "\n".join(f"  · {p['name']} ({p.get('src', '')})" for p in peers_cfg.get("competitors") or [])
     custs = "\n".join(f"  · {p['name']} ({p.get('src', '')})" for p in peers_cfg.get("customers") or [])
+    supps = "\n".join(f"  · {p['name']} ({p.get('src', '')})" for p in peers_cfg.get("suppliers") or [])
     lines = [f"- id={r['id']} [{r.get('source', '')}, {r['ts'][:10]}] {r['title']} — במיון: {r['_why']}"
              for r in items]
     data = (f"האחזקה: {holding}\nתיאור הפעילות במאיה: {prof}\n"
             f"מתחרים (מקור השיוך בסוגריים):\n{comps or '  —'}\n"
             + (f"לקוחות מהותיים:\n{custs}\n" if custs else "")
+            + (f"ספקים מהותיים:\n{supps}\n" if supps else "")
             + "הידיעות (כותרות בלבד, אלא אם צוין אחרת):\n" + "\n".join(lines))
     res, err, usd = _api.ask_json(INSIGHT, data, INSIGHT_SCHEMA, job="peers-insights", model=INSIGHT_MODEL,
                                   max_tokens=16000, max_usd=2.0, effort="low")
