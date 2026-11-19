@@ -80,6 +80,8 @@ check("רינדור: הצעה מסומנת", 'class="peer-chip prop"' in html, T
 check("רינדור: כותרת מוברחת", "&lt;b&gt;מעלה&lt;/b&gt;" in html and "<b>מעלה</b>" not in html, True)
 check("רינדור: שורת באחזקה", "<b>באחזקה:</b> מחיר" in html, True)
 check("רינדור: לפי כותרות מסומן", "לפי כותרות" in html, True)
+check("רינדור: תווית כפולה מוסרת", P._f({"x": "בענף: בענף: מחיר"}, "x"), "מחיר")
+check("רינדור: 'פרשנות:' מוסרת", P._f({"x": "פרשנות: אות"}, "x"), "אות")
 
 print("הכל עבר" if not FAILS else f"{len(FAILS)} נכשלו")
 sys.exit(1 if FAILS else 0)

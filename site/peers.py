@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from html import escape
 from pathlib import Path
@@ -93,16 +94,25 @@ def _chips(rows: list[dict], label: str) -> str:
     return f'<p class="peer-chips"><b>{label}:</b> {"".join(out)}</p>'
 
 
+LABEL = re.compile(r"^\s*(?:(?:בענף|באחזקה|משמעות|פרשנות)\s*:\s*)+")
+
+
+def _f(c: dict, k: str) -> str:
+    """שדה בלי תווית בראשו: העמוד מוסיף "בענף:"/"באחזקה:"/"משמעות:" בעצמו, וכרטיסים
+    מהריצה הראשונה (19/11/2026) כתבו אותן גם בתוך השדה — "בענף: בענף:"."""
+    return escape(LABEL.sub("", c.get(k) or ""))
+
+
 def _card(c: dict) -> str:
     cls = DIR_CLS.get(c.get("direction") or "", "flat")
     srcs = " · ".join(_src_link(s) for s in c.get("sources") or [])
     basis = '<span class="tr-approx">לפי כותרות</span>' if c.get("basis") == "כותרת" else ""
     return ('<div class="topic-item">'
             f'<h3>{escape(c.get("title") or "")}</h3>'
-            f'<p>{escape(c.get("fact") or "")}</p>'
-            f'<p><b>בענף:</b> {escape(c.get("sector") or "")}</p>'
-            f'<p><b>באחזקה:</b> {escape(c.get("impact") or "")}</p>'
-            f'<p class="takeaway"><b>משמעות:</b> {escape(c.get("meaning") or "")}</p>'
+            f'<p>{_f(c, "fact")}</p>'
+            f'<p><b>בענף:</b> {_f(c, "sector")}</p>'
+            f'<p><b>באחזקה:</b> {_f(c, "impact")}</p>'
+            f'<p class="takeaway"><b>משמעות:</b> {_f(c, "meaning")}</p>'
             f'<p class="topic-meta"><span class="dir {cls}">{escape(c.get("direction") or "")}</span>'
             f'{basis}<span class="co">{srcs}</span>'
             f'<span class="t">{_when(c.get("at") or "")}</span></p></div>')
