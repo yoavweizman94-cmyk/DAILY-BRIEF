@@ -40,7 +40,7 @@ CHEAP = "claude-sonnet-5"
 # מ-10/11/2026; שם הג'וב נשאר x-threads) — בתקרה משלהם (X_THREADS_MAX_USD).
 # **ועמוד המתחרים והמגמות** (scripts/analyze_peers.py, מ-19/11/2026) — בתקרה משלו (PEERS_MAX_USD, $10).
 OWN_CAP = ("call-reviews", "impact-triage", "impact", "impact-tweets", "x-threads",
-           "peers-triage", "peers-insights")
+           "peers-triage", "peers-insights", "peers-reviews")
 
 
 def spent(day: str) -> tuple[float, int]:

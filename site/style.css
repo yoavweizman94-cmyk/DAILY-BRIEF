@@ -1631,6 +1631,14 @@ button.pend-go:focus-visible {
 .peer-more ul { margin: 0.4rem 0 0; padding-inline-start: 1.1rem; }
 .peer-more li { margin: 0 0 0.45rem; line-height: 1.6; }
 .peer-more .src { color: var(--faint); font-size: 0.75rem; }
+/* סקירות דוחות (SEC) ושיחות ועידה של מתחרים — בלוק נפרד מתחת לתובנות מהחדשות */
+.peer-reviews { margin: 0.9rem 0 0.2rem; }
+.peer-reviews h4 {
+  font-size: 0.8rem; font-weight: 600; letter-spacing: 0.02em; color: var(--muted);
+  margin: 0 0 0.6rem; padding-top: 0.6rem; border-top: 1px dashed var(--border);
+}
+.peer-review { border-inline-start-color: var(--accent-2); }
+.peer-kind { font-size: 0.75rem !important; color: var(--accent-2); margin: 0 0 0.15rem !important; }
 
 /* ---------- רשימת הכיסוי ---------- */
 

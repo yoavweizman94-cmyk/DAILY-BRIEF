@@ -5,7 +5,9 @@ name: Peers Watch
 #   1. ingest/fund_holdings.py — האחזקות מדוח האחזקות החודשי של הקרן במאיה (אין מודל).
 #   2. ingest/peers_news.py — Google News לכל מתחר, לקוח ומונח ב-output/peers/peers.json,
 #      וכותרות האתר שמזכירות אותם (אין מודל).
-#   3. scripts/analyze_peers.py — מיון (Sonnet) ותובנות לכל אחזקה (אופוס).
+#   3. ingest/peers_filings.py — הודעות תוצאות ודיווחים מהותיים של מתחרים, לקוחות וספקים
+#      שמדווחים ל-SEC (אין מודל). SEC מחייב כתובת פנייה: הסוד SEC_CONTACT; בלעדיו — דילוג.
+#   4. scripts/analyze_peers.py — מיון (Sonnet), סקירת כל דוח חדש ותובנות לכל אחזקה (אופוס).
 #
 # **שלוש פעמים ביום** — 07:20, 13:20 ו-19:20 בחורף (05:20/11:20/17:20 UTC). ה-cron של GitHub
 # מפיל ריצות, ו-scripts/catchup.py משלים משבצת שהוחמצה.
@@ -24,6 +26,14 @@ on:
         default: ""
       reset:
         description: "true = למחוק את הכרטיסים של היום ואת מצב המיון, ולכתוב מחדש (אחרי תיקון בהנחיות)"
+        required: false
+        default: ""
+      sec_days:
+        description: "כמה ימים אחורה למשוך דוחות SEC (ריק = 4; השלמת עונת דוחות — 45)"
+        required: false
+        default: ""
+      max_reviews:
+        description: "כמה דוחות לסקור בריצה (ריק = 8)"
         required: false
         default: ""
 
@@ -64,11 +74,19 @@ jobs:
       - name: Peers news
         run: python ingest/peers_news.py || echo "::warning title=חדשות המתחרים לא נמשכו::המיון ירוץ על מה שנמשך קודם."
 
+      - name: Competitor filings (SEC)
+        env:
+          SEC_CONTACT: ${{ secrets.SEC_CONTACT }}
+          PEERS_SEC_DAYS: ${{ inputs.sec_days }}
+        run: python ingest/peers_filings.py || echo "::warning title=דוחות המתחרים לא נמשכו::הסקירות ימתינו לריצה הבאה."
+
       - name: Triage and insights
         id: analyze
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SEC_CONTACT: ${{ secrets.SEC_CONTACT }}
           PEERS_MAX_HOLDINGS: ${{ inputs.max_holdings }}
+          PEERS_MAX_REVIEWS: ${{ inputs.max_reviews }}
           PEERS_RESET: ${{ inputs.reset }}
         run: |
           set +e

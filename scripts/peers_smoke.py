@@ -91,5 +91,53 @@ check("חיפושים: ספק", qs2['"Y"']["tags"][0]["kind"], "supplier")
 check("רינדור: תווית כפולה מוסרת", P._f({"x": "בענף: בענף: מחיר"}, "x"), "מחיר")
 check("רינדור: 'פרשנות:' מוסרת", P._f({"x": "פרשנות: אות"}, "x"), "אות")
 
+# --- SEC: מי נמשך -----------------------------------------------------------------
+import peers_filings as S  # noqa: E402
+cmap = {"AVNT": (1, "AVIENT CORP"), "FRNY": (2, "FOREIGN CO ADR"), "PG": (3, "PROCTER & GAMBLE")}
+tg = S.targets({"א": {"competitors": [{"name": "Avient", "ticker": "NYSE:AVNT", "src": "דוח"},
+                                       {"name": "ForeignCo", "ticker": "BME:FRN", "sec": "FRNY"},
+                                       {"name": "EuroCo", "ticker": "XETRA:EUR"}],
+                       "customers": [{"name": "P&G", "ticker": "NYSE:PG"}]},
+                "ב": {"suppliers": [{"name": "P&G", "ticker": "NYSE:PG"}]}}, cmap)
+check("SEC: טיקר אמריקאי ושדה sec; בורסה זרה בלי sec לא", sorted(tg), [1, 2, 3])
+check("SEC: חברה משותפת — פעם אחת עם שתי האחזקות",
+      [(x["holding"], x["role"]) for x in tg[3]["holdings"]], [("א", "customer"), ("ב", "supplier")])
+docs = [{"type": "8-K", "url": "https://x/a/main.htm", "desc": ""},
+        {"type": "EX-99.2", "url": "https://x/a/ex992.htm", "desc": ""},
+        {"type": "EX-99.1", "url": "https://x/a/ex991.htm", "desc": "PRESS RELEASE"}]
+check("SEC: ההודעה לעיתונות — EX-99.1", S.pick(docs, "main.htm")["url"], "https://x/a/ex991.htm")
+check("SEC: בלי נספח — המסמך הראשי", S.pick(docs[:1], "main.htm")["url"], "https://x/a/main.htm")
+check("SEC: טקסט בלי כותרת iXBRL ותגיות",
+      S.text_of("<html><ix:header>HIDDEN</ix:header><p>Net sales rose&nbsp;5%</p><div>Q3</div></html>"),
+      "Net sales rose 5%\nQ3")
+check("SEC: 6-K של תוצאות מזוהה", bool(S.RESULTS.search("Third Quarter 2026 Results") and S.SALES.search("net sales")), True)
+check("SEC: 6-K אחר לא", bool(S.RESULTS.search("Notice of annual general meeting")), False)
+
+# --- סקירות דוחות ושיחות -----------------------------------------------------------
+st = {"reviewed": ["a2"]}
+A.FIL = Path(__file__).resolve().parent / "_peers_smoke_tmp"
+A.FIL.mkdir(exist_ok=True)
+(A.FIL / "2026-11-19.jsonl").write_text("\n".join([
+    '{"id": "a1", "kind": "event", "accepted": "2026-11-19T10:00:00Z"}',
+    '{"id": "a2", "kind": "results", "accepted": "2026-11-19T11:00:00Z"}',
+    '{"id": "a3", "kind": "results", "accepted": "2026-11-18T11:00:00Z"}',
+    '{"id": "a4", "kind": "results", "accepted": "2026-11-19T12:00:00Z"}']), encoding="utf-8")
+check("סקירות: ממתינות — תוצאות קודם, חדש קודם, בלי מה שנסקר", [r["id"] for r in A.pending_filings(st)],
+      ["a4", "a3", "a1"])
+for f in A.FIL.glob("*"):
+    f.unlink()
+A.FIL.rmdir()
+rv = [{"kind": "report", "holding": "א", "company": "Avient", "period": "Q3 2026", "at": "2026-11-19T12:00:00+00:00",
+       "title": "Avient: ביקוש חלש", "fact": "המכירות ירדו", "outlook": "תחזית: הורדה", "sector": "s", "impact": "i",
+       "meaning": "m", "direction": "שלילי", "sources": [{"url": "https://sec.gov/x", "source": "SEC 8-K", "ts": ""}]},
+      {"kind": "call", "holding": "א", "company": "Avient", "period": "Q3 2026", "at": "2026-11-19T13:00:00+00:00",
+       "title": "בשיחה: מלאי אצל הלקוחות", "fact": "f", "sector": "s", "impact": "i", "meaning": "m",
+       "direction": "מעורב", "sources": []}]
+h3 = P.index(dict(d, reviews=rv))
+check("סקירות: הבלוק והתוויות", ("דוחות ושיחות ועידה של המתחרים" in h3, "סקירת דוח · Avient · Q3 2026" in h3,
+                                 "שיחת ועידה · Avient · Q3 2026" in h3), (True, True, True))
+check("סקירות: 'תחזית:' לא כפולה", "<b>תחזית:</b> הורדה" in h3, True)
+check("סקירות: מונה בפס העליון", '<div class="lbl">דוחות ושיחות של מתחרים</div><div class="val">2</div>' in h3, True)
+
 print("הכל עבר" if not FAILS else f"{len(FAILS)} נכשלו")
 sys.exit(1 if FAILS else 0)
