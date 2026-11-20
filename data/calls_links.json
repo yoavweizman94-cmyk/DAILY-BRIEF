@@ -1172,5 +1172,21 @@
   "others": [
    "https://arf.co.il"
   ]
+ },
+ "1782719": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_eP61GAv6Spi63wTwVzDlbQ",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_eP61GAv6Spi63wTwVzDlbQ"
+  ],
+  "others": []
+ },
+ "1782694": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_dhrR_KhcS8urAN5fmNwIyw",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_dhrR_KhcS8urAN5fmNwIyw"
+  ],
+  "others": []
  }
 }
