@@ -104,16 +104,22 @@ def _src_link(s: dict) -> str:
     return name
 
 
-def _chips(rows: list[dict], label: str) -> str:
+def _chips(rows: list[dict], label: str, order: list[str] | None = None) -> str:
+    """שורת שבבים לכל תחום פעילות של האחזקה (השדה seg במפה), בסדר התחומים שבמפה; בלי seg — שורה אחת."""
     if not rows:
         return ""
-    out = []
+    groups: dict[str, list[str]] = {}
     for p in rows:
         src = p.get("src") or ""
         cls = "peer-chip prop" if src.startswith("הצעה") else "peer-chip"
         tip = escape(src + (f" · {p['ticker']}" if p.get("ticker") else ""))
-        out.append(f'<span class="{cls}" title="{tip}">{escape(p["name"])}</span>')
-    return f'<p class="peer-chips"><b>{label}:</b> {"".join(out)}</p>'
+        seg = p.get("seg") or ""
+        for s in (seg if isinstance(seg, list) else [seg]):   # מתחר שפועל בכמה תחומים — בכל אחד מהם
+            groups.setdefault(s, []).append(f'<span class="{cls}" title="{tip}">{escape(p["name"])}</span>')
+    rank = {s: i for i, s in enumerate(order or [])}
+    keys = sorted(groups, key=lambda s: (s == "", rank.get(s, len(rank)), list(groups).index(s)))
+    return "".join(f'<p class="peer-chips"><b>{label}{" · " + escape(s) if s else ""}:</b> {"".join(groups[s])}</p>'
+                   for s in keys)
 
 
 LABEL = re.compile(r"^\s*(?:(?:בענף|באחזקה|משמעות|פרשנות|תחזית)\s*:\s*)+")
@@ -233,9 +239,11 @@ def index(d: dict) -> str:
             f'<section class="topic-sum peer-h" data-h="{escape(name)}">'
             f'<div class="topic-sum-head">{escape(name)}'
             f'<span class="stamp">{where}{sector}</span></div>'
-            + _chips(cfg.get("competitors") or [], "מתחרים")
-            + _chips(cfg.get("customers") or [], "לקוחות מהותיים")
-            + _chips(cfg.get("suppliers") or [], "ספקים מהותיים")
+            + (f'<p class="stamp">תחומי פעילות: {escape(" · ".join(cfg["segments"]))}</p>'
+               if cfg.get("segments") else "")
+            + _chips(cfg.get("competitors") or [], "מתחרים", cfg.get("segments"))
+            + _chips(cfg.get("customers") or [], "לקוחות מהותיים", cfg.get("segments"))
+            + _chips(cfg.get("suppliers") or [], "ספקים מהותיים", cfg.get("segments"))
             + body + more + rblock + '</section>')
 
     foot = ('<p class="stamp">מקור השיוך של כל מתחר מופיע במעבר עכבר: "דוח" — החברה נוקבת בשמו בדוח התקופתי '

@@ -130,7 +130,9 @@ def targets(peers: dict, cmap: dict) -> dict[int, dict]:
                 cik, title = cmap[tk]
                 t = out.setdefault(cik, {"cik": cik, "ticker": tk, "company": p["name"], "sec_name": title,
                                          "holdings": []})
-                t["holdings"].append({"holding": h, "role": kind, "src": p.get("src") or ""})
+                seg = p.get("seg") or ""
+                t["holdings"].append({"holding": h, "role": kind, "src": p.get("src") or "",
+                                      "seg": ", ".join(seg) if isinstance(seg, list) else seg})
     return out
 
 

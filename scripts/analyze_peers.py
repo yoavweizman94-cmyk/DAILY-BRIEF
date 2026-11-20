@@ -261,7 +261,8 @@ def review_filing(r: dict, peers: dict, cap: float) -> tuple[dict | None, float,
         if h not in peers:
             continue
         prof = _profiles.line(h, limit=400) or "אין תיאור פעילות במאיה"
-        lines.append(f"- {h} — {r['company']} הוא {KIND.get(x.get('role'), x.get('role'))} שלה "
+        seg = f" בתחום {x['seg']}" if x.get("seg") else ""
+        lines.append(f"- {h} — {r['company']} הוא {KIND.get(x.get('role'), x.get('role'))} שלה{seg} "
                      f"(מקור השיוך: {x.get('src') or '—'}). תיאור הפעילות במאיה: {prof}")
     if not lines:
         return None, 0.0, "noholding"
@@ -333,14 +334,20 @@ def insight_for(holding: str, peers_cfg: dict, items: list[dict], cap: float,
     if spent_today() >= cap:
         return [], 0.0, "cap"
     prof = _profiles.line(holding, limit=400) or "אין תיאור פעילות במאיה"
-    comps = "\n".join(f"  · {p['name']} ({p.get('src', '')})" for p in peers_cfg.get("competitors") or [])
-    custs = "\n".join(f"  · {p['name']} ({p.get('src', '')})" for p in peers_cfg.get("customers") or [])
-    supps = "\n".join(f"  · {p['name']} ({p.get('src', '')})" for p in peers_cfg.get("suppliers") or [])
+    def row(p: dict) -> str:   # תחום הפעילות של האחזקה שבו המתחר/הלקוח פועל — כדי שהכרטיס ידבר על התחום הנכון
+        seg = p.get("seg") or ""
+        seg = ", ".join(seg) if isinstance(seg, list) else seg
+        return f"  · {p['name']}" + (f" — בתחום {seg}" if seg else "") + f" ({p.get('src', '')})"
+    comps = "\n".join(row(p) for p in peers_cfg.get("competitors") or [])
+    custs = "\n".join(row(p) for p in peers_cfg.get("customers") or [])
+    supps = "\n".join(row(p) for p in peers_cfg.get("suppliers") or [])
     lines = [f"- id={r['id']} [{r.get('source', '')}, {r['ts'][:10]}] {r['title']} — במיון: {r['_why']}"
              for r in items]
     seen = sorted(set(reviewed or []))
+    segs = ", ".join(peers_cfg.get("segments") or [])
     data = (f"האחזקה: {holding}\nתיאור הפעילות במאיה: {prof}\n"
-            f"מתחרים (מקור השיוך בסוגריים):\n{comps or '  —'}\n"
+            + (f"תחומי הפעילות העיקריים (לפי הדוח התקופתי): {segs}\n" if segs else "")
+            + f"מתחרים (מקור השיוך בסוגריים):\n{comps or '  —'}\n"
             + (f"לקוחות מהותיים:\n{custs}\n" if custs else "")
             + (f"ספקים מהותיים:\n{supps}\n" if supps else "")
             + (("דוחות שכבר נכתבה עליהם סקירה מלאה מגוף הדוח — אל תכתוב כרטיס נוסף על אותן תוצאות: "
