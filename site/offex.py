@@ -305,22 +305,27 @@ def holders_summary(rows: list[dict], year: str) -> str:
 
     buyers_n = sum(1 for e in agg.values() if e["pct"] > 0)
     sellers_n = sum(1 for e in agg.values() if e["pct"] < 0)
+    # **התמונה כמו הפוסט "מי צבר ומי מימש" ב-Claude Design** (23/11/2026): לוח סיכום
+    # עם פס צברו מול מימשו, וטבלה משלה (kind: holders) — החברה בזהב, תג הכיוון,
+    # ופסים לשינוי נטו ולהחזקה אחרי. "מתחילת השנה" בזהב מדורג (gilt).
     payload = card(
         f"מי צבר ומי מימש · מתחילת {year}",
         "כל הדיווחים של בעל עניין באותה חברה מצורפים יחד, ומדורגים לפי השינוי נטו "
-        "בחלקו מהון החברה — רכישות פחות מכירות.",
+        "בחלקו מהון החברה. רכישות פחות מכירות.",
         [{"type": "stats", "items": [
-            {"label": "מדווחים", "value": str(len(agg)),
-             "cap": f"{buyers_n} צברו · {sellers_n} מימשו"},
-            {"label": "עסקאות", "value": f'{sum(e["n"] for e in agg.values()):,}'},
+            {"label": "מדווחים", "value": str(len(agg)), "cap": "בעלי עניין שדיווחו על עסקה"},
+            {"label": "עסקאות", "value": f'{sum(e["n"] for e in agg.values()):,}',
+             "cap": "דיווחים מתחילת השנה"},
             {"label": "היקף", "value": money(sum(e["buy"] + e["sell"] for e in agg.values())),
-             "cap": "רכישות ומכירות יחד"}]},
-         {"type": "table", "title": "20 השינויים הגדולים בחלק מההון",
+             "cap": "רכישות ומכירות יחד", "tone": "accent"}],
+          "split": {"a": buyers_n, "b": sellers_n, "aLabel": "צברו", "bLabel": "מימשו"}},
+         {"type": "table", "kind": "holders", "title": "20 השינויים הגדולים בחלק מההון",
           "cols": [["מדווח", "name", "rtl", {"sub": "meta"}], cols[-2], cols[-1]],
           "rows": [{k: v for k, v in r.items() if not k.startswith("_")} for r in cells],
           "moreText": more}],
         # הטבלה הזו ממאיה ולא מסקירת הבורסה.
         file=f"tlv-offex-holders-{year}", kicker=KICKER, source=SRC_MAYA)
+    payload["gilt"] = True
 
     lines = [f"בעלי עניין · מתחילת {year}",
              f"{len(agg)} מדווחים, {sum(e['n'] for e in agg.values()):,} עסקאות"]

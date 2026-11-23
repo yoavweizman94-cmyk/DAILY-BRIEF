@@ -353,16 +353,18 @@ def table_j(title: str, sub: str, rows: list[dict], key: str, label: str,
               "pday": _pct(e["pct_day"]), "cap": _pct(e["pct_capital"], 2),
               "chg": otc.signed(e["chg_mean"]), "_cls": otc.cls(e["chg_mean"]),
               # שורת המשנה בתמונת הלילה: החלק מהמחזור עובר אליה, כי בדירוג אין לו עמודה.
-              "detail": " · ".join(t for t in [
-                  (f'{_pct(e["pct_day"])} ממחזור' if e["pct_day"] is not None else ""),
-                  (f'{e["days"]} ימים' if not day_mode and e["days"] > 1 else ""),
+              # הימים והחלק מההון — info: באותה שורה כשיש מקום, ואחרת שורה שלישית.
+              "detail": (f'{_pct(e["pct_day"])} ממחזור' if e["pct_day"] is not None else ""),
+              "info": " · ".join(t for t in [
+                  (f'{e["days"]} ימי מסחר' if not day_mode and e["days"] > 1 else ""),
                   (f'{_pct(e["pct_capital"], 2)} מההון' if e["pct_capital"] else "")] if t),
               "meta": " · ".join(t for t in [
                   (f'{e["days"]} ימים' if not day_mode and e["days"] > 1 else ""),
                   (f'{_pct(e["pct_capital"], 2)} מההון (משוער)' if e["pct_capital"] else "")] if t)}
              for e in shown]
     rest = len(agg) - len(shown)
-    more = (f"ועוד {rest} ניירות בהיקף {otc.money(sum(e['value'] for e in agg[limit:]))}."
+    more = (("ועוד נייר אחד" if rest == 1 else f"ועוד {rest} ניירות")
+            + f" בהיקף {otc.money(sum(e['value'] for e in agg[limit:]))}."
             if rest > 0 else "")
     total_row = {"name": "סך הכל", "days": "", "value": otc.money(total),
                  "pday": "", "cap": "", "chg": ""}
@@ -370,7 +372,8 @@ def table_j(title: str, sub: str, rows: list[dict], key: str, label: str,
     days = len({r["date"] for r in rows})
     stats = [{"label": "היקף", "value": otc.money(total)},
              {"label": "ניירות", "value": str(len(agg))},
-             ({"label": "רוב המחזור", "value": f"{maj} ניירות", "cap": "מעל מחצית מהמסחר בנייר"}
+             ({"label": "רוב המחזור", "value": "נייר אחד" if maj == 1 else f"{maj} ניירות",
+               "cap": "מעל מחצית מהמסחר בנייר"}
               if day_mode else {"label": "ימי מסחר", "value": str(days)})]
     img = [["נייר", "name", "rtl", {"sub": "meta"}], ["היקף", "value", "ltr", {"viz": "bar"}],
            ["% ממחזור היום" if day_mode else "% מהמחזור", "pday", "ltr", {"viz": "meter", "max": 100}]]
@@ -416,21 +419,21 @@ def table_a(title: str, sub: str, otc_rows: list[dict], j_rows: list[dict], key:
     cols.append(["% מההון (משוער)", "cap", "ltr"])
 
     def detail(e: dict) -> str:
-        """שורת המשנה בתמונה, קצרה כמו בפוסטים: הפירוק לשני הערוצים — ובסוגריים, מחיר
-        העסקה מחוץ לבורסה מול שער הבסיס — והחלק מההון."""
-        pv = e[fld]
-        # ביום השבב הוא שינוי המניה, והסטייה של העסקה בסוגריים. בחודש ובשנה השבב
-        # הוא כבר חציון הסטייה, ובסוגריים היא הייתה נכתבת פעמיים.
-        prem = f" ({otc.signed(pv)})" if pv is not None and day_mode else ""
+        """שורת המשנה בתמונה, כמו בפוסטים של Claude Design: הפירוק לשני הערוצים.
+
+        **בלי הסטייה של העסקה בסוגריים** (23/11/2026, "תעשה כמו שהקלוד דיזיין עשה").
+        בפוסט השבב הוא השינוי משער הבסיס והשורה היא הערוצים בלבד; הסטייה נשארת
+        בעמודה שלה בטבלה שבעמוד."""
         if e["otc"] and e["jumbo"]:
-            parts = [f"מחוץ {otc.short(e['otc'])}{prem}", f"מתואם {otc.short(e['jumbo'])}"]
-        else:
-            parts = [f"מחוץ לבורסה{prem}" if e["otc"] else "מתואמת"]
-        if not day_mode and e["days"] > 1:
-            parts.append(f"{e['days']} ימים")
-        if e["pct_capital"]:
-            parts.append(f"{e['pct_capital']:.2f}% מההון")
-        return " · ".join(parts)
+            return f"מחוץ {otc.short(e['otc'])} · מתואם {otc.short(e['jumbo'])}"
+        return "מחוץ לבורסה" if e["otc"] else "מתואמת"
+
+    def info(e: dict) -> str:
+        """ימי המסחר והחלק מההון — מצטרפים לשורת המשנה כשיש מקום, ואחרת שורה
+        שלישית בכל השורות (export_card.js), כמו בפוסט של מתחילת החודש."""
+        return " · ".join(t for t in [
+            (f"{e['days']} ימי מסחר" if not day_mode and e["days"] > 1 else ""),
+            (f"{e['pct_capital']:.2f}% מההון" if e["pct_capital"] else "")] if t)
 
     shown = agg[:limit]
     cells = [{"name": e["name"], "days": str(e["days"]),
@@ -440,7 +443,7 @@ def table_a(title: str, sub: str, otc_rows: list[dict], j_rows: list[dict], key:
               "prem": otc.signed(e[fld]) if e[fld] is not None else "—",
               "_cls_prem": otc.cls(e[fld]),
               "chg": otc.signed(e["chg_mean"]), "_cls_chg": otc.cls(e["chg_mean"]),
-              "detail": detail(e),
+              "detail": detail(e), "info": info(e),
               "meta": " · ".join(t for t in [
                   (otc.nb(f'מחוץ לבורסה {otc.money(e["otc"])}') if e["otc"] else ""),
                   (otc.nb(f'מתואמות {otc.money(e["jumbo"])}') if e["jumbo"] else ""),
@@ -448,12 +451,22 @@ def table_a(title: str, sub: str, otc_rows: list[dict], j_rows: list[dict], key:
                   (f'{_pct(e["pct_capital"], 2)} מההון' if e["pct_capital"] else "")] if t)}
              for e in shown]
     rest = len(agg) - len(shown)
-    more = (f"ועוד {rest} ניירות בהיקף {otc.money(sum(e['value'] for e in agg[limit:]))}."
+    more = (("ועוד נייר אחד" if rest == 1 else f"ועוד {rest} ניירות")
+            + f" בהיקף {otc.money(sum(e['value'] for e in agg[limit:]))}."
             if rest > 0 else "")
     total_row = {"name": "סך הכל", "days": "", "otc": otc.money(o), "jumbo": otc.money(j),
                  "value": otc.money(total), "cap": "", "prem": "", "chg": ""}
-    # החלק של כל ערוץ מההיקף — בלוח הסיכום של התמונה הוא גם פס החלוקה.
-    stats = [{"label": "סה\"כ", "value": otc.money(total), "cap": f"{len(agg)} ניירות"},
+    # החלק של כל ערוץ מההיקף — בלוח הסיכום של התמונה הוא גם פס החלוקה. התווית כמו
+    # בפוסטים: "סה״כ היום", "סה״כ עד כה" ביום פתוח, "סה״כ החודש".
+    if day_mode:
+        tot_label = "סה״כ עד כה" if title.startswith("היום") else "סה״כ היום"
+    elif title.startswith("מתחילת החודש"):
+        tot_label = "סה״כ החודש"
+    elif title.startswith("מתחילת 20"):
+        tot_label = "סה״כ השנה"
+    else:
+        tot_label = "סה״כ"
+    stats = [{"label": tot_label, "value": otc.money(total), "cap": f"{len(agg)} ניירות"},
              {"label": "מחוץ לבורסה", "value": otc.money(o),
               "cap": f"{o / total * 100:.0f}% מההיקף" if total else ""},
              {"label": "מתואמות", "value": otc.money(j),
@@ -700,7 +713,8 @@ def tiles_a(a: dict, j_rows: list[dict], year: str) -> str:
                        (otc.nb(f'מחוץ לבורסה {otc.money(e["otc"])}') if e["otc"] else ""),
                        (otc.nb(f'מתואמות {otc.money(e["jumbo"])}') if e["jumbo"] else "")] if t)}
                   for e in top],
-         "moreText": (f"ועוד {len(rest)} ניירות · {otc.money(sum(e['value'] for e in rest))}"
+         "moreText": (("ועוד נייר אחד" if len(rest) == 1 else f"ועוד {len(rest)} ניירות")
+                      + f" · {otc.money(sum(e['value'] for e in rest))}"
                       if rest else ""),
          "totalRow": {"name": "סך הכל", "otc": otc.money(o_tot) if o_tot else "—",
                       "jumbo": otc.money(j_tot) if j_tot else "—",

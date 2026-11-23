@@ -153,6 +153,9 @@ def num(v, digits: int = 0) -> str:
 def signed(v, digits: int = 2) -> str:
     if v is None:
         return "—"
+    # סטייה זעירה שמתעגלת לאפס נכתבת "0.00%" ולא "-0.00%" — בשבב בתמונה ובטבלה.
+    if round(v, digits) == 0:
+        return f"{0:.{digits}f}%"
     return f"{'+' if v > 0 else ''}{v:.{digits}f}%"
 
 
@@ -220,7 +223,7 @@ def insights(agg: list[dict], total: float, fld: str = "median_prem",
     if withcap:
         big = max(withcap, key=lambda e: e["pct_capital"])
         out.append({"big": f"{big['pct_capital']:.2f}%",
-                    "text": f"מהון {big['name']} עבר ידיים, השיעור הגבוה {scope}"
+                    "text": f"מהון {big['name']} החליף ידיים, השיעור הגבוה {scope}"
                             + (" (משוער)." if estimated else ".")})
     prem = [e[fld] for e in agg if e.get(fld) is not None]
     if prem:
@@ -647,10 +650,16 @@ def period_table(title: str, sub: str, rows: list[dict],
             f'{e["n"]} עסקאות' if e["n"] > 1 else "עסקה אחת",
             (f'{e["days"]} ימים' if show_days and e["days"] > 1 else ""),
             (num(e["pct_capital"], 2) + "% מההון") if e["pct_capital"] is not None else ""] if t),
+        # בתמונת הלילה אותה שורה בשני חלקים: העסקאות, והימים והחלק מההון — שמצטרפים
+        # אליהן כשיש מקום ואחרת יורדים לשורה שלישית (export_card.js, nightTable).
+        "detail": f'{e["n"]} עסקאות' if e["n"] > 1 else "עסקה אחת",
+        "info": " · ".join(t for t in [
+            (f'{e["days"]} ימי מסחר' if show_days and e["days"] > 1 else ""),
+            (num(e["pct_capital"], 2) + "% מההון") if e["pct_capital"] is not None else ""] if t),
     } for e in shown]
     rest = len(agg) - len(shown)
-    more = (f'ועוד {rest} ניירות בהיקף '
-            f'{money(sum(e["value"] for e in agg[len(shown):]))}.'
+    more = (("ועוד נייר אחד בהיקף " if rest == 1 else f"ועוד {rest} ניירות בהיקף ")
+            + f'{money(sum(e["value"] for e in agg[len(shown):]))}.'
             if rest > 0 else "")
     # סכום אחוזי הון של ניירות שונים אינו מספר בעל משמעות, ולכן התא ריק.
     total_row = {"name": "סך הכל", "n": str(sum(e["n"] for e in agg)),
