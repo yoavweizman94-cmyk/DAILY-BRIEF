@@ -1188,5 +1188,23 @@
    "https://us06web.zoom.us/webinar/register/WN_dhrR_KhcS8urAN5fmNwIyw"
   ],
   "others": []
+ },
+ "1782817": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_ulE_MU_rS3uqzyKi9wWOYA",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_ulE_MU_rS3uqzyKi9wWOYA"
+  ],
+  "others": [
+   "https://realestate-rl.co.il"
+  ]
+ },
+ "1782715": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_dhrR_KhcS8urAN5fmNwIyw",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_dhrR_KhcS8urAN5fmNwIyw"
+  ],
+  "others": []
  }
 }
