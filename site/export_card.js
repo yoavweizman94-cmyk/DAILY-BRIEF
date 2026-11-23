@@ -159,7 +159,7 @@
 
   var fontsP = null;
   function fontsReady(theme) {
-    if (theme === "night") { return Promise.all([fontsReady(), nightFonts()]); }
+    if (theme === "night") { return Promise.all([fontsReady(), nightFonts(), brandReady()]); }
     if (fontsP) { return fontsP; }
     if (!document.fonts || !document.fonts.load) {
       fontsP = Promise.resolve();
@@ -2167,8 +2167,8 @@
   // לוח סיכום עם פס החלוקה בין מחוץ לבורסה למתואמות, כרטיסי תובנה, ודירוג
   // בשתי עמודות עם פס מוערם קטן לכל נייר. רוחב 1200, כמו שם.
   //
-  // **הסמל הוא טבעת זהב וסיגר, ולא הלוגו שבקנבס.** בלוגו יש דיוקן של אדם
-  // אמיתי, וזה לא נכנס לתמונות של האתר (ראה ההערה בראש הקובץ).
+  // **בתוך טבעת הזהב — הלוגו של החשבון, כמו בקנבס** (brand.jpg, מ-23/11/2026 לבקשת
+  // יואב). עד אז היה שם סיגר מצויר, והוא נשאר כחלופה כשהלוגו לא נטען.
   //
   // הערכה נבחרת לפי payload.theme === "night": otc.card מסמן כך את כרטיסי העמוד,
   // וסחורות ורכב (share.card) נשארים בערכה הבהירה. הגושים הכלליים (עמודות, דירוג,
@@ -2261,7 +2261,29 @@
     x.restore();
   }
 
-  // הסמל: הילה, טבעת מנוקדת, טבעת זהב ויהלומים — ובתוך הדיסק הסיגר הדולק.
+  // **הלוגו של החשבון בתוך טבעת הזהב — כמו בפוסטים** (יואב, 23/11/2026: "הלוגו לא
+  // נכון. שיהיה כמו התמונה"). הקובץ brand.jpg מוגש מאותו מקור כמו העמוד (build.py),
+  // אחרת הקנבס "מוכתם" והייצוא נכשל. כשהוא לא נטען — הסיגר הדולק, כמו קודם.
+  var BRAND = { img: null, p: null };
+  function brandReady() {
+    if (BRAND.p) { return BRAND.p; }
+    BRAND.p = new Promise(function (res) {
+      var im = new Image(), over = false;
+      function fin(ok) {
+        if (over) { return; }
+        over = true;
+        BRAND.img = ok && im.naturalWidth && im.naturalHeight ? im : null;
+        res();
+      }
+      im.onload = function () { fin(true); };
+      im.onerror = function () { fin(false); };
+      setTimeout(function () { fin(false); }, 6000);
+      im.src = "brand.jpg";
+    });
+    return BRAND.p;
+  }
+
+  // הסמל: הילה, טבעת מנוקדת, טבעת זהב ויהלומים — ובתוך העיגול הלוגו (או הסיגר הדולק).
   function emblem(x, cx, cy) {
     var halo = x.createRadialGradient(cx, cy, 0, cx, cy, 170);
     halo.addColorStop(0, "rgba(227,176,75,0.34)"); halo.addColorStop(0.6, "rgba(227,176,75,0.08)");
@@ -2291,13 +2313,23 @@
     x.shadowColor = "rgba(0,0,0,0.6)"; x.shadowBlur = 52 * SC; x.shadowOffsetY = 20 * SC;
     x.fillStyle = "#0A111F"; x.beginPath(); x.arc(cx, cy, 134, 0, Math.PI * 2); x.fill();
     x.restore();
-    var disc = x.createRadialGradient(cx - 40, cy - 50, 8, cx, cy, 131);
-    disc.addColorStop(0, "#2A3E63"); disc.addColorStop(0.55, "#16243F"); disc.addColorStop(1, "#0C1526");
-    x.fillStyle = disc; x.beginPath(); x.arc(cx, cy, 131, 0, Math.PI * 2); x.fill();
-    x.save();
-    x.beginPath(); x.arc(cx, cy, 130, 0, Math.PI * 2); x.clip();
-    cigar(x, cx + 14, cy + 34, 236, -0.38, 1);
-    x.restore();
+    if (BRAND.img) {
+      // כמו בקנבס: עיגול של 262 ובתוכו התמונה ב-274, כך שהשפה החיצונית של התג נחתכת.
+      x.save();
+      x.beginPath(); x.arc(cx, cy, 131, 0, Math.PI * 2); x.clip();
+      x.imageSmoothingEnabled = true;
+      if ("imageSmoothingQuality" in x) { x.imageSmoothingQuality = "high"; }
+      x.drawImage(BRAND.img, cx - 137, cy - 137, 274, 274);
+      x.restore();
+    } else {
+      var disc = x.createRadialGradient(cx - 40, cy - 50, 8, cx, cy, 131);
+      disc.addColorStop(0, "#2A3E63"); disc.addColorStop(0.55, "#16243F"); disc.addColorStop(1, "#0C1526");
+      x.fillStyle = disc; x.beginPath(); x.arc(cx, cy, 131, 0, Math.PI * 2); x.fill();
+      x.save();
+      x.beginPath(); x.arc(cx, cy, 130, 0, Math.PI * 2); x.clip();
+      cigar(x, cx + 14, cy + 34, 236, -0.38, 1);
+      x.restore();
+    }
     // עשן מחוץ לטבעת, למעלה מימין, כמו בקנבס
     var ox = cx - 210, oy = cy - 170;
     [[[344, 72, 360, 52, 334, 36, 352, 14], 0.28, 5], [[356, 84, 378, 62, 350, 42, 374, 22], 0.16, 3]]

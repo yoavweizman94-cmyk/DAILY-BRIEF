@@ -1181,6 +1181,9 @@ def main() -> int:
         shutil.rmtree(OUT)
     (OUT / "briefs").mkdir(parents=True)
     shutil.copy(STYLE, OUT / "style.css")
+    # הלוגו של החשבון לתמונות הייצוא (export_card.js, emblem) — באותו מקור כמו העמוד,
+    # כדי שהקנבס לא "יוכתם" ויוכל לייצא.
+    shutil.copy(STYLE.parent / "brand.jpg", OUT / "brand.jpg")
 
     # **השפעה על מניות נטען לפני כל העמודים** — הכותרות, הדיווחים והרגולציה מקשרים
     # לכרטיס של אותו אירוע ("מה זה עושה למניה ←"), ועמוד הבית מציג את הבולטים.
