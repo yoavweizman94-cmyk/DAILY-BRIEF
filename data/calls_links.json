@@ -1246,5 +1246,21 @@
   "certain": false,
   "known": [],
   "others": []
+ },
+ "1783265": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_IbpEnAKzQF-SZ6CWHXFidA",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_IbpEnAKzQF-SZ6CWHXFidA"
+  ],
+  "others": []
+ },
+ "1783282": {
+  "link": "https://zoom.us/webinar/register/WN_yc875ETbTxatHoR6yYSzWw",
+  "certain": true,
+  "known": [
+   "https://zoom.us/webinar/register/WN_yc875ETbTxatHoR6yYSzWw"
+  ],
+  "others": []
  }
 }
