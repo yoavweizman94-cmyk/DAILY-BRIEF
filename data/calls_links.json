@@ -1273,5 +1273,31 @@
    "https://top-group.co.il/relations",
    "https://link.accessidoc.com/lUKgAB08PjWqWTr3Q19CDceWL1w5lVRv4kXy6srtosFVqta0zLksJVXVuzfWoV-l2wKNgjVWk6UFbFKAXAOJQGCqtb"
   ]
+ },
+ "1784410": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_1hGJHMspTYGJHIh3ZEwUNg",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_1hGJHMspTYGJHIh3ZEwUNg"
+  ],
+  "others": []
+ },
+ "1783919": {
+  "link": "https://us06web.zoom.us/webinar/register/WN_XT1CI_5qQO2LFZdgLiwUNQ",
+  "certain": true,
+  "known": [
+   "https://us06web.zoom.us/webinar/register/WN_XT1CI_5qQO2LFZdgLiwUNQ"
+  ],
+  "others": []
+ },
+ "1783920": {
+  "link": "https://us02web.zoom.us/webinar/register/WN_bn8DKmaxTA2ZGonXTKmuTA",
+  "certain": true,
+  "known": [
+   "https://us02web.zoom.us/webinar/register/WN_bn8DKmaxTA2ZGonXTKmuTA"
+  ],
+  "others": [
+   "https://www.solaer.co.il/"
+  ]
  }
 }
