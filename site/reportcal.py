@@ -26,8 +26,11 @@ ROOT = Path(__file__).resolve().parent.parent
 LOGOS = ROOT / "output" / "logos"
 DAY_HE = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]   # date.weekday()
 MAX_DAY = 16           # אריחים ליום בתמונה; השאר — "ועוד N"
-SRC = ("מקור: לוח האירועים במערכת מאיה של הבורסה לניירות ערך — מועדי פרסום הדוחות "
-       "ושיחות הוועידה; הלוגואים מאתרי החברות")
+# כמו הפוסט "דוחות השבוע" ב-Claude Design (26/11/2026), מילה במילה
+SRC = "מקור: לוח האירועים במערכת מאיה של הבורסה לניירות ערך, מועדי פרסום הדוחות ושיחות הוועידה"
+# רוחב הלוחות בתמונה — אותם מספרים כמו NW ב-site/export_card.js: לוח של יום עם שלוש חברות
+# לכל היותר צר (טור אחד), והשאר בשני טורים. רוחב התמונה נגזר מהם.
+WIDE, NARROW, DAY_GAP, NIGHT_PAD = 318, 167, 18, 56
 
 
 def _cover() -> tuple[dict[int, str], dict[int, float]]:
@@ -83,15 +86,18 @@ def weeks(calls: list[dict], reports: list[dict], today: str) -> list[dict]:
         if iso < start or not r.get("company_id"):
             continue
         cid = int(r["company_id"])
-        ct = None
+        ct, tm, od = None, "", ""
         if r.get("call_date"):
             linked.add((cid, r.get("call_date")))
-            ct = r.get("call_time") or ""
+            ct = tm = r.get("call_time") or ""
             if r["call_date"] != iso:
-                ct = f"{_dm(r['call_date'])} {ct}".strip()
+                od = r["call_date"]
+                ct = f"{_dm(od)} {ct}".strip()
+        # t — לעמוד (תאריך ושעה יחד); tm ו-od — לתמונה: שעה, או "ב־<תאריך>" לשיחה ביום אחר
         day(iso)["items"][cid] = {"cid": cid, "n": names.get(cid) or r.get("company") or "",
                                   "p": r.get("period") or "", "c": bool(r.get("call_date")),
-                                  "t": ct or "", "lg": logos.get(cid, ""), "url": r.get("report_url")}
+                                  "t": ct or "", "tm": tm, "od": od,
+                                  "lg": logos.get(cid, ""), "url": r.get("report_url")}
     for c in calls:
         iso = c.get("date") or ""
         if iso < start:
@@ -103,6 +109,7 @@ def weeks(calls: list[dict], reports: list[dict], today: str) -> list[dict]:
         if cid and (cid, iso) not in linked and cid not in dd["items"]:
             dd["items"][cid] = {"cid": cid, "n": names.get(cid) or c.get("company") or "",
                                 "p": c.get("period") or "", "c": True, "t": c.get("time") or "",
+                                "tm": c.get("time") or "", "od": "",
                                 "lg": logos.get(cid, ""), "url": c.get("report_url"), "co": True}
 
     out: dict[str, dict] = {}
@@ -134,27 +141,48 @@ def week_range(week: dict) -> str:
     return f"{_dm(a)}–{_dm(b)}.{b[:4]}"
 
 
+def _shown(items: list[dict]) -> list[dict]:
+    """החברות של יום בתמונה, בסדר של הקנבס: שיחות לפי השעה (המוקדמת ראשונה), אחריהן שיחות
+    ביום אחר, ואחריהן דוח בלבד. **הבחירה לפני המיון**: MAX_DAY הגדולות לפי שווי השוק, כדי
+    שחברה גדולה בלי שיחה לא תיפול מהתמונה רק בגלל סדר התצוגה. בתוך קבוצה — לפי השווי."""
+    def key(it: dict) -> tuple:
+        if it["c"] and it.get("tm") and not it.get("od"):
+            return (0, it["tm"], "")
+        if it["c"]:
+            return (1, it.get("od") or "", it.get("tm") or "")
+        return (2, "", "")
+    return sorted(items[:MAX_DAY], key=key)
+
+
 def image(week: dict) -> dict:
-    """מטען לכרטיס התמונה (site/export_card.js, גוש week), בערכת הלילה."""
+    """מטען לכרטיס התמונה (site/export_card.js, גוש week), בערכת הלילה — כמו הפוסט
+    "דוחות השבוע" ב-Claude Design (יואב, 26/11/2026)."""
     by = {d["date"]: d for d in week["days"]}
     days = []
     for iso in _columns(week):
         items = (by.get(iso) or {}).get("items") or []
-        days.append({"label": DAY_HE[date.fromisoformat(iso).weekday()], "date": _dm(iso),
-                     "items": [{"n": it["n"], "c": it["c"], "t": it["t"], "lg": it["lg"]}
-                               for it in items[:MAX_DAY]],
+        days.append({"label": DAY_HE[date.fromisoformat(iso).weekday()], "date": _dm(iso), "iso": iso,
+                     "n": len(items), "nc": sum(1 for it in items if it["c"]),
+                     "items": [{"n": it["n"], "c": it["c"], "t": it.get("tm") or "",
+                                "o": _dm(it["od"]) if it.get("od") else "", "lg": it["lg"]}
+                               for it in _shown(items)],
                      "more": max(0, len(items) - MAX_DAY)})
     n_rep = sum(len(d["items"]) for d in week["days"])
     n_call = sum(1 for d in week["days"] for it in d["items"] if it["c"])
     card = otc.card(f"דוחות השבוע · {week_range(week)}",
-                    f"{n_rep} חברות מפרסמות דוח כספי השבוע, {n_call} מהן מקיימות גם שיחת ועידה — "
-                    "לפי ההודעות במאיה.",
+                    "החברות שמפרסמות דוח כספי השבוע ושיחות הוועידה שלהן, לפי ההודעות במאיה.",
                     [{"type": "week", "days": days}],
                     file=f"tlv-reports-week-{week['start']}",
                     kicker="לוח הדוחות והשיחות", source=SRC, theme="night")
-    # שבוע עם ראשון ושישי — שש עמודות; ב-1200 האריחים צרים מכדי לשאת שם של שתי מילים
-    if len(days) > 5:
-        card["width"] = 1400
+    # הגיבור כמו בקנבס: הכותרת והתאריך בשורה אחת, התאריך בזהב מדורג, שני שבבי ספירה
+    # מתחת לשורת ההסבר — ובלי המפריד שבין הגיבור לגוף.
+    stats = [{"v": n_rep, "t": "דוח כספי" if n_rep == 1 else "דוחות כספיים"}]
+    if n_call:      # "0 עם שיחת ועידה" אינו מידע — השבב יורד
+        stats.append({"v": n_call, "t": "עם שיחת ועידה", "call": True})
+    card.update({"heroInline": True, "gilt": True, "divider": False, "heroStats": stats})
+    cards_n = [len(d["items"]) + (1 if d["more"] else 0) for d in days]
+    card["width"] = max(1200, 2 * NIGHT_PAD + DAY_GAP * (len(days) - 1)
+                        + sum(NARROW if k <= 3 else WIDE for k in cards_n))
     return card
 
 

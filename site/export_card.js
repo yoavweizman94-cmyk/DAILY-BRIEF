@@ -2083,6 +2083,358 @@
     return h;
   }
 
+  // ---------------------------------------------------------------- לוח השבוע בלילה
+  //
+  // **"דוחות השבוע" כמו הפוסט ב-Claude Design** (יואב, 26/11/2026: "שהייצוא של לוח שיחות
+  // הוועידה יהיה כמו שהקלוד דיזיין עיצב לי" — הקנבס "עסקאות מחוץ לבורסה · פוסטים", הלוח
+  // Reports-Nov16). לוח מקרא ברוחב מלא, ומתחתיו לוח לכל יום: כותרת זהב עם היום, התאריך
+  // והספירה, ובו כרטיס לכל חברה — לוחית לבנה עם הלוגו או השם, ומתחתיה שבב זהב עם שעת
+  // השיחה, "ב־<תאריך>" לשיחה ביום אחר, או "דוח בלבד" מקווקו. יום עם שלושה כרטיסים לכל
+  // היותר צר, בטור אחד; השאר בשני טורים (רוחב התמונה נגזר מכך ב-reportcal.image). היום
+  // מסומן בזהב — לפי התאריך במחשב שמייצא, כי התמונה נוצרת ברגע הלחיצה.
+  //
+  // שני חריגים מהקנבס: גופן מינימלי 16 (FMIN — שם 12–14), ולוגו בהיר יושב על לוחית כהה,
+  // כי על לבן הוא נעלם (lightImage).
+  var NW = { wide: 318, narrow: 167, gap: 18, inset: 13, headH: 112, cardH: 138, rowGap: 10,
+    colGap: 10, plateH: 88, chipH: 30, legH: 58 };
+  // השפופרת של הקנבס — Feather "phone" (רישיון MIT), ב-viewBox של 24.
+  var FEATHER_PHONE = "M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 " +
+    "19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 " +
+    "2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z";
+  var FPHONE_P = null;
+  function phoneDot(x, cx, cy, r, bg, fg) {
+    x.fillStyle = bg; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
+    if (!FPHONE_P && window.Path2D) {
+      try { FPHONE_P = new Path2D(FEATHER_PHONE); } catch (e) { FPHONE_P = null; }
+    }
+    if (!FPHONE_P) { return; }
+    var k = (r * 1.1) / 24;
+    x.save();
+    x.translate(cx - 12 * k, cy - 12 * k); x.scale(k, k);
+    x.fillStyle = fg; x.fill(FPHONE_P);
+    x.restore();
+  }
+  function localIso() {
+    var t = new Date();
+    return t.getFullYear() + "-" + ("0" + (t.getMonth() + 1)).slice(-2) + "-" + ("0" + t.getDate()).slice(-2);
+  }
+  // שבב זהב: מעבר ב-135° מזהב בהיר לזהב, וצל רך לשבב שבכרטיס.
+  function goldPill(x, l, t, w, h, shadow) {
+    var gr = x.createLinearGradient(l, t, l + w, t + h);
+    gr.addColorStop(0, "#F7E2A6"); gr.addColorStop(1, C.accent);
+    x.save();
+    if (shadow) { x.shadowColor = "rgba(227,176,75,0.22)"; x.shadowBlur = 12 * SC; x.shadowOffsetY = 4 * SC; }
+    x.fillStyle = gr; rr(x, l, t, w, h, h / 2); x.fill();
+    x.restore();
+  }
+  function dashBox(x, l, t, w, h, r, alpha) {
+    x.save();
+    x.strokeStyle = "rgba(255,255,255," + alpha + ")"; x.lineWidth = 1; x.setLineDash([4, 3]);
+    rr(x, l + 0.5, t + 0.5, w - 1, h - 1, r); x.stroke();
+    x.restore();
+  }
+
+  // שבבי הספירה בגיבור: "72 דוחות כספיים", ובזהב — עיגול שפופרת ו"55 עם שיחת ועידה".
+  function heroChips(x, stats, R, t, h) {
+    var cx = R;
+    stats.forEach(function (st) {
+      var num = String(st.v), lab = st.t || "", call = !!st.call;
+      x.font = F(900, 36); var nw = x.measureText(num).width;
+      x.font = F(400, 19); var lw = x.measureText(lab).width;
+      var w = 20 + (call ? 30 + 10 : 0) + nw + (call ? 10 : 8) + lw + 20, l = cx - w, mid = t + h / 2;
+      if (call) {
+        var gr = x.createLinearGradient(l, t, l + w, t + h);
+        gr.addColorStop(0, "rgba(242,210,126,0.18)"); gr.addColorStop(1, "rgba(227,176,75,0.08)");
+        x.fillStyle = gr;
+      } else {
+        x.fillStyle = "rgba(255,255,255,0.05)";
+      }
+      rr(x, l, t, w, h, 14); x.fill();
+      x.strokeStyle = call ? "rgba(227,176,75,0.55)" : "rgba(255,255,255,0.1)"; x.lineWidth = 1;
+      rr(x, l + 0.5, t + 0.5, w - 1, h - 1, 13.5); x.stroke();
+      var px = cx - 20;
+      if (call) { phoneDot(x, px - 15, mid, 15, C.accent, "#0A111F"); px -= 40; }
+      x.direction = "ltr"; x.textAlign = "right"; x.fillStyle = call ? "#F2D27E" : C.ink; x.font = F(900, 36);
+      x.fillText(num, px, mid + 13);
+      px -= nw + (call ? 10 : 8);
+      x.direction = "rtl"; x.fillStyle = call ? "#F2D27E" : C.muted; x.font = F(400, 19);
+      x.fillText(lab, px, call ? mid + 7 : mid + 13);
+      cx = l - 12;
+    });
+  }
+
+  // שם בלוחית בלי לוגו: Heebo 900, הגודל לפי אורך השם כמו בקנבס (24/21/18/16), קטן עד
+  // שכל מילה נכנסת שלמה; שתי שורות מאוזנות (text-wrap: balance), ושלוש רק כשאין ברירה.
+  function balanced(x, words, max) {
+    var all = words.join(" ");
+    if (x.measureText(all).width <= max) { return [all]; }
+    var best = null;
+    for (var i = 1; i < words.length; i += 1) {
+      var a = words.slice(0, i).join(" "), b = words.slice(i).join(" ");
+      var m = Math.max(x.measureText(a).width, x.measureText(b).width);
+      if (m <= max && (!best || m < best.m)) { best = { m: m, lines: [a, b] }; }
+    }
+    if (best) { return best.lines; }
+    var lines = [], cur = "";
+    words.forEach(function (wd) {
+      var cand = cur ? cur + " " + wd : wd;
+      if (!cur || x.measureText(cand).width <= max) { cur = cand; } else { lines.push(cur); cur = wd; }
+    });
+    if (cur) { lines.push(cur); }
+    return lines;
+  }
+  function wordmark(x, text, max) {
+    var t = String(text || ""), len = t.length, words = t.split(/\s+/).filter(Boolean);
+    var s0 = len <= 6 ? 24 : len <= 9 ? 21 : len <= 12 ? 18 : 16, s, lines;
+    for (s = s0; s >= 16; s -= 1) {
+      x.font = F(900, s);
+      if (!words.every(function (wd) { return x.measureText(wd).width <= max; })) { continue; }
+      lines = balanced(x, words, max);
+      if (lines.length <= 2) { return { s: s, lines: lines }; }
+    }
+    x.font = F(900, 16);
+    lines = balanced(x, words.map(function (wd) { return fitText(x, wd, max); }), max).slice(0, 3);
+    return { s: 16, lines: lines.length ? lines : [""] };
+  }
+
+  // הלוחית: לבן חם בהדרגה, ובה הלוגו בגודל אופטי (שטח דומה לכל לוגו, עד 46 גובה ו-112
+  // רוחב) ושם החברה מתחתיו — או השם עצמו, כשאין לוגו.
+  function weekPlate(x, it, l, t, w, h) {
+    var info = it.lg ? LOGOS[it.lg] : null, im = info && info.img, dark = !!(im && info.light);
+    if (dark) {
+      x.fillStyle = "#1C2A44";
+    } else {
+      var pg = x.createLinearGradient(0, t, 0, t + h);
+      pg.addColorStop(0, "#FFFFFF"); pg.addColorStop(1, "#F4F1EA");
+      x.fillStyle = pg;
+    }
+    rr(x, l, t, w, h, 10); x.fill();
+    x.strokeStyle = dark ? "rgba(255,255,255,0.08)" : "rgba(19,32,58,0.06)"; x.lineWidth = 1;
+    rr(x, l + 0.5, t + 0.5, w - 1, h - 1, 9.5); x.stroke();
+    x.direction = "rtl"; x.textAlign = "center";
+    if (im) {
+      var r = im.naturalWidth / im.naturalHeight, cap = Math.min(112, w - 14);
+      var lh = Math.min(46, Math.sqrt(3300 / r)), lw = lh * r;
+      if (lw > cap) { lw = cap; lh = lw / r; }
+      var y0 = t + (h - (lh + 5 + 16)) / 2;
+      x.save();
+      x.imageSmoothingEnabled = true;
+      if ("imageSmoothingQuality" in x) { x.imageSmoothingQuality = "high"; }
+      x.drawImage(im, l + (w - lw) / 2, y0, lw, lh);
+      x.restore();
+      x.fillStyle = dark ? "#B7C0CE" : "#5B6578"; x.font = F(700, 12);
+      x.fillText(fitText(x, it.n, w - 12), l + w / 2, y0 + lh + 5 + 13);
+      return;
+    }
+    var nm = wordmark(x, it.n, w - 12), s = nm.s, lines = nm.lines;
+    var lhh = Math.round(s * 1.1), y = t + (h - lines.length * lhh) / 2 + Math.round(s * 0.86);
+    x.fillStyle = "#13203A"; x.font = F(900, s);
+    lines.forEach(function (ln, i) { x.fillText(ln, l + w / 2, y + i * lhh); });
+  }
+
+  // שבב השיחה, ממורכז: העיגול מימין, ואחריו השעה — או "ב־" והתאריך לשיחה ביום אחר.
+  function callChip(x, it, l, t, w, h) {
+    goldPill(x, l, t, w, h, true);
+    var other = it.o || "", txt = other || it.t || "ועידה", digits = !!(other || it.t);
+    var preF = F(800, 14), tF = F(900, other ? 15 : 16), pw = 0;
+    if (other) { x.font = preF; pw = x.measureText("ב־").width; }
+    x.font = tF;
+    var tw = x.measureText(txt).width, tot = 20 + 6 + (other ? pw + 2 : 0) + tw;
+    var right = l + w / 2 + tot / 2, cy = t + h / 2;
+    phoneDot(x, right - 10, cy, 10, "#0A111F", "#F2D27E");
+    var cx = right - 26;
+    x.fillStyle = "#0A111F"; x.textAlign = "right";
+    if (other) {
+      x.direction = "rtl"; x.font = preF; x.fillText("ב־", cx, cy + 6);
+      cx -= pw + 2;
+    }
+    x.direction = digits ? "ltr" : "rtl"; x.font = tF; x.fillText(txt, cx, cy + 6);
+  }
+
+  function weekCard(x, it, l, t, w) {
+    var h = NW.cardH;
+    x.direction = "rtl"; x.textAlign = "center";
+    if (it.more) {
+      dashBox(x, l, t, w, h, 14, 0.24);
+      x.fillStyle = "#9AA6B8"; x.font = F(700, 18);
+      x.fillText("ועוד " + it.more, l + w / 2, t + h / 2 + 6);
+      return;
+    }
+    x.fillStyle = "#131D31"; rr(x, l, t, w, h, 14); x.fill();
+    x.strokeStyle = it.c ? "rgba(227,176,75,0.55)" : "rgba(255,255,255,0.09)"; x.lineWidth = 1;
+    rr(x, l + 0.5, t + 0.5, w - 1, h - 1, 13.5); x.stroke();
+    weekPlate(x, it, l + 7, t + 7, w - 14, NW.plateH);
+    var ct = t + 7 + NW.plateH + 6;
+    if (it.c) { callChip(x, it, l + 7, ct, w - 14, NW.chipH); return; }
+    dashBox(x, l + 7, ct, w - 14, NW.chipH, NW.chipH / 2, 0.24);
+    x.direction = "rtl"; x.textAlign = "center"; x.fillStyle = "#9AA6B8"; x.font = F(400, 13);
+    x.fillText("דוח בלבד", l + w / 2, ct + NW.chipH / 2 + 6);
+  }
+
+  function dayCount(day, narrow) {
+    var n = day.n != null ? day.n : (day.items || []).length + (day.more || 0);
+    var c = day.nc != null ? day.nc : (day.items || []).filter(function (it) { return it.c; }).length;
+    if (!n) { return "אין פרסומים"; }
+    if (n === 1) { return "דוח אחד"; }
+    if (narrow) { return n + " דוחות"; }
+    return n + " דוחות · " + (c ? (c === 1 ? "שיחה אחת" : c + " שיחות") : "ללא שיחות");
+  }
+
+  // תג "היום" בראש הלוח של היום: גלולה כהה במסגרת זהב, נקודה זוהרת והמילה.
+  function todayBadge(x, cx, t) {
+    x.font = F(900, 18);
+    var tw = x.measureText("היום").width + 3, w = 18 + 10 + 8 + tw + 18, h = 36, l = cx - w / 2, top = t - 19;
+    x.save();
+    x.shadowColor = "rgba(0,0,0,0.5)"; x.shadowBlur = 18 * SC; x.shadowOffsetY = 6 * SC;
+    x.fillStyle = "#0A111F"; rr(x, l, top, w, h, 18); x.fill();
+    x.restore();
+    x.strokeStyle = C.accent; x.lineWidth = 2; rr(x, l + 1, top + 1, w - 2, h - 2, 17); x.stroke();
+    var dx = l + w - 18 - 5, dy = top + h / 2;
+    x.fillStyle = "rgba(242,210,126,0.25)"; x.beginPath(); x.arc(dx, dy, 9, 0, Math.PI * 2); x.fill();
+    x.fillStyle = "#F2D27E"; x.beginPath(); x.arc(dx, dy, 5, 0, Math.PI * 2); x.fill();
+    x.direction = "rtl"; x.textAlign = "right"; x.font = F(900, 18);
+    x.fillText("היום", l + w - 18 - 10 - 8, dy + 6.5);
+  }
+
+  function weekPanel(x, c, l, t, w, h, today) {
+    var day = c.day, isT = !!day.iso && day.iso === today, r = 24;
+    if (isT) {
+      // הלוח של היום: זוהר זהב סביבו, טבעת שקופה ומסגרת זהב, ובתוכו מעבר זהב מלמעלה
+      x.save();
+      x.shadowColor = "rgba(227,176,75,0.28)"; x.shadowBlur = 70 * SC;
+      x.fillStyle = "#121C30"; rr(x, l, t, w, h, r); x.fill();
+      x.restore();
+      x.strokeStyle = "rgba(227,176,75,0.12)"; x.lineWidth = 6; rr(x, l - 3, t - 3, w + 6, h + 6, r + 3); x.stroke();
+      var pg = x.createLinearGradient(0, t, 0, t + h);
+      pg.addColorStop(0, "rgba(227,176,75,0.22)"); pg.addColorStop(0.34, "rgba(227,176,75,0.07)");
+      pg.addColorStop(1, "rgba(227,176,75,0.04)");
+      x.fillStyle = "#121C30"; rr(x, l, t, w, h, r); x.fill();
+      x.fillStyle = pg; rr(x, l, t, w, h, r); x.fill();
+      x.strokeStyle = C.accent; x.lineWidth = 2; rr(x, l + 1, t + 1, w - 2, h - 2, r - 1); x.stroke();
+    } else {
+      x.fillStyle = "#0F182A"; rr(x, l, t, w, h, r); x.fill();
+      x.strokeStyle = "rgba(255,255,255,0.1)"; x.lineWidth = 1; rr(x, l + 0.5, t + 0.5, w - 1, h - 1, r - 0.5); x.stroke();
+    }
+    var hl = l + NW.inset, hw = w - NW.inset * 2, ht = t + NW.inset, HH = NW.headH;
+    if (isT) {
+      x.save();
+      x.shadowColor = "rgba(227,176,75,0.3)"; x.shadowBlur = 22 * SC; x.shadowOffsetY = 8 * SC;
+      var hg = x.createLinearGradient(hl, ht, hl + hw, ht + HH);
+      hg.addColorStop(0, "#F9E4A8"); hg.addColorStop(0.6, C.accent); hg.addColorStop(1, "#C99636");
+      x.fillStyle = hg; rr(x, hl, ht, hw, HH, 16); x.fill();
+      x.restore();
+    } else {
+      var hg2 = x.createLinearGradient(0, ht, 0, ht + HH);
+      hg2.addColorStop(0, "rgba(227,176,75,0.13)"); hg2.addColorStop(1, "rgba(227,176,75,0.03)");
+      x.fillStyle = hg2; rr(x, hl, ht, hw, HH, 16); x.fill();
+      x.strokeStyle = "rgba(227,176,75,0.3)"; x.lineWidth = 1; rr(x, hl + 0.5, ht + 0.5, hw - 1, HH - 1, 15.5); x.stroke();
+    }
+    var cx = hl + hw / 2;
+    x.textAlign = "center"; x.fillStyle = isT ? "#0A111F" : "#F2D27E";
+    x.direction = "rtl"; x.font = F(900, 38, SERIF); x.fillText(day.label || "", cx, ht + 44);
+    x.direction = "ltr"; x.font = F(800, 21); x.fillText(day.date || "", cx, ht + 75);
+    x.direction = "rtl"; x.fillStyle = isT ? "#2A1E05" : C.muted; x.font = F(700, 14);
+    x.fillText(dayCount(day, c.narrow), cx, ht + 99);
+    if (isT) { todayBadge(x, l + w / 2, t); }
+  }
+
+  // לוח המקרא: שבב שעה, שבב "ב־<תאריך>", "דוח בלבד" — מימין; "היום מסומן בזהב" — בקצה
+  // השמאלי. רק מה שמופיע בתמונה: בלי שיחה ביום אחר אין את השבב שלה.
+  function weekLegend(x, days, g, today) {
+    var all = [];
+    days.forEach(function (d) { (d.items || []).forEach(function (it) { all.push(it); }); });
+    var anyTime = all.some(function (it) { return it.c && it.t && !it.o; });
+    var other = all.filter(function (it) { return it.c && it.o; })[0];
+    var anyRep = all.some(function (it) { return !it.c; });
+    var hasToday = days.some(function (d) { return d.iso === today; });
+    var l = g.left, t = g.top, w = g.inner, H = NW.legH, cy = t + H / 2, R = g.right - 24;
+    x.fillStyle = "#111A2C"; rr(x, l, t, w, H, 18); x.fill();
+    x.strokeStyle = "rgba(255,255,255,0.08)"; x.lineWidth = 1; rr(x, l + 0.5, t + 0.5, w - 1, H - 1, 17.5); x.stroke();
+    function label(txt) {
+      x.direction = "rtl"; x.textAlign = "right"; x.fillStyle = "#D5DBE4"; x.font = F(400, 17);
+      x.fillText(txt, R, cy + 6);
+      R -= x.measureText(txt).width + 30;
+    }
+    if (anyTime) {
+      x.font = F(900, 16);
+      var pw = 6 + 20 + 6 + x.measureText("10:00").width + 12;
+      goldPill(x, R - pw, cy - 15, pw, 30, false);
+      phoneDot(x, R - 16, cy, 10, "#0A111F", "#F2D27E");
+      x.direction = "ltr"; x.textAlign = "right"; x.fillStyle = "#0A111F";
+      x.fillText("10:00", R - 32, cy + 6);
+      R -= pw + 10;
+      label("שיחת ועידה בשעה המצוינת");
+    }
+    if (other) {
+      x.font = F(800, 15);
+      var a = x.measureText("ב־").width, dw = x.measureText(other.o).width, pw2 = 12 + a + 4 + dw + 12;
+      goldPill(x, R - pw2, cy - 15, pw2, 30, false);
+      x.fillStyle = "#0A111F"; x.textAlign = "right";
+      x.direction = "rtl"; x.fillText("ב־", R - 12, cy + 6);
+      x.direction = "ltr"; x.fillText(other.o, R - 12 - a - 4, cy + 6);
+      R -= pw2 + 10;
+      label("השיחה ביום אחר");
+    }
+    if (anyRep) {
+      x.font = F(400, 14);
+      var rw = x.measureText("דוח בלבד").width + 24;
+      dashBox(x, R - rw, cy - 15, rw, 30, 15, 0.28);
+      x.direction = "rtl"; x.textAlign = "center"; x.fillStyle = "#9AA6B8";
+      x.fillText("דוח בלבד", R - rw / 2, cy + 6);
+      R -= rw + 10;
+      label("ללא שיחת ועידה");
+    }
+    if (hasToday) {
+      var L = g.left + 24;
+      x.font = F(700, 17);
+      var lw = x.measureText("היום מסומן בזהב").width, sx = L + lw + 10;
+      x.direction = "rtl"; x.textAlign = "left"; x.fillStyle = "#F2D27E";
+      x.fillText("היום מסומן בזהב", L, cy + 6);
+      x.save();
+      x.shadowColor = "rgba(227,176,75,0.35)"; x.shadowBlur = 14 * SC;
+      x.fillStyle = "rgba(227,176,75,0.18)"; rr(x, sx, cy - 15, 30, 30, 8); x.fill();
+      x.restore();
+      x.strokeStyle = C.accent; x.lineWidth = 2; rr(x, sx + 1, cy - 14, 28, 28, 7); x.stroke();
+    }
+  }
+
+  function nightWeek(x, b, g, draw) {
+    var days = b.days || [];
+    if (!days.length) { return 0; }
+    var today = b.today || localIso();
+    var cols = days.map(function (day) {
+      var items = (day.items || []).slice();
+      if (day.more) { items.push({ more: day.more }); }
+      var narrow = items.length <= 3, per = narrow ? 1 : 2;
+      return { day: day, items: items, narrow: narrow, per: per, rows: Math.max(1, Math.ceil(items.length / per)) };
+    });
+    // הלוחות פרושים לכל הרוחב, כמו justify-content: space-between בקנבס; כשאין מקום — הרחבים מצטמצמים
+    var nat = sum(cols.map(function (c) { return c.narrow ? NW.narrow : NW.wide; })), n = cols.length;
+    var gap = n > 1 ? (g.inner - nat) / (n - 1) : 0, k = 1;
+    if (n === 1) { k = Math.min(1, g.inner / nat); }
+    if (gap < NW.gap) { gap = NW.gap; k = (g.inner - gap * (n - 1)) / nat; }
+    var rowsMax = Math.max.apply(null, cols.map(function (c) { return c.rows; }));
+    var panelH = NW.inset + NW.headH + 12 + rowsMax * NW.cardH + (rowsMax - 1) * NW.rowGap + NW.inset;
+    var lift = 26 + 14;            // הרווח מהמקרא, ומקום לתג "היום" שבולט מעל הלוח
+    var h = NW.legH + lift + panelH;
+    if (!draw) { return h; }
+    weekLegend(x, days, g, today);
+    var pt = g.top + NW.legH + lift, right = g.right;
+    cols.forEach(function (c) {
+      var w = (c.narrow ? NW.narrow : NW.wide) * k, l = right - w;
+      weekPanel(x, c, l, pt, w, panelH, today);
+      var gl = l + NW.inset, gw = w - NW.inset * 2, gt = pt + NW.inset + NW.headH + 12;
+      // יום ריק — "אין פרסומים" כבר כתוב בכותרת הלוח, והגוף נשאר ריק
+      var cw = c.per === 2 ? (gw - NW.colGap) / 2 : gw;
+      c.items.forEach(function (it, i) {
+        var row = Math.floor(i / c.per), pos = i % c.per;
+        weekCard(x, it, gl + gw - (pos + 1) * cw - pos * NW.colGap, gt + row * (NW.cardH + NW.rowGap), cw);
+      });
+      right = l - gap;
+    });
+    return h;
+  }
+
   var BLOCKS = { stats: statsBlock, notes: notesBlock, table: tableBlock, bars: barsBlock,
     columns: columnsBlock, reports: reportsBlock, lines: linesBlock, dbars: dbarsBlock,
     rank: rankBlock, dumbbell: dumbbellBlock, curves: curvesBlock, cards: cardsBlock,
@@ -2100,6 +2452,7 @@
     // מימש" — לוח משלו, כמו הפוסט; ושאר הגושים בלוח לילה עם הכותרת בפנים.
     if (NIGHT_ON && b.type === "table" && b.kind === "holders") { return nightHolders(x, b, g, draw); }
     if (NIGHT_ON && b.type === "table" && rankable(b)) { return nightTable(x, b, g, draw); }
+    if (NIGHT_ON && b.type === "week") { return nightWeek(x, b, g, draw); }
     var fn = BLOCKS[b.type];
     if (!Object.prototype.hasOwnProperty.call(FRAME, b.type)) { return fn(x, b, g, draw); }
     if (NIGHT_ON) { return nightFrame(x, b, g, draw, fn); }
@@ -2224,17 +2577,19 @@
       if (document.querySelector("link[data-night-fonts]")) { res(); return; }
       var l = document.createElement("link");
       l.rel = "stylesheet"; l.setAttribute("data-night-fonts", "1");
-      l.href = "https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&display=swap";
+      l.href = "https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800;900&display=swap";
       l.onload = l.onerror = function () { res(); };
       document.head.appendChild(l);
     });
     var he = "אבגדהוזחטיכלמנסעפצקרשת", num = "0123456789.,%+-₪", lat = "@Cigarbutthunte7";
     nightFontsP = Promise.race([css.then(function () {
       if (!document.fonts || !document.fonts.load) { return null; }
-      return Promise.all([[400, he + num], [500, he + num], [700, he + num + lat], [800, he + num]]
+      // 900 — לשמות החברות ולשעות בלוח הדוחות; ופרנק־ריהל 900 בעברית — לשמות הימים.
+      return Promise.all([[400, he + num], [500, he + num], [700, he + num + lat], [800, he + num],
+        [900, he + num]]
         .map(function (w) {
           return document.fonts.load(w[0] + " 20px Heebo", w[1]).catch(function () { return null; });
-        }));
+        }).concat([document.fonts.load(F(900, 20, SERIF), he).catch(function () { return null; })]));
     }), new Promise(function (r) { setTimeout(r, 3500); })]);
     return nightFontsP;
   }
@@ -2364,27 +2719,46 @@
   var HERO_H = 340, EMB_W = 420, PILL = "חתך חלקי · לפני נעילת המסחר";
   function nightHeader(x, d, g, draw) {
     var hp = heroParts(d), top = 48, colW = g.inner - EMB_W - 32, R = g.right;
-    var ts = 80, lines;
-    for (; ts >= 56; ts -= 2) {
-      x.font = F(900, ts, SERIF);
-      lines = wrap(x, bidi(hp.head), colW);
-      if (lines.length === 1) { break; }
+    var ts = 80, lines, ds = 58, inline = false, tw1 = 0;
+    // **כותרת ותאריך בשורה אחת** — "דוחות השבוע 16–20.11.2026" בפוסט של לוח הדוחות
+    // (Claude Design, 26/11/2026): הכותרת ב-96 והתאריך ב-62, על אותו קו בסיס. כשאינם
+    // נכנסים יחד — זה מתחת לזה, כמו בשאר הפוסטים.
+    if (d.heroInline && hp.date) {
+      for (var s1 = 96; s1 >= 64; s1 -= 2) {
+        var s2 = Math.round(s1 * 62 / 96);
+        x.font = F(900, s1, SERIF); tw1 = x.measureText(bidi(hp.head)).width;
+        x.font = F(700, s2, SERIF);
+        if (tw1 + 28 + x.measureText(hp.date).width <= colW) { ts = s1; ds = s2; inline = true; break; }
+      }
     }
-    if (lines.length > 1) {
-      ts = 64; x.font = F(900, ts, SERIF); lines = wrap(x, bidi(hp.head), colW);
-      if (lines.length > 2) { ts = 52; x.font = F(900, ts, SERIF); lines = wrap(x, bidi(hp.head), colW); }
+    if (inline) {
+      lines = [bidi(hp.head)];
+    } else {
+      for (ts = 80; ts >= 56; ts -= 2) {
+        x.font = F(900, ts, SERIF);
+        lines = wrap(x, bidi(hp.head), colW);
+        if (lines.length === 1) { break; }
+      }
+      if (lines.length > 1) {
+        ts = 64; x.font = F(900, ts, SERIF); lines = wrap(x, bidi(hp.head), colW);
+        if (lines.length > 2) { ts = 52; x.font = F(900, ts, SERIF); lines = wrap(x, bidi(hp.head), colW); }
+      }
+      ds = 58;
+      x.font = F(700, ds, SERIF);
+      while (hp.date && ds > 34 && x.measureText(hp.date).width > colW) { ds -= 2; x.font = F(700, ds, SERIF); }
     }
-    var ds = 58;
-    x.font = F(700, ds, SERIF);
-    while (hp.date && ds > 34 && x.measureText(hp.date).width > colW) { ds -= 2; x.font = F(700, ds, SERIF); }
-    x.font = F(400, 21);
-    var lede = d.sub ? wrap(x, bidi(d.sub), Math.min(colW, 560)) : [];
-    var TLH = Math.round(ts * 1.06), LLH = 31;
-    var colH = (hp.partial ? 34 + 16 : 0) + lines.length * TLH + (hp.date ? 16 + ds : 0) +
-      (lede.length ? 18 + lede.length * LLH - 8 : 0);
+    // בפוסט של לוח הדוחות שורת ההסבר גדולה ורחבה יותר (23 ועד 860), ומתחתיה שבבי הספירה.
+    var big = !!d.heroInline, LF = big ? 23 : 21, LLH = big ? 33 : 31;
+    var stats = d.heroStats || [], SH = stats.length ? 62 : 0;
+    x.font = F(400, LF);
+    var lede = d.sub ? wrap(x, bidi(d.sub), Math.min(colW, big ? 860 : 560)) : [];
+    var TLH = Math.round(ts * 1.06);
+    var colH = (hp.partial ? 34 + 16 : 0) + lines.length * TLH + (hp.date && !inline ? 16 + ds : 0) +
+      (lede.length ? 18 + lede.length * LLH - 8 : 0) + (SH ? 20 + SH : 0);
     var rowTop = top + 28 + 24, rowH = Math.max(HERO_H, colH + 20);
     var divY = rowTop + rowH + 24;
-    var end = divY + 14 + 30;
+    // בלי המפריד — הלוח הבא מתחיל 26 מתחת לגיבור, כמו בקנבס
+    var end = d.divider === false ? rowTop + rowH + 26 : divY + 14 + 30;
     if (!draw) { return end; }
 
     // שורה עליונה: נקודת זהב ותווית מימין, החתימה משמאל (LTR)
@@ -2411,8 +2785,22 @@
     }
     x.fillStyle = C.ink; x.font = F(900, ts, SERIF);
     lines.forEach(function (ln, k) { x.fillText(ln, R, y + Math.round(ts * 0.82) + k * TLH); });
+    if (inline) {
+      // התאריך משמאל לכותרת, על קו הבסיס שלה
+      var iy = y + Math.round(ts * 0.82), ir = R - tw1 - 28;
+      x.direction = "ltr"; x.textAlign = "right"; x.font = F(700, ds, SERIF);
+      if (d.gilt) {
+        var ig = x.createLinearGradient(0, iy - ds * 0.85, 0, iy + ds * 0.12);
+        ig.addColorStop(0, "#F9E4A8"); ig.addColorStop(0.55, "#E3B04B"); ig.addColorStop(1, "#B07D24");
+        x.fillStyle = ig;
+      } else {
+        x.fillStyle = C.accent;
+      }
+      x.fillText(hp.date, ir, iy);
+      x.direction = "rtl";
+    }
     y += lines.length * TLH;
-    if (hp.date) {
+    if (hp.date && !inline) {
       // תאריך במספרים — LTR; "מתחילת 2026" או "נובמבר 2026" — RTL, אחרת המילה
       // והשנה מתחלפות במקומן.
       var dy = y + 16 + Math.round(ds * 0.8);
@@ -2431,9 +2819,12 @@
       y += 16 + ds;
     }
     if (lede.length) {
-      x.fillStyle = C.muted; x.font = F(400, 21);
-      lede.forEach(function (ln, k) { x.fillText(ln, R, y + 18 + 22 + k * LLH - 8); });
+      x.fillStyle = C.muted; x.font = F(400, LF);
+      lede.forEach(function (ln, k) { x.fillText(ln, R, y + 18 + LF + 1 + k * LLH - 8); });
+      y += 18 + lede.length * LLH - 8;
     }
+    if (SH) { heroChips(x, stats, R, y + 20, SH); }
+    if (d.divider === false) { return end; }
 
     // מפריד: שני קווי זהב ויהלום באמצע
     var mid = g.W / 2;
